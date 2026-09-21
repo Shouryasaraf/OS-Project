@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adaptive-disk-prefetch"
+version = "0.1.0"
+description = "Review 2 prototype for workload-aware disk I/O prefetching"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+adaptive-prefetch = "adaptive_prefetch.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
