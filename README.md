@@ -39,6 +39,7 @@ To use Python directly or export a demonstration trace:
 $env:PYTHONPATH='src'
 python -m adaptive_prefetch export-demo demo.csv
 python -m adaptive_prefetch replay demo.csv
+python -m adaptive_prefetch replay msr-cambridge1-sample.csv
 ```
 
 On macOS/Linux, use `PYTHONPATH=src python -m adaptive_prefetch demo`.
@@ -61,6 +62,11 @@ number of contiguous blocks in that request. `operation` is `R` or `W`.
 the current model classifies the **aggregate** request stream. A real dataset
 must be converted to these units before replay. The repository does not bundle
 MSR Cambridge or SNIA IOTTA production traces.
+
+The included `msr-cambridge1-sample.csv` uses the original MSR headers
+`Timestamp,Hostname,DiskNumber,Type,Offset,Size,ResponseTime`. The loader
+converts its byte offsets and sizes to 512-byte blocks, timestamps to elapsed
+milliseconds, and `Read`/`Write` to `R`/`W` automatically.
 
 ## How the demonstration avoids a timing mistake
 

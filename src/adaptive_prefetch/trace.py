@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Iterable
 
 CLASSES = ("sequential", "strided", "random", "mixed")
+MSR_COLUMNS = ("Timestamp", "Hostname", "DiskNumber", "Type", "Offset", "Size",
+               "ResponseTime")
 
 
 @dataclass(frozen=True)
@@ -27,10 +29,12 @@ class Request:
 
 
 def load_csv(path: str | Path) -> list[Request]:
-    """Read a normalized block trace. Units are documented in README.md."""
+    """Read a normalized trace or an MSR Cambridge block trace."""
     requests: list[Request] = []
     with Path(path).open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
+        if reader.fieldnames and set(MSR_COLUMNS).issubset(reader.fieldnames):
+            return _load_msr_rows(reader)
         required = {"timestamp_ms", "lba", "size_blocks", "operation"}
         if not reader.fieldnames or not required.issubset(reader.fieldnames):
             raise ValueError(f"CSV requires columns: {', '.join(sorted(required))}")
@@ -49,6 +53,41 @@ def load_csv(path: str | Path) -> list[Request]:
         raise ValueError("CSV trace is empty")
     if any(b.timestamp_ms < a.timestamp_ms for a, b in zip(requests, requests[1:])):
         raise ValueError("CSV requests must be sorted by timestamp_ms")
+    return requests
+
+
+def _load_msr_rows(reader: csv.DictReader) -> list[Request]:
+    """Convert MSR timestamps and byte ranges to normalized block requests."""
+    rows = list(reader)
+    if not rows:
+        raise ValueError("CSV trace is empty")
+    try:
+        first_timestamp = int(rows[0]["Timestamp"])
+        requests = []
+        for row in rows:
+            timestamp = int(row["Timestamp"])
+            offset_bytes = int(row["Offset"])
+            size_bytes = int(row["Size"])
+            if offset_bytes % 512 or size_bytes % 512:
+                raise ValueError("Offset and Size must be multiples of 512")
+            operation = row["Type"].strip().upper()
+            if operation == "READ":
+                operation = "R"
+            elif operation == "WRITE":
+                operation = "W"
+            else:
+                raise ValueError(f"unsupported Type: {row['Type']}")
+            requests.append(Request(
+                timestamp_ms=(timestamp - first_timestamp) / 10_000,
+                lba=offset_bytes // 512,
+                size_blocks=size_bytes // 512,
+                operation=operation,
+                stream_id=(row.get("Hostname") or "default").strip(),
+            ))
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"invalid MSR trace row: {exc}") from exc
+    if any(b.timestamp_ms < a.timestamp_ms for a, b in zip(requests, requests[1:])):
+        raise ValueError("CSV requests must be sorted by timestamp")
     return requests
 
 

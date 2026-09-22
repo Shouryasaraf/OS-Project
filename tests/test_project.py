@@ -19,6 +19,20 @@ class TraceTests(unittest.TestCase):
             write_csv(path, original)
             self.assertEqual(load_csv(path), original)
 
+    def test_load_msr_csv(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "msr.csv"
+            path.write_text(
+                "Timestamp,Hostname,DiskNumber,Type,Offset,Size,ResponseTime\n"
+                "100000,hm,0,Read,1024,2048,10\n"
+                "110000,hm,0,Write,2048,512,20\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(load_csv(path), [
+                Request(0.0, 2, 4, "R", "hm"),
+                Request(1.0, 4, 1, "W", "hm"),
+            ])
+
     def test_invalid_request(self):
         with self.assertRaises(ValueError):
             Request(0, -1)

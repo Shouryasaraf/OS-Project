@@ -42,7 +42,7 @@ model *after* prediction. No online update is made on unlabelled real traces.
 | Policy selector | Predicted class, recent stride | Future block candidates | Implemented, tested through replay |
 | LRU cache simulator | Requests and prefetches | Hits, precision, wasted prefetches | Implemented, tested |
 | Baselines | Same trace and cache settings | No/fixed prefetch comparison | Implemented |
-| Real-trace adapter | Source-specific trace fields | Normalized CSV | Not implemented: source trace not supplied |
+| Real-trace adapter | MSR Cambridge CSV fields | Normalized requests | Implemented for the included sample |
 | Kernel I/O integration | Live OS requests | Live prefetch actions | Outside current user-space prototype |
 
 ## Prepared live demonstration
