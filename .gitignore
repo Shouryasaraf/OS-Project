@@ -8,4 +8,5 @@ data/raw/
 .build/
 .codex-finalizer/
 .chart-data-*/
-models/
+models/*
+!models/msr_sample_gnb.json

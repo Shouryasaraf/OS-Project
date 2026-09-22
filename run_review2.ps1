@@ -1,7 +1,9 @@
 param(
     [switch]$Test,
     [switch]$Benchmark,
+    [switch]$TrainMSR,
     [string]$Trace,
+    [string]$ModelPath,
     [ValidateSet('auto', 'normalized', 'msr', 'iotta8', 'alibaba')]
     [string]$Format = 'auto'
 )
@@ -25,8 +27,14 @@ try {
         & $pythonExe -m unittest discover -s tests -v
     } elseif ($Benchmark) {
         & $pythonExe -m adaptive_prefetch benchmark
+    } elseif ($TrainMSR) {
+        & $pythonExe -m adaptive_prefetch train-msr-sample
     } elseif ($Trace) {
-        & $pythonExe -m adaptive_prefetch replay $Trace --format $Format
+        if ($ModelPath) {
+            & $pythonExe -m adaptive_prefetch replay $Trace --format $Format --model-path $ModelPath
+        } else {
+            & $pythonExe -m adaptive_prefetch replay $Trace --format $Format
+        }
     } else {
         & $pythonExe -m adaptive_prefetch demo
     }

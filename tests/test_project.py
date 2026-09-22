@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from adaptive_prefetch.baselines import MarkovPrefetcher, StridePrefetcher
+from adaptive_prefetch.artifacts import load_model
 from adaptive_prefetch.benchmark import benchmark_dataset, drift_report
 from adaptive_prefetch.cli import train
 from adaptive_prefetch.features import FEATURE_NAMES, dominant_stride, extract
@@ -11,6 +12,7 @@ from adaptive_prefetch.model import OnlineGaussianNB
 from adaptive_prefetch.simulator import LatencyModel, Metrics, replay
 from adaptive_prefetch.trace import (CLASSES, Request, load_csv, synthetic_dataset,
                                      synthetic_window, transition_trace, write_csv)
+from adaptive_prefetch.training import adapt_msr_sample
 
 
 class TraceTests(unittest.TestCase):
@@ -114,6 +116,18 @@ class ClassifierTests(unittest.TestCase):
         model.update(example, "sequential")
         self.assertEqual(model.count["sequential"], 1)
         self.assertEqual(model.predict(example)[0], "sequential")
+
+    def test_weak_sample_training_saves_loadable_model(self):
+        source = Path(__file__).resolve().parents[1] / "data" / "samples" / "msr-cambridge1-sample.csv"
+        with tempfile.TemporaryDirectory() as directory:
+            artifact = Path(directory) / "model.json"
+            metadata = adapt_msr_sample(source, artifact)
+            model, saved = load_model(artifact)
+            self.assertEqual(metadata, saved)
+            self.assertEqual(metadata["requests"], 1000)
+            self.assertGreater(metadata["real_windows_updated"], 0)
+            self.assertFalse(metadata["true_real_labels_available"])
+            self.assertEqual(model.n_features, len(FEATURE_NAMES))
 
 
 class SimulatorTests(unittest.TestCase):

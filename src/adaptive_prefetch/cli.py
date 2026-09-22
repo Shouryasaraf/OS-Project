@@ -8,6 +8,7 @@ from time import perf_counter
 
 from .benchmark import (MODES, benchmark_dataset, drift_report, make_model,
                         markdown_table, write_results_csv)
+from .artifacts import load_model
 from .features import FEATURE_NAMES, extract
 from .model import OnlineGaussianNB
 from .simulator import LatencyModel, confusion_matrix, replay
@@ -66,7 +67,8 @@ def run_replay(args: argparse.Namespace) -> None:
     print(f"Loaded {len(requests)} requests from {args.trace}")
     print("Real-trace labels are unknown; classifier updates are disabled.")
     for mode in MODES:
-        model = train(args.seed, args.train_per_class) if mode == "adaptive" else None
+        model = (load_model(args.model_path)[0] if args.model_path else
+                 train(args.seed, args.train_per_class)) if mode == "adaptive" else None
         if mode == "lstm" and not args.lstm_model:
             print("lstm        skipped: no trained artifact")
             continue
@@ -143,6 +145,18 @@ def run_train_lstm(args: argparse.Namespace) -> None:
     print(f"Saved offline LSTM to {args.save}: {result}")
 
 
+def run_train_msr_sample(args: argparse.Namespace) -> None:
+    from .training import adapt_msr_sample
+    result = adapt_msr_sample(args.trace, args.save, args.seed, args.window_size)
+    print(f"Saved weakly adapted classifier to {args.save}")
+    print(f"Source: {result['requests']} requests; {result['complete_windows']} complete windows")
+    print(f"Real random-like windows used: {result['real_windows_updated']}")
+    print("Real-data labels: heuristic proxy only; no real-trace accuracy claim")
+    print(f"Held-out synthetic accuracy before/after: "
+          f"{result['synthetic_held_out_accuracy_before']:.3f} / "
+          f"{result['synthetic_held_out_accuracy_after']:.3f}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -161,6 +175,7 @@ def main() -> None:
     replay_command.add_argument("--format", default="auto",
                                 choices=("auto", "normalized", "msr", "iotta8", "alibaba"))
     replay_command.add_argument("--lstm-model")
+    replay_command.add_argument("--model-path", help="saved Gaussian NB classifier JSON")
     benchmark = commands.add_parser("benchmark", help="compare all available policies")
     benchmark.add_argument("--datasets", nargs="+", default=["synthetic", "msr"],
                            choices=("synthetic", "msr", "iotta"))
@@ -191,6 +206,12 @@ def main() -> None:
                       choices=("auto", "normalized", "msr", "iotta8", "alibaba"))
     lstm.add_argument("--epochs", type=int, default=2)
     lstm.add_argument("--seed", type=int, default=42)
+    msr_train = commands.add_parser("train-msr-sample", help="weakly adapt classifier on the unlabelled MSR sample")
+    msr_train.add_argument("--trace", default=str(Path(__file__).resolve().parents[2] /
+                                                 "data" / "samples" / "msr-cambridge1-sample.csv"))
+    msr_train.add_argument("--save", default="models/msr_sample_gnb.json")
+    msr_train.add_argument("--seed", type=int, default=42)
+    msr_train.add_argument("--window-size", type=int, default=32)
     export = commands.add_parser("export-demo", help="write synthetic transition CSV")
     export.add_argument("path")
     export.add_argument("--seed", type=int, default=42)
@@ -206,6 +227,8 @@ def main() -> None:
             run_normalize(args)
         elif args.command == "train-lstm":
             run_train_lstm(args)
+        elif args.command == "train-msr-sample":
+            run_train_msr_sample(args)
         else:
             requests, _ = transition_trace(args.seed)
             write_csv(args.path, requests)

@@ -44,6 +44,7 @@ From the repository root in PowerShell:
 .\run_review2.ps1
 .\run_review2.ps1 -Test
 .\run_review2.ps1 -Benchmark
+.\run_review2.ps1 -TrainMSR
 ```
 
 The launcher uses a Python command on PATH or the bundled Codex Python on
@@ -52,6 +53,7 @@ this machine. To replay a normalized CSV trace:
 ```powershell
 .\run_review2.ps1 -Trace path\to\trace.csv
 .\run_review2.ps1 -Trace path\to\trace.csv -Format alibaba
+.\run_review2.ps1 -Trace .\data\samples\msr-cambridge1-sample.csv -ModelPath .\models\msr_sample_gnb.json
 ```
 
 To use Python directly or export a demonstration trace:
@@ -92,6 +94,16 @@ The included `data/samples/msr-cambridge1-sample.csv` uses the original MSR head
 `Timestamp,Hostname,DiskNumber,Type,Offset,Size,ResponseTime`. The loader
 converts its byte offsets and sizes to 512-byte blocks, timestamps to elapsed
 milliseconds, and `Read`/`Write` to `R`/`W` automatically.
+
+`-TrainMSR` creates a small, reproducible JSON classifier artifact at
+`models/msr_sample_gnb.json`. The four-class model is first trained on the
+labelled synthetic generator. From the unlabelled MSR sample, it then learns
+only from read-heavy windows with a conservative **random-like proxy label**.
+This is weakly supervised adaptation, not four-class training from real ground
+truth. The model can be loaded with `-ModelPath` for replay; replaying the same
+sample is an in-sample demonstration, not an unbiased performance evaluation.
+See [the training record](docs/MSR_SAMPLE_TRAINING.md) for exact counts and
+limitations.
 
 `normalize` also supports two explicit IOTTA-related profiles: `alibaba`
 (`device_id,opcode,offset,length,timestamp`; byte offsets/lengths and
