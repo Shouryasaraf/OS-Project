@@ -15,6 +15,7 @@ REPO = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO / "src"))
 
 from adaptive_prefetch.benchmark import (  # noqa: E402
+    analyze_results,
     benchmark_dataset,
     drift_report,
     markdown_table,
@@ -28,7 +29,7 @@ MSR_SAMPLE = REPO / "data" / "samples" / "msr-cambridge1-sample.csv"
 LSTM_ARTIFACT = REPO / "models" / "lstm_delta.pt"
 OUTPUT_DIR = REPO / "outputs"
 
-FORMATS = ("auto", "normalized", "msr", "iotta8", "alibaba")
+FORMATS = ("auto", "normalized", "msr", "iotta8", "alibaba", "revised")
 
 
 def ask(prompt: str, default: str = "", cast=None):
@@ -70,7 +71,7 @@ def pick_datasets() -> list[tuple[str, list]]:  # list[tuple[name, requests]]
     print("\n--- Datasets (pick one or more, comma-separated) ---")
     print("  1. Synthetic transition traces (default; labelled, multi-seed)")
     print("  2. Bundled MSR Cambridge sample (real requests, unlabelled)")
-    print("  3. Custom trace file (normalized/msr/iotta8/alibaba)")
+    print("  3. Custom trace file (normalized/msr/iotta8/alibaba/revised)")
     wanted = ask("Datasets to benchmark", "1")
     names = [token.strip() for token in wanted.split(",") if token.strip()]
     datasets: list[tuple[str, list]] = []
@@ -95,25 +96,44 @@ def pick_datasets() -> list[tuple[str, list]]:  # list[tuple[name, requests]]
     return datasets
 
 
-def ensure_lstm() -> str | None:
+def ensure_lstm(real_traces: list[list] | None = None) -> str | None:
+    """Include the LSTM baseline; retrain or reuse the cached artifact."""
     print("\n--- LSTM baseline (offline delta-prediction LSTM, optional) ---")
     if not ask_yes_no("Include the LSTM baseline?"):
         return None
-    if not LSTM_ARTIFACT.is_file():
-        print("No trained artifact found.")
-        if ask_yes_no("Train it now (needs PyTorch installed)?"):
-            epochs = ask_int("Epochs", 2, 1)
-            try:
-                from adaptive_prefetch.lstm import train_lstm
+    if LSTM_ARTIFACT.is_file():
+        if ask_yes_no("Retrain the LSTM from scratch?", True):
+            return _train_lstm(real_traces)
+        print(f"Using cached artifact: {LSTM_ARTIFACT}")
+        return str(LSTM_ARTIFACT)
+    print("No trained artifact found; training now (needs PyTorch).")
+    return _train_lstm(real_traces)
 
-                LSTM_ARTIFACT.parent.mkdir(parents=True, exist_ok=True)
-                result = train_lstm(LSTM_ARTIFACT, epochs=epochs)
-                print(f"Saved {LSTM_ARTIFACT}: {result}")
-            except RuntimeError as exc:
-                print(f"LSTM skipped: {exc}")
-                return None
-        else:
-            return None
+
+def _train_lstm(real_traces: list[list] | None = None) -> str | None:
+    """Train the offline LSTM; return the artifact path or None on failure."""
+    epochs = ask_int("Epochs", 2, 1)
+    traces = real_traces or None
+    if traces is None:
+        print("No real trace picked; training on synthetic traces.")
+    else:
+        total = sum(len(trace) for trace in traces)
+        print(f"{len(traces)} real trace(s) selected, {total:,} requests total.")
+        limit = ask_int("Requests per trace to train on (0 = all)", 0, 0)
+        if limit:
+            traces = [trace[:limit] for trace in traces]
+            total = sum(len(trace) for trace in traces)
+        print(f"Training on {total:,} requests for {epochs} epoch(s) "
+              f"-> may take a while...")
+    try:
+        from adaptive_prefetch.lstm import train_lstm
+
+        LSTM_ARTIFACT.parent.mkdir(parents=True, exist_ok=True)
+        result = train_lstm(LSTM_ARTIFACT, traces=traces, epochs=epochs)
+        print(f"Saved {LSTM_ARTIFACT}: {result}")
+    except (RuntimeError, ValueError) as exc:
+        print(f"LSTM skipped: {exc}")
+        return None
     return str(LSTM_ARTIFACT)
 
 
@@ -137,7 +157,8 @@ def main() -> None:
     cache_blocks = ask_int("Cache capacity (blocks)", 128, 1)
     window_size = ask_int("Window size (requests)", 32, 8)
     datasets = pick_datasets()
-    lstm_model = ensure_lstm()
+    real_traces = [requests for name, requests in datasets if not name.startswith("synthetic")]
+    lstm_model = ensure_lstm(real_traces)
     latency = ask_latency()
     save_outputs = ask_yes_no("Save results to outputs/results.md + .csv?", True)
 
@@ -163,6 +184,8 @@ def main() -> None:
     print("recall uses measurement-only future-reaccess lookahead, never policy input;")
     print("LSTM row appears only if a trained artifact was available.")
 
+    print("\n" + analyze_results(rows))
+
     print("\nDrift adaptation (labelled synthetic phases, frozen vs online GNB):")
     print(f"  workload order: {' -> '.join(CLASSES)}")
     for item in drift_report(42, 8, window_size):
@@ -174,7 +197,8 @@ def main() -> None:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         md_path = OUTPUT_DIR / "results.md"
         csv_path = OUTPUT_DIR / "results.csv"
-        md_path.write_text("# Final results\n\n" + table + "\n", encoding="utf-8")
+        md_path.write_text("# Final results\n\n" + table + "\n\n"
+                           + analyze_results(rows) + "\n", encoding="utf-8")
         write_results_csv(csv_path, rows)
         print(f"\nSaved: {md_path}\n       {csv_path}")
 
@@ -184,8 +208,10 @@ def main() -> None:
     print("precision, oracle recall, unused prefetches, modelled mean latency, and")
     print("latency speedup vs no prefetch. The adaptive ML policy row shows whether")
     print("classify-then-prefetch beats the stride/Markov/LSTM baselines while")
-    print("issuing less wasted I/O. The drift report shows how quickly the online")
-    print("classifier re-learns when the workload pattern changes.")
+    print("issuing less wasted I/O. The result-interpretation section then names")
+    print("the winning policy per dataset with its quantified gains (speedup and")
+    print("hit-ratio improvement vs no prefetch). The drift report shows how")
+    print("quickly the online classifier re-learns when the workload changes.")
 
 
 if __name__ == "__main__":

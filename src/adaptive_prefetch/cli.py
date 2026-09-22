@@ -173,7 +173,7 @@ def main() -> None:
     replay_command.add_argument("--window-size", type=int, default=32)
     replay_command.add_argument("--cache-blocks", type=int, default=128)
     replay_command.add_argument("--format", default="auto",
-                                choices=("auto", "normalized", "msr", "iotta8", "alibaba"))
+                                choices=("auto", "normalized", "msr", "iotta8", "alibaba", "revised"))
     replay_command.add_argument("--lstm-model")
     replay_command.add_argument("--model-path", help="saved Gaussian NB classifier JSON")
     benchmark = commands.add_parser("benchmark", help="compare all available policies")
@@ -181,7 +181,7 @@ def main() -> None:
                            choices=("synthetic", "msr", "iotta"))
     benchmark.add_argument("--trace")
     benchmark.add_argument("--format", default="auto",
-                           choices=("auto", "normalized", "msr", "iotta8", "alibaba"))
+                           choices=("auto", "normalized", "msr", "iotta8", "alibaba", "revised"))
     benchmark.add_argument("--seed", type=int, default=42)
     benchmark.add_argument("--seeds", type=int, default=3)
     benchmark.add_argument("--windows-per-class", type=int, default=8)
@@ -198,12 +198,12 @@ def main() -> None:
     normalize.add_argument("--input", required=True)
     normalize.add_argument("--output", required=True)
     normalize.add_argument("--format", default="auto",
-                           choices=("auto", "normalized", "msr", "iotta8", "alibaba"))
+                           choices=("auto", "normalized", "msr", "iotta8", "alibaba", "revised"))
     lstm = commands.add_parser("train-lstm", help="train optional offline LSTM baseline")
     lstm.add_argument("--save", default="models/lstm_delta.pt")
     lstm.add_argument("--trace", action="append", default=[])
     lstm.add_argument("--format", default="auto",
-                      choices=("auto", "normalized", "msr", "iotta8", "alibaba"))
+                      choices=("auto", "normalized", "msr", "iotta8", "alibaba", "revised"))
     lstm.add_argument("--epochs", type=int, default=2)
     lstm.add_argument("--seed", type=int, default=42)
     msr_train = commands.add_parser("train-msr-sample", help="weakly adapt classifier on the unlabelled MSR sample")

@@ -5,7 +5,8 @@ from pathlib import Path
 
 from adaptive_prefetch.baselines import MarkovPrefetcher, StridePrefetcher
 from adaptive_prefetch.artifacts import load_model
-from adaptive_prefetch.benchmark import benchmark_dataset, drift_report
+from adaptive_prefetch.benchmark import (analyze_results, benchmark_dataset,
+                                         drift_report)
 from adaptive_prefetch.cli import train
 from adaptive_prefetch.features import FEATURE_NAMES, dominant_stride, extract
 from adaptive_prefetch.model import OnlineGaussianNB
@@ -57,6 +58,36 @@ class TraceTests(unittest.TestCase):
                 Request(0.0, 2, 4, "R", "7"),
                 Request(1.0, 4, 1, "W", "7"),
             ])
+
+    def test_revised_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "hm_1.revised"
+            path.write_text(
+                "0.000004981 RS 1432 128 seq 13770.6865422 0.000255738 13770.6862\n"
+                "0.010347144 WS 1572960 8 rand 341.358274019 0.000137415 341.358048\n"
+                "0.020573163 RS 1448 96 rand 2.0402e-05 0.000246558 0\n",
+                encoding="utf-8")
+            loaded = load_csv(path, "revised")
+            self.assertEqual(len(loaded), 3)
+            self.assertEqual(loaded[0], Request(0.0, 1432, 128, "R"))
+            self.assertAlmostEqual(loaded[1].timestamp_ms, 10.342163, places=5)
+            self.assertEqual((loaded[1].lba, loaded[1].size_blocks,
+                              loaded[1].operation), (1572960, 8, "W"))
+            self.assertAlmostEqual(loaded[2].timestamp_ms, 20.568182, places=5)
+            self.assertEqual((loaded[2].lba, loaded[2].size_blocks,
+                              loaded[2].operation), (1448, 96, "R"))
+
+    def test_revised_profile_rejects_bad_rows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bad.revised"
+            path.write_text("0.000004981 QS 1432 128 seq 1 2 3\n",
+                            encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "op must be RS or WS"):
+                load_csv(path, "revised")
+            path.write_text("0.000004981 RS 1432 128 seq 1 2\n",
+                            encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "expected 8 columns"):
+                load_csv(path, "revised")
 
     def test_unknown_trace_schema_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -201,6 +232,23 @@ class SimulatorTests(unittest.TestCase):
         requests = [Request(float(i), i) for i in range(32)]
         with self.assertRaises((RuntimeError, FileNotFoundError)):
             replay(requests, mode="lstm", lstm_model_path="missing-model.pt")
+
+    def test_analyze_results_names_winner_with_gains(self):
+        requests, _ = transition_trace(3, windows_per_class=2)
+        rows = benchmark_dataset("analysis_trace", requests)
+        report = analyze_results(rows)
+        self.assertIn("analysis_trace", report)
+        self.assertIn("best policy:", report)
+        # Winner must carry a latency speedup > 0 and hit-ratio gain line.
+        self.assertIn("x", report)
+        self.assertIn("up", report)
+
+    def test_analyze_results_survives_skipped_lstm(self):
+        requests, _ = transition_trace(3, windows_per_class=2)
+        rows = benchmark_dataset("analysis_trace", requests, lstm_model_path=None)
+        report = analyze_results(rows)
+        self.assertIn("skipped: lstm", report)
+        self.assertIn("best policy:", report)
 
 
 if __name__ == "__main__":

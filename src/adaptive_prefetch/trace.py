@@ -14,6 +14,8 @@ MSR_COLUMNS = ("Timestamp", "Hostname", "DiskNumber", "Type", "Offset", "Size",
 IOTTA8_COLUMNS = ("device", "sector", "size", "op", "offset", "timestamp",
                   "lifetime", "count")
 ALIBABA_COLUMNS = ("device_id", "opcode", "offset", "length", "timestamp")
+REVISED_COLUMNS = ("time_s", "op", "lba", "size_blocks", "seq_or_rand",
+                   "t1", "t2", "t3")
 
 
 @dataclass(frozen=True)
@@ -33,8 +35,10 @@ class Request:
 
 def load_csv(path: str | Path, format: str = "auto") -> list[Request]:
     """Read a known trace schema; ambiguous units require an explicit profile."""
-    if format not in {"auto", "normalized", "msr", "iotta8", "alibaba"}:
-        raise ValueError("format must be auto, normalized, msr, iotta8, or alibaba")
+    if format not in {"auto", "normalized", "msr", "iotta8", "alibaba", "revised"}:
+        raise ValueError("format must be auto, normalized, msr, iotta8, alibaba, or revised")
+    if format == "revised":
+        return _load_revised_rows(path)
     requests: list[Request] = []
     with Path(path).open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
@@ -159,6 +163,43 @@ def _load_alibaba_rows(reader: csv.DictReader) -> list[Request]:
             ))
         except (ValueError, TypeError, KeyError, AttributeError) as exc:
             raise ValueError(f"invalid Alibaba row {line}: {exc}") from exc
+    _validate_order(requests)
+    return requests
+
+
+def _load_revised_rows(path: str | Path) -> list[Request]:
+    """MSRC-trace-003 'final-trace' profile: 8 whitespace-separated columns.
+
+    Each line is  ``time_s op lba size seq|rand t1 t2 t3`` where op is RS
+    (read) or WS (write), lba and size are 512-byte sectors, time_s is in
+    seconds, and the trailing columns are per-request timing/flag fields
+    not needed by the simulator. Timestamps are normalized to elapsed
+    milliseconds from the first request, matching the canonical units.
+    """
+    rows: list[tuple[float, str, int, int]] = []
+    with Path(path).open(encoding="utf-8-sig") as handle:
+        for line_no, raw in enumerate(handle, start=1):
+            columns = raw.split()
+            if len(columns) != len(REVISED_COLUMNS):
+                raise ValueError(
+                    f"invalid revised row {line_no}: expected "
+                    f"{len(REVISED_COLUMNS)} columns, got {len(columns)}")
+            try:
+                seconds = float(columns[0])
+                op = columns[1]
+                lba = int(columns[2])
+                size = int(columns[3])
+            except (ValueError, TypeError) as exc:
+                raise ValueError(f"invalid revised row {line_no}: {exc}") from exc
+            if op not in {"RS", "WS"}:
+                raise ValueError(f"invalid revised row {line_no}: op must be RS or WS")
+            rows.append((seconds, op, lba, size))
+    if not rows:
+        raise ValueError("CSV trace is empty")
+    first = rows[0][0]
+    requests = [Request((seconds - first) * 1000, lba, size,
+                        "R" if op == "RS" else "W")
+                for seconds, op, lba, size in rows]
     _validate_order(requests)
     return requests
 
