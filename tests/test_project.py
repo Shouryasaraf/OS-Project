@@ -94,7 +94,9 @@ class SimulatorTests(unittest.TestCase):
             replay(requests, model=model, online_updates=True)
         before = model.count["sequential"]
         replay(requests, model=model, labels=["sequential"], online_updates=True)
-        self.assertEqual(model.count["sequential"], before + 1)
+        self.assertAlmostEqual(
+            model.count["sequential"], before * model.decay_factor + 1
+        )
 
 
 if __name__ == "__main__":

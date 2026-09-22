@@ -60,8 +60,10 @@ timestamp_ms,lba,size_blocks,operation,stream_id
 number of contiguous blocks in that request. `operation` is `R` or `W`.
 `stream_id` is optional and retained for future per-process/per-volume analysis;
 the current model classifies the **aggregate** request stream. A real dataset
-must be converted to these units before replay. The repository does not bundle
-MSR Cambridge or SNIA IOTTA production traces.
+must be converted to these units before replay. The repository includes a
+1,000-request MSR-format sample; it does not bundle complete MSR Cambridge or
+SNIA IOTTA trace collections. The sample's provenance has not been
+independently verified here.
 
 The included `msr-cambridge1-sample.csv` uses the original MSR headers
 `Timestamp,Hostname,DiskNumber,Type,Offset,Size,ResponseTime`. The loader

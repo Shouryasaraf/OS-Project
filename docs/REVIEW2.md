@@ -42,7 +42,7 @@ model *after* prediction. No online update is made on unlabelled real traces.
 | Policy selector | Predicted class, recent stride | Future block candidates | Implemented, tested through replay |
 | LRU cache simulator | Requests and prefetches | Hits, precision, wasted prefetches | Implemented, tested |
 | Baselines | Same trace and cache settings | No/fixed prefetch comparison | Implemented |
-| Real-trace adapter | MSR Cambridge CSV fields | Normalized requests | Implemented for the included sample |
+| Real-trace adapter | MSR-format CSV fields | Normalized requests | Implemented and tested on the included sample |
 | Kernel I/O integration | Live OS requests | Live prefetch actions | Outside current user-space prototype |
 
 ## Prepared live demonstration
@@ -56,7 +56,9 @@ model *after* prediction. No online update is made on unlabelled real traces.
 7. Explain that a higher hit ratio is not guaranteed on every synthetic mix.
    Also compare precision and unnecessary prefetches.
 8. Run `.\run_review2.ps1 -Test`.
-9. State limitations: synthetic labels, no device latency, no real-trace claims.
+9. Run `.\run_review2.ps1 -Trace msr-cambridge1-sample.csv` and state that its
+   workload labels and source provenance are unverified.
+10. State limitations: synthetic labels, no device latency, no general real-trace claims.
 
 ## Suggested slide sequence
 
