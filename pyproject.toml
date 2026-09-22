@@ -9,6 +9,9 @@ description = "Review 2 prototype for workload-aware disk I/O prefetching"
 requires-python = ">=3.10"
 dependencies = []
 
+[project.optional-dependencies]
+lstm = ["torch>=2.2"]
+
 [project.scripts]
 adaptive-prefetch = "adaptive_prefetch.cli:main"
 

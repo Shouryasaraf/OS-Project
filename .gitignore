@@ -8,3 +8,4 @@ data/raw/
 .build/
 .codex-finalizer/
 .chart-data-*/
+models/

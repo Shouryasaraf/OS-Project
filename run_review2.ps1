@@ -1,6 +1,9 @@
 param(
     [switch]$Test,
-    [string]$Trace
+    [switch]$Benchmark,
+    [string]$Trace,
+    [ValidateSet('auto', 'normalized', 'msr', 'iotta8', 'alibaba')]
+    [string]$Format = 'auto'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,8 +23,10 @@ try {
     $env:PYTHONPATH = Join-Path $repoRoot 'src'
     if ($Test) {
         & $pythonExe -m unittest discover -s tests -v
+    } elseif ($Benchmark) {
+        & $pythonExe -m adaptive_prefetch benchmark
     } elseif ($Trace) {
-        & $pythonExe -m adaptive_prefetch replay $Trace
+        & $pythonExe -m adaptive_prefetch replay $Trace --format $Format
     } else {
         & $pythonExe -m adaptive_prefetch demo
     }

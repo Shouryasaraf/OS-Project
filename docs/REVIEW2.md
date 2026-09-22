@@ -6,7 +6,7 @@
 | --- | --- |
 | System design and architecture (1) | Pipeline below, trace schema, and causal decision timing. |
 | Module identification (1) | Module table below and file boundaries. |
-| Module completion (4) | Live `demo`, `replay`, and unit tests. |
+| Module completion (4) | Live `demo`, seven-row `benchmark`, `replay`, and unit tests. |
 | Presentation and discussion (4) | Slide outline, scripted demonstration, and viva answers below. |
 
 ## System design and data flow
@@ -43,6 +43,10 @@ model *after* prediction. No online update is made on unlabelled real traces.
 | LRU cache simulator | Requests and prefetches | Hits, precision, wasted prefetches | Implemented, tested |
 | Baselines | Same trace and cache settings | No/fixed prefetch comparison | Implemented |
 | Real-trace adapter | MSR-format CSV fields | Normalized requests | Implemented and tested on the included sample |
+| Classic stride + Markov baselines | Request address deltas | Prefetch candidates | Implemented and tested |
+| Optional offline LSTM | Training traces + PyTorch | Saved next-delta model | Code implemented; runtime unverified here because PyTorch is unavailable |
+| IOTTA-related format profiles | Confirmed per-trace CSV units | Normalized requests | Parsers tested on fixtures; no full public trace benchmarked |
+| Benchmark + cost model | Same trace/cache for each mode | Hit, waste, oracle recall, modelled cost, compute timing | Implemented and tested |
 | Kernel I/O integration | Live OS requests | Live prefetch actions | Outside current user-space prototype |
 
 ## Prepared live demonstration
@@ -52,13 +56,17 @@ model *after* prediction. No online update is made on unlabelled real traces.
 3. Identify separate training and held-out generated test windows.
 4. Read one confusion-matrix row and explain what a mistake would mean.
 5. Point out sequential → strided → random → mixed window predictions.
-6. Compare no prefetch, fixed read-ahead, fixed stride, and adaptive policies.
+6. Run `.\run_review2.ps1 -Benchmark` and compare no prefetch, fixed
+   read-ahead, window stride, classic stride, Markov, and adaptive policies.
+   The optional LSTM row is explicitly skipped until its dependency and
+   trained artifact are available.
 7. Explain that a higher hit ratio is not guaranteed on every synthetic mix.
    Also compare precision and unnecessary prefetches.
 8. Run `.\run_review2.ps1 -Test`.
 9. Run `.\run_review2.ps1 -Trace msr-cambridge1-sample.csv` and state that its
    workload labels and source provenance are unverified.
-10. State limitations: synthetic labels, no device latency, no general real-trace claims.
+10. State limitations: synthetic labels, modelled rather than measured device
+    latency, unverified sample provenance, and no full IOTTA result.
 
 ## Suggested slide sequence
 
@@ -89,11 +97,19 @@ model *after* prediction. No online update is made on unlabelled real traces.
 - **Why can adaptive lose to fixed read-ahead on a test?** The classifier needs
   an observation window, policy switches lag changes, and fixed read-ahead can
   get hits by issuing many extra prefetches. Compare wasted work too.
-- **What remains?** Normalize a specified public trace, validate labels,
-  measure multiple workloads/capacities, and consider more realistic I/O costs.
+- **What remains?** Obtain a metadata-verified full public trace, run the
+  optional LSTM in a PyTorch environment, test more cache capacities, and
+  validate the latency model against actual device observations.
+- **Does this prove the slide's expected wins?** No. The benchmark makes those
+  hypotheses testable, but a win on every workload or faster adaptation is
+  not guaranteed. The LSTM predicts the next address delta, not one of the
+  four workload classes, so compare end-to-end cache metrics and compute
+  cost, not their classification accuracies.
 
 ## Verification record
 
 Run the commands in README immediately before the review and paste the actual
 results into slides. Do not use the expected outcomes from Review 1 as if they
-were measurements.
+were measurements. The existing Review 2 deck was created before Stage 2 and
+its numeric results should be refreshed from the current benchmark before
+presentation.

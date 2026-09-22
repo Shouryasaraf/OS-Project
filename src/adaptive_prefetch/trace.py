@@ -11,6 +11,9 @@ from typing import Iterable
 CLASSES = ("sequential", "strided", "random", "mixed")
 MSR_COLUMNS = ("Timestamp", "Hostname", "DiskNumber", "Type", "Offset", "Size",
                "ResponseTime")
+IOTTA8_COLUMNS = ("device", "sector", "size", "op", "offset", "timestamp",
+                  "lifetime", "count")
+ALIBABA_COLUMNS = ("device_id", "opcode", "offset", "length", "timestamp")
 
 
 @dataclass(frozen=True)
@@ -28,16 +31,31 @@ class Request:
             raise ValueError("operation must be R or W")
 
 
-def load_csv(path: str | Path) -> list[Request]:
-    """Read a normalized trace or an MSR Cambridge block trace."""
+def load_csv(path: str | Path, format: str = "auto") -> list[Request]:
+    """Read a known trace schema; ambiguous units require an explicit profile."""
+    if format not in {"auto", "normalized", "msr", "iotta8", "alibaba"}:
+        raise ValueError("format must be auto, normalized, msr, iotta8, or alibaba")
     requests: list[Request] = []
     with Path(path).open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
-        if reader.fieldnames and set(MSR_COLUMNS).issubset(reader.fieldnames):
+        columns = set(reader.fieldnames or [])
+        if format == "msr" or (format == "auto" and set(MSR_COLUMNS).issubset(columns)):
+            if not set(MSR_COLUMNS).issubset(columns):
+                raise ValueError("MSR format requires its seven named columns")
             return _load_msr_rows(reader)
+        if format == "alibaba" or (format == "auto" and set(ALIBABA_COLUMNS).issubset(columns)):
+            if not set(ALIBABA_COLUMNS).issubset(columns):
+                raise ValueError("Alibaba format requires device_id,opcode,offset,length,timestamp")
+            return _load_alibaba_rows(reader)
+        if format == "iotta8" or (format == "auto" and set(IOTTA8_COLUMNS).issubset(columns)):
+            if set(IOTTA8_COLUMNS).issubset(columns):
+                return _load_iotta8_rows(reader)
+            if format == "iotta8":
+                handle.seek(0)
+                return _load_iotta8_rows(csv.DictReader(handle, fieldnames=IOTTA8_COLUMNS))
         required = {"timestamp_ms", "lba", "size_blocks", "operation"}
-        if not reader.fieldnames or not required.issubset(reader.fieldnames):
-            raise ValueError(f"CSV requires columns: {', '.join(sorted(required))}")
+        if not required.issubset(columns):
+            raise ValueError("unknown CSV schema; choose a documented --format and units")
         for line, row in enumerate(reader, start=2):
             try:
                 requests.append(Request(
@@ -89,6 +107,65 @@ def _load_msr_rows(reader: csv.DictReader) -> list[Request]:
     if any(b.timestamp_ms < a.timestamp_ms for a, b in zip(requests, requests[1:])):
         raise ValueError("CSV requests must be sorted by timestamp")
     return requests
+
+
+def _load_iotta8_rows(reader: csv.DictReader) -> list[Request]:
+    """Plan-specific eight-column profile: sector/size in 512-B sectors, us time.
+
+    SNIA IOTTA is a repository, not a universal schema. This profile must be
+    selected only for a trace whose accompanying metadata confirms these units.
+    """
+    rows = list(reader)
+    if not rows:
+        raise ValueError("CSV trace is empty")
+    first = float(rows[0]["timestamp"])
+    requests = []
+    for line, row in enumerate(rows, start=2):
+        try:
+            op = row["op"].strip().upper()
+            if op in {"READ", "0"}:
+                op = "R"
+            elif op in {"WRITE", "1"}:
+                op = "W"
+            requests.append(Request(
+                timestamp_ms=(float(row["timestamp"]) - first) / 1000,
+                lba=int(row["sector"]), size_blocks=int(row["size"]),
+                operation=op, stream_id=row["device"].strip(),
+            ))
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ValueError(f"invalid IOTTA-8 row {line}: {exc}") from exc
+    _validate_order(requests)
+    return requests
+
+
+def _load_alibaba_rows(reader: csv.DictReader) -> list[Request]:
+    """Alibaba EBS profile: byte offset/length and microsecond timestamp."""
+    rows = list(reader)
+    if not rows:
+        raise ValueError("CSV trace is empty")
+    first = int(rows[0]["timestamp"])
+    requests = []
+    for line, row in enumerate(rows, start=2):
+        try:
+            offset = int(row["offset"])
+            length = int(row["length"])
+            if offset % 512 or length % 512:
+                raise ValueError("offset and length must be multiples of 512 bytes")
+            requests.append(Request(
+                timestamp_ms=(int(row["timestamp"]) - first) / 1000,
+                lba=offset // 512, size_blocks=length // 512,
+                operation=row["opcode"].strip().upper(),
+                stream_id=row["device_id"].strip(),
+            ))
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ValueError(f"invalid Alibaba row {line}: {exc}") from exc
+    _validate_order(requests)
+    return requests
+
+
+def _validate_order(requests: list[Request]) -> None:
+    if any(b.timestamp_ms < a.timestamp_ms for a, b in zip(requests, requests[1:])):
+        raise ValueError("CSV requests must be sorted by timestamp")
 
 
 def write_csv(path: str | Path, requests: Iterable[Request]) -> None:
