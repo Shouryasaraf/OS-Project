@@ -36,38 +36,34 @@ folder before writing results there).
   demonstration, cache hit ratio, prefetch precision, and unused-prefetch count.
 - Standard-library unit tests. No packages need to be downloaded to run from source.
 
-## Run on Windows
+## Run
 
-From the repository root in PowerShell:
-
-```powershell
-.\run_review2.ps1
-.\run_review2.ps1 -Test
-.\run_review2.ps1 -Benchmark
-.\run_review2.ps1 -TrainMSR
-```
-
-The launcher uses a Python command on PATH or the bundled Codex Python on
-this machine. To replay a normalized CSV trace:
+From the repository root. The quick, **guided full run** — asks for inputs,
+then runs the classifier demo, the seven-policy benchmark, and the drift
+report, saving `outputs/results.md` + `outputs/results.csv`:
 
 ```powershell
-.\run_review2.ps1 -Trace path\to\trace.csv
-.\run_review2.ps1 -Trace path\to\trace.csv -Format alibaba
-.\run_review2.ps1 -Trace .\data\samples\msr-cambridge1-sample.csv -ModelPath .\models\msr_sample_gnb.json
+python main.py
 ```
 
-To use Python directly or export a demonstration trace:
+For specific tasks, call the modules directly (set `PYTHONPATH=src` first,
+or install with `pip install -e .`):
 
 ```powershell
 $env:PYTHONPATH='src'
-python -m adaptive_prefetch export-demo demo.csv
-python -m adaptive_prefetch replay demo.csv
-python -m adaptive_prefetch replay data/samples/msr-cambridge1-sample.csv
-python -m adaptive_prefetch benchmark --datasets synthetic msr --output-csv results.csv
+python -m unittest discover -s tests -v          # unit tests
+python -m adaptive_prefetch demo                 # classifier accuracy + confusion matrix
+python -m adaptive_prefetch benchmark            # seven-policy comparison matrix
+python -m adaptive_prefetch replay path\to\trace.csv
+python -m adaptive_prefetch replay path\to\trace.csv --format alibaba
+python -m adaptive_prefetch replay data/samples/msr-cambridge1-sample.csv --model-path models/msr_sample_gnb.json
+python -m adaptive_prefetch train-msr-sample     # weakly adapt classifier on the MSR sample
 python -m adaptive_prefetch normalize --input trace.csv --format alibaba --output normalized.csv
+python -m adaptive_prefetch export-demo demo.csv # export a synthetic transition trace
 ```
 
-On macOS/Linux, use `PYTHONPATH=src python -m adaptive_prefetch demo`.
+On macOS/Linux, prefix the same way
+(`PYTHONPATH=src python -m adaptive_prefetch demo` or `python main.py`).
 
 ## Trace data format
 
@@ -95,13 +91,14 @@ The included `data/samples/msr-cambridge1-sample.csv` uses the original MSR head
 converts its byte offsets and sizes to 512-byte blocks, timestamps to elapsed
 milliseconds, and `Read`/`Write` to `R`/`W` automatically.
 
-`-TrainMSR` creates a small, reproducible JSON classifier artifact at
+`train-msr-sample` creates a small, reproducible JSON classifier artifact at
 `models/msr_sample_gnb.json`. The four-class model is first trained on the
 labelled synthetic generator. From the unlabelled MSR sample, it then learns
 only from read-heavy windows with a conservative **random-like proxy label**.
 This is weakly supervised adaptation, not four-class training from real ground
-truth. The model can be loaded with `-ModelPath` for replay; replaying the same
-sample is an in-sample demonstration, not an unbiased performance evaluation.
+truth. The model can be loaded with `--model-path` for replay; replaying the
+same sample is an in-sample demonstration, not an unbiased performance
+evaluation.
 See [the training record](docs/MSR_SAMPLE_TRAINING.md) for exact counts and
 limitations.
 

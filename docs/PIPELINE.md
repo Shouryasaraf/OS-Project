@@ -68,9 +68,11 @@ classifier updates.
 ## Run
 
 ```powershell
-.\run_review2.ps1 -Test
-.\run_review2.ps1 -Benchmark
-.\run_review2.ps1 -Trace .\data\samples\msr-cambridge1-sample.csv
+python main.py                       # guided run: demo + benchmark + drift + outputs/
+$env:PYTHONPATH='src'
+python -m unittest discover -s tests -v
+python -m adaptive_prefetch benchmark
+python -m adaptive_prefetch replay .\data\samples\msr-cambridge1-sample.csv
 ```
 
 For custom datasets, normalization, latency parameters, CSV export, and the

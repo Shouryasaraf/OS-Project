@@ -1,7 +1,8 @@
 # MSR sample classifier adaptation
 
 The existing four-class Gaussian Naive Bayes classifier was adapted on
-`data/samples/msr-cambridge1-sample.csv` using `run_review2.ps1 -TrainMSR`.
+`data/samples/msr-cambridge1-sample.csv` using
+`python -m adaptive_prefetch train-msr-sample`.
 It is **not** a model trained from four real workload classes: the CSV has no
 workload labels and its small set of windows is overwhelmingly random-like.
 
@@ -21,8 +22,9 @@ workload labels and its small set of windows is overwhelmingly random-like.
 To regenerate and load the artifact from the repository root:
 
 ```powershell
-.\run_review2.ps1 -TrainMSR
-.\run_review2.ps1 -Trace .\data\samples\msr-cambridge1-sample.csv -ModelPath .\models\msr_sample_gnb.json
+$env:PYTHONPATH='src'
+python -m adaptive_prefetch train-msr-sample
+python -m adaptive_prefetch replay .\data\samples\msr-cambridge1-sample.csv --model-path .\models\msr_sample_gnb.json
 ```
 
 The second command verifies that the saved model can be used in replay. It

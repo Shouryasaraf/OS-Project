@@ -11,5 +11,6 @@
 From the repository root, run:
 
 ```powershell
-.\run_review2.ps1 -Trace .\data\samples\msr-cambridge1-sample.csv
+$env:PYTHONPATH='src'
+python -m adaptive_prefetch replay .\data\samples\msr-cambridge1-sample.csv
 ```

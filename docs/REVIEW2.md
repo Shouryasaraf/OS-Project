@@ -52,19 +52,21 @@ model *after* prediction. No online update is made on unlabelled real traces.
 ## Prepared live demonstration
 
 1. Explain the five-block pipeline above and the four workload classes.
-2. Run `.\run_review2.ps1`.
+2. Run `python main.py` (accept the defaults) and point out the final
+   policy-comparison table and drift report.
 3. Identify separate training and held-out generated test windows.
 4. Read one confusion-matrix row and explain what a mistake would mean.
 5. Point out sequential → strided → random → mixed window predictions.
-6. Run `.\run_review2.ps1 -Benchmark` and compare no prefetch, fixed
-   read-ahead, window stride, classic stride, Markov, and adaptive policies.
+6. Run `python -m adaptive_prefetch benchmark` (with `PYTHONPATH=src`) and
+   compare no prefetch, fixed read-ahead, window stride, classic stride,
+   Markov, and adaptive policies.
    The optional LSTM row is explicitly skipped until its dependency and
    trained artifact are available.
 7. Explain that a higher hit ratio is not guaranteed on every synthetic mix.
    Also compare precision and unnecessary prefetches.
-8. Run `.\run_review2.ps1 -Test`.
-9. Run `.\run_review2.ps1 -Trace data/samples/msr-cambridge1-sample.csv` and state that its
-   workload labels and source provenance are unverified.
+8. Run `python -m unittest discover -s tests -v` (unit tests).
+9. Run `python -m adaptive_prefetch replay data/samples/msr-cambridge1-sample.csv`
+   and state that its workload labels and source provenance are unverified.
 10. State limitations: synthetic labels, modelled rather than measured device
     latency, unverified sample provenance, and no full IOTTA result.
 

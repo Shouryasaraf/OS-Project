@@ -150,7 +150,8 @@ Add to `tests/test_project.py`:
   IOTTA loader normalization; `benchmark` runs all available modes and returns
   a table; causality re-check: first window never prefetches for new modes.
 
-Verification gate: `.\run_review2.ps1 -Test` green + `benchmark` prints the
+Verification gate: unit tests green (`python -m unittest discover -s tests -v`
+with `PYTHONPATH=src`) + `benchmark` prints the
 7-row matrix on the MSR sample with no missing rows (LSTM row skipped
 gracefully when torch absent).
 

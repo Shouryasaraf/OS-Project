@@ -5,6 +5,7 @@ __pycache__/
 *.egg-info/
 outputs/
 data/raw/
+data/MSRC-trace-003
 .build/
 .codex-finalizer/
 .chart-data-*/

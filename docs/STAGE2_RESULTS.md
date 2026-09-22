@@ -1,6 +1,7 @@
 # Stage 2 verification snapshot
 
-Run on 22 September 2026 with `run_review2.ps1 -Benchmark`, default cache
+Run on 22 September 2026 with the `benchmark` command
+(`python -m adaptive_prefetch benchmark` with `PYTHONPATH=src`), default cache
 (128 blocks), window (32 requests), and modelled costs (5/100/50 µs for
 hit/demand miss/prefetch). These are simulation outcomes, not physical-disk
 measurements. Predictor timings are machine-dependent and will vary.
