@@ -70,11 +70,11 @@ classifier updates.
 ```powershell
 .\run_review2.ps1 -Test
 .\run_review2.ps1 -Benchmark
-.\run_review2.ps1 -Trace .\msr-cambridge1-sample.csv
+.\run_review2.ps1 -Trace .\data\samples\msr-cambridge1-sample.csv
 ```
 
 For custom datasets, normalization, latency parameters, CSV export, and the
-optional LSTM commands, see [README.md](README.md). The bundled MSR-format
+optional LSTM commands, see [README.md](../README.md). The bundled MSR-format
 sample has unverified provenance. No full IOTTA trace has been supplied, so
 full-trace outcome claims remain open. The Review 2 slide deck predates this
 Stage 2 benchmark; refresh its numbers from a current run before presenting.

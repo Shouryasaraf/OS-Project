@@ -95,7 +95,8 @@ def run_benchmark(args: argparse.Namespace) -> None:
                                            args.windows_per_class, args.window_size)
             datasets.append((f"synthetic_seed_{args.seed + offset}", requests))
     if "msr" in args.datasets:
-        sample = Path(__file__).resolve().parents[2] / "msr-cambridge1-sample.csv"
+        sample = (Path(__file__).resolve().parents[2] / "data" / "samples" /
+                  "msr-cambridge1-sample.csv")
         datasets.append(("msr_format_sample", load_csv(sample, "msr")))
     if "iotta" in args.datasets:
         if not args.trace:

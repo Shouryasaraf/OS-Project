@@ -63,7 +63,7 @@ model *after* prediction. No online update is made on unlabelled real traces.
 7. Explain that a higher hit ratio is not guaranteed on every synthetic mix.
    Also compare precision and unnecessary prefetches.
 8. Run `.\run_review2.ps1 -Test`.
-9. Run `.\run_review2.ps1 -Trace msr-cambridge1-sample.csv` and state that its
+9. Run `.\run_review2.ps1 -Trace data/samples/msr-cambridge1-sample.csv` and state that its
    workload labels and source provenance are unverified.
 10. State limitations: synthetic labels, modelled rather than measured device
     latency, unverified sample provenance, and no full IOTTA result.

@@ -1,6 +1,6 @@
 # Implementation Plan — Stage 2 (delivers "Operating Systems Lab Submission 2" spec)
 
-Source of truth: `Operating Systems Lab Submission 2.pdf` (Project Review 1).
+Source of truth: [`Operating Systems Lab Submission 2.pdf`](reference/Operating%20Systems%20Lab%20Submission%202.pdf) (Project Review 1).
 Goal of Stage 2: **actually build and prove what the PDF promises** — classify
 access pattern in real time, switch prefetch policy per class, learn online, and
 benchmark against **stride, Markov, and offline-LSTM baselines**.
@@ -23,7 +23,7 @@ benchmark against **stride, Markov, and offline-LSTM baselines**.
 
 ## 2. Architecture (unchanged spine, pluggable policy layer)
 
-Same 5-stage pipeline (see `Pipeline.md`). Change: **Stage 4 policy selection
+Same 5-stage pipeline (see [`PIPELINE.md`](PIPELINE.md)). Change: **Stage 4 policy selection
 becomes a pluggable predictor registry** so every baseline + the adaptive
 classifier feed the same `candidates()`-style signature and are compared under
 identical causality, stream, cache, and LRU rules.
@@ -115,7 +115,7 @@ unused_prefetches, mean_access_latency (µs), latency_speedup_vs_none`.
 
 Datasets:
 1. Synthetic transition traces, multi-seed (have).
-2. `msr-cambridge1-sample.csv` (1000 reqs — real but tiny; mark as sample).
+2. `data/samples/msr-cambridge1-sample.csv` (1000 reqs — real but tiny; mark as sample).
 3. Full MSR + IOTTA: `normalize` script + README download pointers; runner
    benchmarks whatever normalized traces are present.
 
@@ -163,7 +163,7 @@ gracefully when torch absent).
 4. **M4 — LSTM**: optional torch path, `train-lstm`, artifact loading, skip-
    gracefully behavior + README note.
 5. **M5 — Drift + pseudo-label**: B4/B5 benchmarks, `--online-real` flag.
-6. **M6 — Docs**: update `Pipeline.md` (7-mode matrix) + `README.md`
+6. **M6 — Docs**: update `docs/PIPELINE.md` (7-mode matrix) + `README.md`
    (benchmark/normalize/train-lstm commands, optional lstm extra).
 
 ## 9. Explicit non-goals (scope control)

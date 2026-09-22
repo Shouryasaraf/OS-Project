@@ -6,6 +6,21 @@ is: trace requests → window features → online-capable classifier → pattern
 prefetch policy → LRU cache simulation. It does **not** modify the operating
 system or perform physical disk reads.
 
+## Repository layout
+
+| Location | Contents |
+| --- | --- |
+| `src/adaptive_prefetch/` | Trace loading, features, models, policies, replay, benchmark, and CLI |
+| `tests/` | Automated checks |
+| `data/samples/` | Small demonstration traces and format notes |
+| `docs/` | Pipeline, implementation plan, Review 2 guide, and results |
+| `docs/reference/` | Original lab brief |
+| `presentation/` | Review 2 slide deck |
+
+Run commands below from the repository root. Keep new trace datasets under
+`data/` and generated benchmark outputs under `outputs/` (create that ignored
+folder before writing results there).
+
 ## What is implemented
 
 - Reproducible synthetic sequential, strided, random, and mixed I/O traces.
@@ -45,7 +60,7 @@ To use Python directly or export a demonstration trace:
 $env:PYTHONPATH='src'
 python -m adaptive_prefetch export-demo demo.csv
 python -m adaptive_prefetch replay demo.csv
-python -m adaptive_prefetch replay msr-cambridge1-sample.csv
+python -m adaptive_prefetch replay data/samples/msr-cambridge1-sample.csv
 python -m adaptive_prefetch benchmark --datasets synthetic msr --output-csv results.csv
 python -m adaptive_prefetch normalize --input trace.csv --format alibaba --output normalized.csv
 ```
@@ -73,7 +88,7 @@ must be converted to these units before replay. The repository includes a
 SNIA IOTTA trace collections. The sample's provenance has not been
 independently verified here.
 
-The included `msr-cambridge1-sample.csv` uses the original MSR headers
+The included `data/samples/msr-cambridge1-sample.csv` uses the original MSR headers
 `Timestamp,Hostname,DiskNumber,Type,Offset,Size,ResponseTime`. The loader
 converts its byte offsets and sizes to 512-byte blocks, timestamps to elapsed
 milliseconds, and `Read`/`Write` to `R`/`W` automatically.
@@ -136,4 +151,7 @@ cannot be compared directly.
 See [Review 2 guide](docs/REVIEW2.md) for architecture, module completion,
 demonstration steps, and discussion questions. See the
 [Stage 2 verification snapshot](docs/STAGE2_RESULTS.md) for actual results
-and explicit gaps; rerun the benchmark before presenting any numbers.
+and explicit gaps; rerun the benchmark before presenting any numbers. The
+[pipeline guide](docs/PIPELINE.md) and [Stage 2 plan](docs/implementation-stage2.md)
+are kept under `docs/`; sample traces and their format notes are under
+`data/samples/`.
