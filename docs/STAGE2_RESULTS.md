@@ -1,5 +1,24 @@
 # Stage 2 verification snapshot
 
+> **STALE -- do not quote any number in this file.**
+>
+> Every figure below predates four changes that invalidate them:
+>
+> - The cache default is now **2048 blocks**, not the 128 used here. 128 was
+>   calibrated for the old synthetic generator's 1-3 block requests and
+>   starved every policy once requests became a realistic 8-128 blocks
+>   ([DECISIONS.md](DECISIONS.md) D10.5).
+> - Costs are now **measured** from each trace's own recorded service times
+>   (means of 260-5491 us), not the assumed 5/100/50 us model. The modelled
+>   cost column is also *degenerate* at the default: break-even precision is
+>   1.0101, so "no prefetch" wins it by arithmetic (D11).
+> - The benchmark runs **12 modes**, not 7. Fixed depth-8 read-ahead (`deep`)
+>   now has the highest hit ratio on 6 of 8 real datasets (D13, D14).
+> - The LSTM baseline reported here has since been reworked (D3).
+>
+> Regenerate with `python main.py` and read `outputs/results.md`. Do not
+> hand-edit numbers into this file or into the slide decks.
+
 Run on 22 September 2026 with the `benchmark` command
 (`python -m adaptive_prefetch benchmark` with `PYTHONPATH=src`), default cache
 (128 blocks), window (32 requests), and modelled costs (5/100/50 µs for
