@@ -509,3 +509,373 @@ mis-specification to be left alone; fixing the generator made leaving it
 incorrect.
 
 ---
+
+## D11. The prefetch cost model made the cost column unwinnable
+
+`LatencyModel.measured()` charged a speculative read `1.1 x mean_service`,
+justified in a comment as "a full device read plus queueing pressure". That
+put break-even precision at **1.111** -- above 100%, so no prefetcher could
+ever pay for itself under any policy on any trace. The sweep's
+"lowest modelled cost" column was therefore decided by arithmetic, not by
+measurement.
+
+Changed the default to `prefetch_multiple = 1.0` (a prefetch is one device
+read) and added `LatencyModel.break_even_precision()` plus a
+`--prefetch-multiple` flag on both entry points.
+
+**This did not fix the problem, and the first draft of the code comment
+claimed it had.** Break-even is `prefetch_us / (demand_miss_us - hit_us)`,
+which at `hit = 0.01 x mean` and `prefetch = mean` is `1/0.99 = 1.0101`.
+Still above 1. The cost column is degenerate at *any* `prefetch_multiple >= 1`.
+
+That is not a modelling artefact, it is the arithmetic of this hardware: a
+speculative read performs the same device read as the demand read it
+replaces, and saves strictly less than a whole demand read because the hit
+still costs a cache lookup. To be worth it, a prefetcher must exceed 100%
+precision. No prefetcher can.
+
+Consequences, stated plainly:
+
+* The modelled-cost column of every benchmark is degenerate at the default
+  setting. `none` wins it by construction. `report.cost_model_section()` and
+  both CLI entry points now print the break-even and say so *before* any
+  reader sees a cost table.
+* Values **below 1.0** model overlapped or coalesced prefetch: identical
+  device work, but the requester is not blocked by it. That is an assumption
+  these traces cannot support -- they record demand-read service time only,
+  never queue depth or overlap. It is a flag, not a default, and
+  `--prefetch-multiple 0.5` is the setting under which prefetching is even
+  arithmetically possible.
+* Cost ranking is invariant to a **uniform rescale** of the calibration --
+  every mode's cost is linear in the mean service time, so multiplying all
+  three costs by the same factor cannot move `argmin`. That is pinned by
+  `test_cost_ranking_is_invariant_to_the_calibration_scale`.
+  It is **not** invariant to `prefetch_multiple`, which re-weights only the
+  prefetch term. That distinction was originally written up wrongly here, and
+  an audit caught it: at `prefetch_multiple = 1.0` `none` is cheapest on a
+  contiguous scan (100.00 vs `deep` 101.01 us/read), and at 0.9 the argmin
+  flips to `deep` (91.06 vs 100.00). The flip is pinned by
+  `test_prefetch_multiple_does_change_the_cost_ranking`. So the setting does
+  change which policy is cheapest -- it just cannot change the *hit ratio*,
+  which is what the cache actually produces.
+
+Reported metrics for the whole collection are therefore re-stated: hit ratio,
+precision and wasted I/O are the informative columns; modelled cost is
+degenerate and is labelled as such.
+
+## D12. Invert the target: predict *harm*, not the best policy
+
+The oracle experiment (D9 follow-up, temp script `trueoracle.py`) settled the
+"can the classifier be better?" question: a perfect window router beats fixed
+read-ahead by only +0.42 / +0.26 / +0.02 / +0.00 points of hit ratio on
+hm_1 / src2_2 / ts_0 / proj_0. Four-way routing had almost no headroom,
+because `none`, `sequential` and `strided` perform near-identically.
+
+The one large real win was the opposite decision. On `web_3`, `none` reaches
+50.61% and `sequential` reaches 25.70% -- read-ahead **halves** the hit ratio
+by evicting useful blocks. A perfect router recovers +24.83 points there, all
+of it from knowing when *not* to prefetch.
+
+So the target was inverted: the only decision worth making is "will
+prefetching hurt?".
+
+**That decision does not need predicting.** `LRUCache` already counts
+`useful_prefetches`, so the realised precision of our own speculative reads is
+observable at read time, causally, with no future knowledge and no trained
+model. `guard.py` adds three feedback-gated modes that compare realised
+precision against `break_even_precision()`:
+
+* `guard` -- prefetch only while precision clears break-even
+* `depth_adaptive` -- depth scaled by the margin above break-even
+* `correlate` -- additionally require a stride confirmed over a longer
+  history than one window
+
+`policy_interval` lets the gate re-decide faster than the classifier's window
+(default: one decision per `window_size` requests).
+
+## D13. Policy space: read-ahead *depth* was the missing dimension
+
+The +0.4-point oracle ceiling in D9 was not evidence that prefetching had
+little headroom. It was evidence that the policy space was degenerate: every
+mode issued at most 2 blocks from one heuristic, so `sequential` and
+`strided` produced identical hit ratios on 4 of 5 traces
+(`dominant_stride` returns `None` on real data, so `strided` degenerates to
+`none`).
+
+Isolating depth from policy choice -- first 40,000 requests of 8 real traces,
+2048-block cache, window 32:
+
+| trace | d=1 | d=2 (baseline) | d=4 | d=8 | d=16 | d8-d2 | d16-d2 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| wdev_3 | 10.21% | 10.28% | 10.44% | 10.76% | 11.39% | +0.47 | +1.11 |
+| rsrch_1 | 49.46% | 49.64% | 50.00% | 50.72% | 51.80% | +1.08 | +2.16 |
+| rsrch_2 | 54.80% | 56.34% | 59.41% | **65.89%** | 58.69% | **+9.54** | +2.35 |
+| web_3 | 25.52% | 25.70% | 26.07% | 26.77% | 27.25% | +1.07 | +1.55 |
+| src2_2 | 29.98% | 31.67% | 35.24% | 42.72% | **46.77%** | **+11.05** | +15.10 |
+| ts_0 | 32.50% | 33.50% | 35.52% | 39.63% | **42.35%** | +6.13 | +8.85 |
+| proj_0 | 31.00% | 31.63% | 33.00% | 35.76% | **38.48%** | +4.13 | +6.85 |
+| hm_1 | **31.52%** | 31.39% | 30.97% | 30.71% | 30.72% | -0.68 | -0.67 |
+| **mean** | 33.12% | 33.77% | 35.08% | 37.87% | 38.43% | **+4.10** | **+4.66** |
+
+**Depth 8 is worth +4.10 points of mean hit ratio** over the depth-2 baseline
+that every earlier mode used -- an order of magnitude more headroom than the
+entire policy-selection question. Depth 16 scores +4.66 on the mean but is
+*not* the default: it issues 4x the prefetches and loses 7.20 points on
+rsrch_2, where a deeper prefetch evicts blocks the workload still wants.
+Depth 8 is best-or-near-best on all 8 traces; only `hm_1` prefers shallower
+prefetch at all.
+
+So `deep` was added: fixed-depth read-ahead, `DEFAULT_READ_AHEAD_DEPTH = 8`.
+It is not a clever policy -- it is the baseline the earlier mode set was
+missing, and the gate has to beat it.
+
+On a contiguous synthetic scan the effect is stark: depth 2 gives 24.86% hit
+ratio, depth 8 gives 99.45%, at 99.98% prefetch precision.
+
+*Correction (second audit):* the first version of this entry quoted "+4.66"
+and "+15.10 on src2_2" as the depth-8 result. Those are the depth-**16**
+deltas. The depth-8 numbers are +4.10 and +11.05. Both are in the table
+above.
+
+## D14. Where the feedback gate actually wins, measured
+
+First 40,000 requests of each real trace, 2048-block cache, window 32, default
+cost model (break-even 1.0101, so the gate is shut for most of the run).
+
+| trace | `none` | `sequential` | `deep` | `guard` | best |
+| --- | ---: | ---: | ---: | ---: | --- |
+| wdev_3 | 10.13% | 10.28% | **10.76%** | 10.28% | deep |
+| rsrch_1 | 49.19% | 49.64% | **50.72%** | 49.64% | deep |
+| rsrch_2 | 53.21% | 56.34% | **65.89%** | 53.69% | deep |
+| web_3 | **50.61%** | 25.70% | 26.77% | 44.69% | none |
+| src2_2 | 28.31% | 31.67% | **42.72%** | 28.67% | deep |
+| ts_0 | 31.46% | 33.50% | **39.63%** | 33.18% | deep |
+| proj_0 | 30.34% | 31.63% | **35.76%** | 30.63% | deep |
+| hm_1 | **31.76%** | 31.39% | 30.71% | 31.62% | none |
+
+Wasted prefetches -- issued minus subsequently read:
+
+| trace | `sequential` | `deep` | `guard` | gate as % of sequential |
+| --- | ---: | ---: | ---: | ---: |
+| wdev_3 | 14 | 56 | 14 | 100.0% |
+| rsrch_1 | 31 | 127 | 31 | 100.0% |
+| rsrch_2 | 14,671 | 58,608 | 1,837 | 12.5% |
+| web_3 | 9,718 | 41,073 | **1,275** | **13.1%** |
+| src2_2 | 18,970 | 77,566 | 2,459 | 13.0% |
+| ts_0 | 6,914 | 28,608 | 5,776 | 83.5% |
+| proj_0 | 14,190 | 58,503 | 2,630 | 18.5% |
+| hm_1 | 26,522 | 115,235 | 3,974 | 15.0% |
+
+Read honestly:
+
+* **`deep` wins hit ratio on 6 of 8** and is the strongest single result in
+  the project. It is also by far the most wasteful -- 77,566 wasted
+  prefetches on src2_2 against `sequential`'s 18,970. It buys hit ratio with
+  speculative I/O, and the cost model says that trade does not pay.
+* **The gate wins exactly where the hypothesis said it would** -- web_3, the
+  one trace where read-ahead wrecks the cache. +18.99 points of hit ratio
+  over `sequential` *and* 86.9% less wasted I/O. It does not beat `none`
+  there (50.61%); it recovers most of the 24.91-point damage `sequential`
+  does.
+* **On the other seven traces the gate loses to `sequential`**, by 0.00 to
+  3.00 points. What it buys is less waste: 12-19% of `sequential`'s on five
+  traces, but only 16.5% less on ts_0 and none at all on the two traces short
+  enough (wdev_3, rsrch_1) that the gate never finishes exploring.
+* **`none` still wins on `web_3` and `hm_1`.** Unchanged from D9.
+
+The gate is not a general win. It is a targeted win on cache-polluting
+workloads, and it buys that by spending less, not by predicting better.
+
+The gate's own final decision, for the record (default cost model, so every
+margin is against a break-even of 1.0101):
+
+| trace | observed precision | margin | policy switches |
+| --- | ---: | ---: | ---: |
+| wdev_3 | 0.125 | -0.401 | 1 |
+| rsrch_1 | 0.139 | -0.387 | 1 |
+| rsrch_2 | 0.312 | -0.215 | 232 |
+| web_3 | 0.371 | -0.156 | 196 |
+| src2_2 | 0.232 | -0.295 | 278 |
+| ts_0 | 0.594 | **+0.068** | 53 |
+| proj_0 | 0.440 | -0.086 | 196 |
+| hm_1 | 0.177 | -0.349 | 276 |
+
+Realised precision ranges from 0.125 to 0.594, never near the 1.0101
+break-even, which is why the gate spends most intervals closed. ts_0 is the
+one trace where it opens on its own evidence (margin +0.068) -- and there it
+still scores 0.32 points *below* `sequential`, so a positive margin is not a
+guarantee of a win. That is a reminder that break-even precision is a
+necessary condition for a prefetcher to pay, not a sufficient one.
+
+*Correction (second audit):* the first version of this entry reported
+`src2_2 none 16.94%`, `ts_0 22.60%`, `proj_0 28.49%`, `hm_1 37.86%` and
+`rsrch_2 53.63%`. Those came from a script whose `head()` helper kept
+overwriting `out` on each chunk and broke on the second pass, so it returned
+requests 40,001-80,000 for any trace longer than 80k. The table above takes
+the *first* 40,000 requests and the numbers are reproducible from it. The
+`web_3` conclusion (+18.99 over `sequential`, 86.9% less waste) was and
+remains correct -- web_3 is shorter than 40k requests, so it was never
+affected by the bug.
+
+### D14.1 `depth_adaptive` is identical to `guard` at the default cost model
+
+Measured, and worth stating rather than hiding: at `prefetch_multiple = 1.0`
+the break-even is 1.0101 while realised precision is clamped to at most 1.0,
+so `margin <= -0.0101 < 0` on **every** non-probing decision.
+`depth_for_margin()` returns 0 whenever the margin is not positive, so the
+mode is driven entirely by the exploration budget and the 1-in-9 re-probe,
+both of which use the same `min_depth = 2` that `guard` uses. On all 8 traces
+above the two modes agree on hit ratio, prefetch count, wasted I/O and policy
+switches, to the digit.
+
+It is kept because it is a genuinely different policy in the only regime
+where prefetching is arithmetically possible (`--prefetch-multiple 0.5`),
+where it does diverge -- though even there it trails `guard` on the traces
+where they differ. It earns a row in the benchmark matrix so that divergence
+is measurable rather than assumed, and `observed_precision`,
+`precision_margin` and `observed_stride` are written into the sweep CSV so a
+reader can see *why* a gated mode issued what it did.
+
+## D15. Bugs the new modes introduced, and the audit that found them
+
+A two-angle audit (one agent for bugs/dead code, one to re-verify claims with
+numbers) found nine defects. All are fixed with regression tests.
+
+**Crash.** `replay_stream` had no feedback-gated branch at all, so
+`sweep_modes.py` died with `ValueError: unknown mode` on the 9th mode of the
+first trace. Root cause was duplicated loop logic: `replay` and
+`replay_stream` each carried their own copy. Fixed by extracting
+`GateController` so both drive one state machine, plus `_publish_gate()` so
+the two cannot report different things for the same run. A test asserts
+`replay` == `replay_stream` on every gated mode across a chunk boundary.
+
+**Wrong result: cumulative usefulness recorded as an interval delta.**
+`GateController.decide()` recorded `self._useful_total` -- the *cumulative*
+useful count -- as if it were the interval's own. Every interval re-counted
+all previous usefulness, the rolling ratio pinned at 1.0, and the gate sat at
+maximum depth permanently. This produced an apparent **+12.3-point "win" on
+rsrch_2 and +30.9 on src2_2** that was entirely an artefact. Realised rolling
+precision is 0.34-0.42, and the true numbers are in D14. The clamp at 1.0 in
+`PrecisionMonitor.precision` had been hiding the symptom. Two tests now pin
+the accounting invariant (`monitor.useful` must equal the true total) and
+that precision must decay when usefulness stops arriving.
+
+**Wrong result: `read_ahead` double-added `lba`.** A nested generator
+expression produced `2*lba + size + k`, so every read-ahead prefetch went to
+the wrong half of the disk and realised precision was exactly 0.0.
+
+**Wrong result: the gate latched shut.** Once closed it never reopened: it
+stopped issuing, so it never gathered new evidence, so it stayed closed even
+if the workload changed completely. `REPROBE_AFTER = 8` forces a one-interval
+probe after eight consecutive closed decisions. Pinned by a test that changes
+workload mid-stream and requires the hit ratio to recover.
+
+**Wrong result: `correlate` confirmed a stride and then ignored it.**
+`metrics.observed_stride` was set but `read_ahead` was called without it, so
+`correlate` was a byte-identical duplicate of `guard` -- a dead mode. Fixed
+by threading the stride through `GateController.candidates()`. It is now the
+only policy that scores on a stride-512 scan: 93.3% precision and 11.20% hit
+against 0.00% for both `guard` and `sequential`.
+
+**Wrong result: usefulness discarded in idle intervals.** `record()` returned
+early when an interval issued nothing, but usefulness from a prefetch issued
+several intervals earlier routinely lands in exactly such an interval.
+
+**Wrong result: precision could exceed 1.0.** A bounded window pairs
+usefulness from older issuances with fewer recent ones. Clamped, with the
+reason recorded.
+
+**Wrong result: `break_even == 0` treated as a veto.** A free prefetch was
+refused. Only an infinite break-even (a hit that saves nothing) is a veto now.
+
+**Wrong result: `observed_precision` reported 0.0 for "never measured".** Now
+`None`, so unmeasured is distinguishable from measured-as-zero.
+
+**Resource leak.** `CorrelateDetector.table` was an unbounded `Counter` of
+offset tuples -- ~150 bytes per request on a narrow-address workload, a third
+of the cost of the `Request` objects the streaming design exists to avoid,
+and O(len(table)) per decision. Now capped with least-seen eviction (a stride
+worth acting on is seen many times, so eviction cannot discard it) and
+memoised.
+
+Also removed: a leftover `oracle_horizon` parameter on `replay_stream` that
+did nothing, a redundant `pending` counter duplicating `interval`, an unused
+import, and a no-op `reset_interval()`.
+
+## D16. Second audit round: five more wrong-result bugs, three wrong claims
+
+The first round was validated by a second, independent audit that both
+re-derived every published number and mutated the code to check the
+regression tests actually bite. It found five more wrong-result bugs, three
+incorrect claims in this file, and two metrics that reached no output at all.
+All fixed.
+
+**Wrong result: `read_ahead`'s stride branch under- and over-prefetched.**
+It proposed `depth` blocks *spaced* `stride` apart -- the first block of each
+of the next `depth` requests, not `depth` blocks -- and then dropped any
+candidate inside the request's own extent. Two consequences: at
+`stride < size_blocks` it returned **nothing at all**, and otherwise it
+proposed one block per request instead of a full extent. On a contiguous scan
+(a request at lba 1000 of size 8) `correlate` scored **half** of `guard`
+(12.80% vs 24.79%), on the single most common workload shape there is; dense
+stride-1 gave 88.28% against `guard`'s 99.88%. The existing tests only used
+stride 512 with size 8, which is the one case the broken code handled
+correctly. It now walks the predicted stream for `depth` blocks.
+
+**Wrong result: `CorrelateDetector`'s memo was keyed on `len(table)`.**
+Incrementing an existing key's count does not change `len(table)`, so after a
+workload phase change the detector reported the **old** stride indefinitely:
+300 reads at stride 512 followed by 300 at stride 1000 still reported 512.
+A stride worth acting on is by definition a repeated one, which is exactly
+the case this memo broke. The memo is gone; it was O(len) over a capped table
+and called once per interval, so it was not buying anything.
+
+**Wrong result: `replay_stream` skipped `replay`'s validation.** It accepted
+`window_size = 4` (below the documented floor of 8) and
+`read_ahead_depth = -5` (which silently produced zero prefetches). Both paths
+now call one `_validate_replay()`.
+
+**Wrong result: `adaptive_evidence` policy switches were counted in `replay`
+and not in `replay_stream`** -- 230 versus 0 on web_3, while every cache
+metric agreed. This falsified the blanket "the two paths are identical"
+claim, so it is now restated as a test over the whole mode set
+(`test_every_supported_mode_agrees_across_both_paths`).
+
+**Wrong result: an infinite break-even was documented as a hard veto but was
+not one.** Exploration and re-probe bypassed `margin()` entirely, so a cost
+model where a prefetch saves nothing (`hit_us == demand_miss_us`) still
+issued 1,088 provably wasted prefetches. Now vetoed before exploration.
+
+**Wrong claim: cost ranking is invariant to `prefetch_multiple`.** It is not.
+That claim was mine, in D11, backed by a test that rescaled all three costs
+uniformly -- a different thing. Re-deriving it: `argmin` flips from `none` to
+`deep` at `prefetch_multiple = 0.9`. Corrected in D11 and pinned by
+`test_prefetch_multiple_does_change_the_cost_ranking`.
+
+**Wrong claim: the D13 and D14 numbers.** "+4.66" and "+15.10 on src2_2" were
+depth-16 deltas presented as depth-8 results. Worse, the D14 per-trace table
+came from a script whose chunk helper returned requests 40,001-80,000 instead
+of the first 40,000, so four of the eight `none` rows were simply the wrong
+slice. Both entries are corrected above, and the sweep CSV now carries the
+gate diagnostics so the numbers are checkable without rerunning anything.
+
+**Dead output: `observed_precision`, `precision_margin` and `observed_stride`
+reached no file.** They were written to `Metrics` and read only by tests, so
+the central claim of D12 -- that a policy can observe its own prefetch value
+and act on it -- produced a number no reader could obtain. All three are now
+columns in `outputs/msrc_sweep.csv`.
+
+**Cosmetic:** `PrecisionMonitor(window=4)` silently floored to 16, so three
+tests were not exercising the window they named. The floor is now a named
+`MIN_WINDOW` and the tests use it explicitly and prove the window rolls.
+
+### On the strength of the regression tests
+
+The audit reintroduced each of the seven original bugs one at a time and
+confirmed the suite fails every time, so the tests are load-bearing rather
+than decorative. It also re-derived the D13 depth table from scratch and got
+it exactly (33.12 / 33.77 / 35.08 / 37.87 / 38.43), and checked that
+`CorrelateDetector` eviction preserves a genuine stride under heavy noise
+over 500k requests at both capacity 4096 and 256 -- 19 of 19 checkpoints.
+
+Test count: 91 -> 131.

@@ -47,7 +47,7 @@ folder before writing results there).
 
 From the repository root. The **complete research run** — no prompts. It
 profiles every dataset, evaluates the classifier against alternative models,
-measures domain shift, replays all seven policies against a perfect-predictor
+measures domain shift, replays all twelve policies against a perfect-predictor
 bound, and reports drift adaptation. The console shows conclusions; every raw
 row goes to `outputs/`:
 
@@ -56,23 +56,56 @@ python main.py                          # full run, ~6 min (11 datasets)
 python main.py --quick                  # skip LSTM training + regime sweep
 python main.py --interactive            # guided dataset/LSTM picker
 python main.py --cost-model assumed     # compare vs the 5/100/50 us model
+python main.py --prefetch-multiple 0.5   # model overlapped prefetch
 ```
 
 The default run calibrates the cost model from the traces' own recorded device
-service times (`.revised` columns 6-8) and prints a `REAL-WORKLOAD RESULT`
-section comparing every policy against doing nothing.
+service times (`.revised` columns 6-8) and prints a `COST MODEL` section with
+the break-even precision **before** any cost table.
 
-**The headline finding is negative and is reported as such.** On real traces no
-prefetcher -- adaptive, fixed read-ahead, or the learned baselines -- beats
-doing nothing on hit ratio, under either cost model. The cause is measured and
-printed. The evidence router does issue 3-4x fewer prefetches than fixed
-read-ahead for comparable hit ratio: a real reduction in wasted I/O, but not a
-hit-ratio win. See `docs/DECISIONS.md` D9.
+**At the default `--prefetch-multiple 1.0` the modelled-cost column is
+degenerate.** A speculative read does the same device work as the demand read
+it replaces and saves strictly less (the hit still costs a cache lookup), so
+break-even precision is 1.0101 and no prefetcher can reach it. `none` wins that
+column by arithmetic, not by result. Values below 1.0 model *overlapped*
+prefetch -- identical device work, requester not blocked -- which is an
+assumption these traces cannot support, since they record demand-read service
+time only. Use `--prefetch-multiple` to explore it. See `docs/DECISIONS.md` D11.
+
+**Read hit ratio, precision and wasted I/O; treat modelled cost as degenerate
+unless the break-even is printed.**
+
+### What actually wins on real traces
+
+Measured over 8 real traces capped at 40k requests (`docs/DECISIONS.md` D14):
+
+* **`deep`** (fixed depth-8 read-ahead) has the highest hit ratio on 6 of 8,
+  and is by far the most wasteful. Read-ahead *depth* is worth **+4.10
+  points** of mean hit ratio on its own -- an order of magnitude more than the
+  entire policy-selection question, because every earlier mode prefetched at
+  most 2 blocks. (Depth 16 scores +4.66 on the mean but issues 4x the
+  prefetches and loses 7.2 points on `rsrch_2`, which is why 8 is the
+  default and not the argmax.)
+* **The feedback gate** (`guard`, `depth_adaptive`, `correlate`) wins on
+  exactly one trace: `web_3`, where read-ahead wrecks the cache. It takes
+  +18.99 points of hit ratio over `sequential` and cuts wasted I/O 86.9%. It
+  does not beat `none` there (50.61%). On the other seven traces it *loses* to
+  `sequential` by 0.00-3.00 points, in exchange for 12-19% of its wasted I/O
+  on five of them.
+* **`none`** still wins on `web_3` and `msrc_hm_1`.
+* Note that `depth_adaptive` is byte-identical to `guard` at the default cost
+  model, because break-even 1.0101 exceeds any achievable precision. It
+  diverges only under `--prefetch-multiple 0.5`. See `DECISIONS.md` D14.1.
+
+This is a targeted result, not a general win for adaptive prefetching. The
+trained `adaptive` classifier remains behind fixed read-ahead; see
+`docs/DECISIONS.md` D9-D10 for why, and D12-D14 for the inverted target and
+the depth finding.
 
 | Output file | Contents |
 | --- | --- |
 | `outputs/results.csv` | every benchmark row (all datasets × all modes) |
-| `outputs/results.md` | narrative report with the full 7-mode table and interpretation |
+| `outputs/results.md` | narrative report with the full 12-mode table and interpretation |
 | `outputs/eda.md` | per-trace request stream, locality, feature distributions, cluster structure |
 | `outputs/classifier_eval.csv` | classifier × regime accuracy, spread, predict and train cost |
 | `outputs/domain_shift.csv` | per-feature shift and coverage vs the synthetic training region |

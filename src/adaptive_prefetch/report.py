@@ -253,6 +253,40 @@ def drift_section(rows: list[dict], window_size: int) -> str:
 # Caveats and file map
 # --------------------------------------------------------------------------
 
+def cost_model_section(latency, cost_model: str = "measured") -> str:
+    """State the cost model and its break-even precision before any ranking.
+
+    At the default prefetch_multiple the break-even is above 1, which means no
+    prefetcher can ever pay for itself and the cost column is degenerate.
+    That has to be said before a reader interprets a cost table.
+    """
+    break_even = latency.break_even_precision()
+    lines = ["COST MODEL", THIN, ""]
+    lines.append(f"  source            : {cost_model}")
+    lines.append(f"  hit               : {latency.hit_us:,.1f} us")
+    lines.append(f"  demand miss       : {latency.demand_miss_us:,.1f} us")
+    lines.append(f"  prefetch          : {latency.prefetch_us:,.1f} us")
+    lines.append(f"  break-even precision: {break_even:.3f}")
+    lines.append("")
+    if break_even > 1.0:
+        lines.append("  -> A prefetch costs a full device read; a hit saves a full")
+        lines.append("     demand read, less the cache lookup. Break-even is therefore")
+        lines.append(f"     {break_even:.3f} and NO prefetcher can reach it, so 'no prefetch'")
+        lines.append("     wins the cost column by arithmetic rather than by result.")
+        lines.append("     Treat hit ratio, precision and wasted I/O as the informative")
+        lines.append("     columns here; the cost column is degenerate.")
+        lines.append("")
+        lines.append("     Pass --prefetch-multiple < 1.0 to model overlapped prefetch,")
+        lines.append("     where a speculative read does identical device work but does")
+        lines.append("     not block the requester. That is an assumption: these traces")
+        lines.append("     record demand-read service time only.")
+    else:
+        lines.append("  -> Prefetching can pay for itself at this setting; precision must")
+        lines.append(f"     reach {break_even:.1%} to be worthwhile.")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def caveats_section() -> str:
     lines = ["WHAT THESE NUMBERS DO AND DO NOT SHOW", THIN, ""]
     for text in (
@@ -342,17 +376,54 @@ def real_world_section(rows: list[dict], capacity: int) -> str:
     lines.append("  is highest. Where 'best mode' is a fixed heuristic, adaptive")
     lines.append("  gained less than read-ahead did.")
     lines.append("")
+    lines.append("  WHAT WON, AND WHAT IT MEANS")
     lines.append("")
-    lines.append("  Why: these traces are ~49% backward seeks and ~43% long forward")
-    lines.append("  jumps, with reuse distances far exceeding the cache. The next")
-    lines.append("  block address is not recoverable from request history, so no")
-    lines.append("  routing decision can help. The evidence router reduces wasted")
-    lines.append("  prefetches 3-4x versus fixed read-ahead, which is a real")
-    lines.append("  reduction in I/O volume, but it does not raise the hit ratio.")
+    winners = {}
+    for name, group in by_dataset.items():
+        winners[name] = max(
+            (r for r in group if r["status"] == "ok" and r["mode"] != "none"),
+            key=lambda r: float(r["hit_ratio"]), default=None)
+    scored = sum(1 for w in winners.values() if w is not None)
+    fixed_wins = sum(1 for w in winners.values()
+                     if w is not None and w["mode"] == "deep")
+    adaptive_dataset_wins = sum(1 for w in winners.values()
+                                if w is not None
+                                and w["mode"].startswith("adaptive"))
+    if fixed_wins:
+        lines.append(f"  Fixed depth-8 read-ahead ('deep') has the highest hit")
+        lines.append(f"  ratio on {fixed_wins} of {scored} real datasets. It is")
+        lines.append("  not an adaptive policy; it never looks at the workload.")
+        lines.append("")
+    lines.append("  That is the result, and it is not a win for this project. Two")
+    lines.append("  things have to be said about it honestly.")
     lines.append("")
-    lines.append("  This holds under BOTH the assumed cost model and the measured")
-    lines.append("  one (see 'cost model' in the header), so it is not an artefact")
-    lines.append("  of the assumed latencies.")
+    lines.append("  1. It was nearly invisible until the policy space was fixed.")
+    lines.append("     Every mode until now prefetched at most 2 blocks, so a")
+    lines.append("     perfect policy router had only +0.4 points of headroom over")
+    lines.append("     fixed read-ahead, which looked like proof that no routing")
+    lines.append("     decision could help. It was not. Read-ahead DEPTH is worth")
+    lines.append("     +4.10 points of mean hit ratio on its own, an order of")
+    lines.append("     magnitude more than the whole routing question. The earlier")
+    lines.append("     'no decision can help' conclusion was an artefact of a")
+    lines.append("     degenerate baseline, and it is retracted.")
+    lines.append("")
+    lines.append("  2. The learned classifier still loses to a fixed heuristic,")
+    lines.append(f"     winning {adaptive_dataset_wins} of {scored} datasets. Its")
+    lines.append("     accuracy on synthetic windows is real, but these traces are")
+    lines.append("     ~49% backward seeks and ~43% long forward jumps with reuse")
+    lines.append("     distances far exceeding the cache, so the next address is not")
+    lines.append("     recoverable from request history.")
+    lines.append("")
+    lines.append("  What the feedback gate buys, on the one trace where read-ahead")
+    lines.append("  actively destroys the cache (web_3), is +18.99 points of hit")
+    lines.append("  ratio over fixed read-ahead with 86.9% less wasted I/O.")
+    lines.append("  Everywhere else it trades a little hit ratio for a lot less")
+    lines.append("  waste. A targeted result, not a general one.")
+    lines.append("")
+    lines.append("  The modelled-cost column is degenerate at the default cost model:")
+    lines.append("  break-even precision is 1.0101, so no prefetcher can pay for")
+    lines.append("  itself and 'none' wins it by arithmetic. Read hit ratio,")
+    lines.append("  precision and wasted I/O instead. See DECISIONS.md D11, D14.")
     lines.append("")
     return "\n".join(lines)
 

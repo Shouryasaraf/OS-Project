@@ -36,7 +36,7 @@ prefetch policy.
         +-- gathered into fixed-size windows (window_size, default 32)
         |                      |
         |                      v
-        |            feature extraction (8 features)
+        |            feature extraction (12 features)
         |                      |
         |                      v
         |          OnlineGaussianNB (frozen or incremental)
@@ -68,7 +68,8 @@ per-request predictors (`baselines.py`, `lstm.py`, exposing
 | `baselines.py` | Causal per-request stride and Markov prefetchers | `StridePrefetcher`, `MarkovPrefetcher` |
 | `lstm.py` | Optional offline LSTM predicting the next address *delta* as (sign, magnitude-bucket) with explicit abstention | `train_lstm`, `load_predictor`, `LSTMPrefetcher` |
 | `simulator.py` | Causal block-level LRU replay, latency model, class->policy routing, perfect-predictor bound | `replay`, `LRUCache`, `LatencyModel`, `oracle_reference`, `confusion_matrix` |
-| `benchmark.py` | Seven-policy comparison, drift diagnostics, aggregation, result interpretation | `benchmark_dataset`, `drift_report`, `aggregate_results`, `analyze_results`, `markdown_table` |
+| `guard.py` | Feedback-gated policies: observed prefetch precision vs `break_even_precision()`, stride confirmation | `PrecisionMonitor`, `CorrelateDetector`, `GateController`, `read_ahead`, `depth_for_margin` |
+| `benchmark.py` | Twelve-policy comparison, drift diagnostics, aggregation, result interpretation | `benchmark_dataset`, `drift_report`, `aggregate_results`, `analyze_results`, `markdown_table` |
 | `training.py` | Conservative weak-label adaptation for the unlabelled MSR sample | `adapt_msr_sample` |
 | `artifacts.py` | Versioned JSON persistence tagged by classifier kind (no pickle) | `save_model`, `load_model` |
 | `eda.py` | Trace profiling, locality/reuse analysis, k-means elbow, domain-shift and label-support measurement | `profile_trace`, `domain_shift`, `label_support`, `locality_profile` |
@@ -193,7 +194,8 @@ causal: they consume the current request and propose blocks for later reads.
 ## Benchmark (`benchmark.py`)
 
 `benchmark_dataset` replays one trace under all `MODES = (none, sequential,
-strided, stride, markov, lstm, adaptive)` with identical parameters, computes
+strided, stride, markov, lstm, adaptive, adaptive_evidence, guard,
+depth_adaptive, correlate, deep)` with identical parameters, computes
 `speedup_vs_none = baseline_mean_latency / mode_mean_latency`, and returns one
 row per mode. Missing LSTM → row with `status="skipped: ..."`, not a fake
 result. `aggregate_results` merges per-trace rows with request-weighted
@@ -202,6 +204,34 @@ a synthetic transition trace, reporting per-phase switch lag and phase
 accuracy. `analyze_results` interprets the table: winning policy per dataset
 with speedup and hit-ratio gains, flags degenerate ties, calls out a
 different best-hit-ratio mode, and adds relative adaptive-vs-baseline gains.
+
+## Feedback-gated policies (`guard.py`)
+
+`guard`, `depth_adaptive` and `correlate` use **no classifier**. `LRUCache`
+already counts `useful_prefetches`, so the realised precision of the system's
+own speculative reads is observable at read time — causally, with no future
+knowledge. `GateController` compares that rolling precision against
+`LatencyModel.break_even_precision()` and sets read-ahead depth from the
+margin: depth 0 when precision is below break-even, otherwise depth scaled
+from 1 to 8.
+
+Two mechanisms keep the controller from getting stuck:
+
+* **Exploration** — `EXPLORATION_PREFETCHES` (256) speculative reads are issued
+  before the estimate is trusted. Without it the controller deadlocks: no
+  measurement means no prefetch, and no prefetch means no measurement.
+* **Re-probe** — after `REPROBE_AFTER` (8) consecutive closed decisions the
+  gate spends one interval prefetching again. Without it a gate that closes
+  never reopens, because closing stops the evidence that would reopen it.
+
+`correlate` additionally requires a stride confirmed over a longer history
+than one window (`CorrelateDetector`, bounded table, least-seen eviction).
+It is the only policy that scores on a stride-512 scan.
+
+`replay()` and `replay_stream()` both drive one `GateController` rather than
+each reimplementing the decision, and `_publish_gate()` is the single place
+gate state reaches `Metrics`. Duplicating that logic previously left the
+streamed path without these modes entirely, which crashed the sweep.
 
 ## CLI and interactive entry points
 

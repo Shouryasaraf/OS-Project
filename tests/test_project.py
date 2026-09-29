@@ -12,8 +12,10 @@ from adaptive_prefetch.benchmark import (MODES, aggregate_results, analyze_resul
 from adaptive_prefetch.cli import train
 from adaptive_prefetch.eda import (domain_shift, locality_profile, profile_trace)
 from adaptive_prefetch.features import (FEATURE_NAMES, STREAM_FEATURES,
-                                         WindowContext, dominant_stride,
-                                         dominant_stride as _ds, extract)
+                                         WindowContext, dominant_stride, extract)
+from adaptive_prefetch.guard import (MIN_WINDOW, CorrelateDetector,
+                                    GateController, PrecisionMonitor,
+                                    depth_for_margin, read_ahead)
 from adaptive_prefetch.lstm import (HISTORY, MAX_DELTA, LSTMPrefetcher, UNK,
                                     _encode, bucket_of, bucket_span,
                                     load_predictor, train_lstm)
@@ -152,8 +154,35 @@ class TraceTests(unittest.TestCase):
         model = LatencyModel.measured(trace=requests)
         # Mean measured service time is 1000 ms = 1e6 us; a miss must cost it.
         self.assertAlmostEqual(model.demand_miss_us, 1_000_000.0, places=3)
-        self.assertGreater(model.prefetch_us, model.demand_miss_us)
+        # Default prefetch_multiple is 1.0: a speculative read is the same
+        # device work as the demand read it replaces.
+        self.assertAlmostEqual(model.prefetch_us, 1_000_000.0, places=3)
         self.assertLess(model.hit_us, model.demand_miss_us)
+
+    def test_measured_cost_model_prefetch_multiple_is_configurable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "t.revised"
+            path.write_text("".join(
+                f"{i * 0.001} RS {i * 8} 8 rand 1000.0 0.1 999.9\n"
+                for i in range(20)), encoding="utf-8")
+            requests = load_csv(path, "revised")
+        base = LatencyModel.measured(trace=requests, prefetch_multiple=1.0)
+        cheap = LatencyModel.measured(trace=requests, prefetch_multiple=0.5)
+        self.assertAlmostEqual(cheap.prefetch_us, base.prefetch_us / 2.0, places=3)
+        # Halving the prefetch cost halves the precision needed to break even.
+        self.assertAlmostEqual(cheap.break_even_precision(),
+                               base.break_even_precision() / 2.0, places=6)
+        with self.assertRaises(ValueError):
+            LatencyModel.measured(trace=requests, prefetch_multiple=0.0)
+
+    def test_break_even_precision_reports_unachievable_when_prefetch_is_dearer(self):
+        # A prefetch dearer than a whole demand miss can never pay for itself.
+        model = LatencyModel(hit_us=10.0, demand_miss_us=100.0, prefetch_us=110.0)
+        self.assertGreater(model.break_even_precision(), 1.0)
+        cheap = LatencyModel(hit_us=10.0, demand_miss_us=100.0, prefetch_us=45.0)
+        self.assertLess(cheap.break_even_precision(), 1.0)
+        flat = LatencyModel(hit_us=100.0, demand_miss_us=100.0, prefetch_us=10.0)
+        self.assertEqual(flat.break_even_precision(), float("inf"))
 
     def test_measured_cost_model_uses_mean_not_median(self):
         """Real traces are sub-microsecond-dominant, so a median-based cost
@@ -955,8 +984,14 @@ class SweepTests(unittest.TestCase):
         """mean_us is linear in the calibration constant, so argmin cannot move.
 
         Every mode's modelled cost is k * (per-mode constant) for the shared
-        shape hit=0.01m, miss=m, prefetch=1.1m, so rescaling m rescales all
+        shape hit=0.01m, miss=m, prefetch=1.0m, so rescaling m rescales all
         modes equally. Only the absolute microsecond figures should change.
+
+        Note the scope: this is invariance to a *uniform rescale* of the whole
+        calibration. It is NOT invariance to ``prefetch_multiple``, which
+        re-weights only the prefetch term and does move the ranking -- see
+        ``test_prefetch_multiple_does_change_the_cost_ranking`` for the
+        flip, and DECISIONS.md D11 for why that distinction matters.
         """
         rng = random.Random(11)
         requests = [Request(float(i) * 0.5, rng.randrange(0, 4000) * 16, 8)
@@ -964,7 +999,7 @@ class SweepTests(unittest.TestCase):
         orders = []
         for scale in (100.0, 1488.0, 7590.0, 50_000.0):
             model = LatencyModel(hit_us=0.01 * scale, demand_miss_us=scale,
-                                 prefetch_us=1.1 * scale)
+                                 prefetch_us=1.0 * scale)
             costs = {}
             for mode in ("none", "sequential", "strided", "adaptive_evidence"):
                 m, _ = replay(requests, 2048, 32, mode, latency_model=model)
@@ -972,6 +1007,30 @@ class SweepTests(unittest.TestCase):
             orders.append(tuple(sorted(costs, key=costs.get)))
         self.assertEqual(len(set(orders)), 1,
                          f"ranking changed with calibration: {orders}")
+
+    def test_prefetch_multiple_does_change_the_cost_ranking(self):
+        """The counterweight to the invariance test above.
+
+        `prefetch_multiple` re-weights only the prefetch term, so unlike a
+        uniform rescale it *does* move the ranking: at 1.0 nothing can pay for
+        itself and `none` is cheapest, while below 0.99 a read-ahead policy
+        that actually uses its prefetches wins. Claiming invariance here
+        would have hidden a real result.
+        """
+        scan = [Request(float(i) * 0.5, i * 8, 8) for i in range(3000)]
+        modes = ("none", "sequential", "deep")
+
+        def cheapest(multiple):
+            model = LatencyModel(hit_us=75.9, demand_miss_us=7590.0,
+                                 prefetch_us=7590.0 * multiple)
+            costs = {}
+            for mode in modes:
+                m, _ = replay(scan, 2048, 32, mode, latency_model=model)
+                costs[mode] = m.mean_access_latency_us
+            return min(costs, key=costs.get)
+
+        self.assertEqual(cheapest(1.0), "none")
+        self.assertEqual(cheapest(0.5), "deep")
 
     def test_measured_cost_model_is_linear_in_the_mean(self):
         """Guards the invariance claim above: cost scales exactly with m."""
@@ -983,6 +1042,409 @@ class SweepTests(unittest.TestCase):
         b, _ = replay(requests, 2048, 32, "sequential", latency_model=high)
         self.assertAlmostEqual(b.mean_access_latency_us,
                                10.0 * a.mean_access_latency_us, places=6)
+
+
+class GuardModeTests(unittest.TestCase):
+    """Feedback-gated policies: the decision comes from observed precision."""
+
+    def _stream(self):
+        requests, _ = transition_trace(42 + 200000, 8, 32)
+        return requests
+
+    def test_read_ahead_starts_past_the_request(self):
+        request = Request(0.0, 1000, 8)
+        self.assertEqual(read_ahead(request, 2), [1008, 1009])
+        self.assertEqual(read_ahead(request, 1), [1008])
+        self.assertEqual(read_ahead(request, 0), [])
+        write = Request(0.0, 1000, 8, "W")
+        self.assertEqual(read_ahead(write, 4), [], "writes never prefetch")
+
+    def test_precision_monitor_rolling_precision(self):
+        # MIN_WINDOW floors this at 16, so record past the floor to prove the
+        # window really rolls rather than accumulating everything.
+        self.assertEqual(PrecisionMonitor(window=4).window, MIN_WINDOW)
+        monitor = PrecisionMonitor(window=MIN_WINDOW)
+        self.assertEqual(monitor.precision, 0.0)
+        monitor.record(1, 2)      # 50%
+        self.assertAlmostEqual(monitor.precision, 0.5)
+        monitor.record(0, 2)      # recent window now 25%
+        self.assertAlmostEqual(monitor.precision, 0.25)
+        # One more interval pushes the first out of the window entirely.
+        for _ in range(MIN_WINDOW - 1):
+            monitor.record(0, 0)
+        self.assertEqual(monitor.precision, 0.0,
+                         "expired intervals must leave the rolling window")
+
+    def test_monitor_ignores_empty_intervals(self):
+        monitor = PrecisionMonitor()
+        monitor.record(0, 0)
+        self.assertEqual(monitor.issued, 0)
+        self.assertEqual(monitor.precision, 0.0)
+
+    def test_exploration_prevents_the_startup_deadlock(self):
+        """No measurement must not mean 'never prefetch'."""
+        monitor = PrecisionMonitor()
+        self.assertTrue(monitor.exploring(256))
+        monitor.record(1, 256)
+        self.assertFalse(monitor.exploring(256))
+
+    def test_depth_for_margin_thresholds(self):
+        self.assertEqual(depth_for_margin(-0.1), 0, "below break-even: stop")
+        self.assertEqual(depth_for_margin(0.0), 0)
+        self.assertGreaterEqual(depth_for_margin(0.01), 1)
+        self.assertGreater(depth_for_margin(0.20), depth_for_margin(0.05))
+        self.assertEqual(depth_for_margin(0.9), 8, "clamped at max depth")
+
+    def test_guard_throttles_when_precision_is_below_break_even(self):
+        requests = self._stream()
+        dear = LatencyModel(hit_us=10.0, demand_miss_us=1000.0, prefetch_us=1100.0)
+        self.assertGreater(dear.break_even_precision(), 1.0)
+        metrics, _ = replay(requests, mode="guard", latency_model=dear)
+        # It explores briefly, then stops; the fixed baseline never does.
+        fixed, _ = replay(requests, mode="sequential", latency_model=dear)
+        self.assertLess(metrics.prefetches, fixed.prefetches)
+        self.assertLess(metrics.prefetches, 400)
+
+    def test_guard_engages_when_precision_can_pay(self):
+        requests = self._stream()
+        cheap = LatencyModel(hit_us=1.0, demand_miss_us=100.0, prefetch_us=5.0)
+        self.assertLess(cheap.break_even_precision(), 0.2)
+        metrics, _ = replay(requests, mode="guard", latency_model=cheap)
+        self.assertGreater(metrics.prefetches, 0)
+        self.assertGreater(metrics.observed_precision, cheap.break_even_precision())
+
+    def test_guard_beats_fixed_readahead_on_cost(self):
+        """The point of the mode: get most of the gain for less of the cost."""
+        requests = self._stream()
+        model = LatencyModel(hit_us=75.9, demand_miss_us=7590.0, prefetch_us=7590.0)
+        none, _ = replay(requests, mode="none", latency_model=model)
+        fixed, _ = replay(requests, mode="sequential", latency_model=model)
+        guarded, _ = replay(requests, mode="guard", latency_model=model)
+        self.assertLess(guarded.mean_access_latency_us, fixed.mean_access_latency_us)
+        self.assertGreater(guarded.hit_ratio, none.hit_ratio)
+
+    def test_gated_modes_need_no_trained_model(self):
+        for mode in ("guard", "depth_adaptive", "correlate"):
+            metrics, _ = replay(self._stream(), mode=mode)
+            self.assertGreaterEqual(metrics.inference_calls, 0)
+
+    def test_correlate_requires_a_confirmed_stride(self):
+        detector = CorrelateDetector(order=1, min_repeat=3)
+        request = Request(0.0, 0, 8)
+        for i in range(10):
+            detector.update(Request(0.0, i * 64, 8))
+        self.assertEqual(detector.confirmed_stride(), 64)
+        noisy = CorrelateDetector(order=1, min_repeat=3)
+        rng = random.Random(4)
+        for _ in range(60):
+            noisy.update(Request(0.0, rng.randrange(0, 10 ** 6), 8))
+        self.assertIsNone(noisy.confirmed_stride())
+
+    def test_policy_interval_must_be_sane(self):
+        requests = self._stream()
+        with self.assertRaises(ValueError):
+            replay(requests, mode="guard", policy_interval=0)
+        with self.assertRaises(ValueError):
+            replay(requests, mode="guard", policy_interval=4)
+
+    def test_faster_interval_is_at_least_as_reactive(self):
+        requests = self._stream()
+        model = LatencyModel(hit_us=1.0, demand_miss_us=100.0, prefetch_us=5.0)
+        slow, _ = replay(requests, mode="guard", latency_model=model)
+        fast, _ = replay(requests, mode="guard", latency_model=model,
+                         policy_interval=8)
+        self.assertGreaterEqual(fast.policy_switches, slow.policy_switches)
+
+
+class GateAuditRegressionTests(unittest.TestCase):
+    """Regressions for the audit findings on the feedback-gated modes."""
+
+    def test_gated_modes_are_supported_by_replay_stream(self):
+        """C1: the sweep crashed because replay_stream had no gated branch."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "t.revised"
+            path.write_text("".join(
+                f"{i * 0.001} RS {i * 8} 8 rand 1.0 0.1 0.9\n"
+                for i in range(2000)), encoding="utf-8")
+            whole = load_csv(path, "revised")
+            for mode in ("guard", "depth_adaptive", "correlate"):
+                a, _ = replay(whole, capacity=64, mode=mode)
+                b = replay_stream(iter_csv_chunks(path, "revised", 1000),
+                                  capacity=64, mode=mode)
+                self.assertAlmostEqual(a.hit_ratio, b.hit_ratio, places=12)
+                self.assertEqual(a.prefetches, b.prefetches)
+
+    def test_gate_reopens_after_the_workload_changes(self):
+        """W2: the gate latched off and could never probe again."""
+        rng = random.Random(2)
+        requests = [Request(i * 0.5, rng.randrange(0, 10 ** 6), 8)
+                    for i in range(3000)]
+        requests += [Request(3000 + i * 0.5, 500_000 + i * 8, 8)
+                     for i in range(6000)]
+        cheap = LatencyModel(hit_us=1.0, demand_miss_us=100.0, prefetch_us=5.0)
+        metrics, _ = replay(requests, mode="guard", capacity=64,
+                            latency_model=cheap)
+        # A pure sequential tail must be prefetched; if the gate stayed shut
+        # the hit ratio would be zero for the whole scan.
+        self.assertGreater(metrics.hit_ratio, 0.05,
+                           "gate never reopened after the workload changed")
+
+    def test_precision_never_exceeds_one(self):
+        """W6: bounded windows can pair usefulness with fewer issuances."""
+        monitor = PrecisionMonitor(window=MIN_WINDOW)
+        monitor.record(0, 1)
+        for _ in range(6):
+            monitor.record(5, 0)
+        self.assertLessEqual(monitor.precision, 1.0)
+
+    def test_idle_interval_usefulness_is_recorded(self):
+        """W6: usefulness landing in an idle interval must not vanish."""
+        monitor = PrecisionMonitor(window=MIN_WINDOW)
+        monitor.record(0, 10)
+        monitor.record(5, 0)
+        self.assertAlmostEqual(monitor.precision, 5 / 10)
+
+    def test_free_prefetch_is_not_refused(self):
+        """W3: break_even == 0 means a prefetch is free, not forbidden."""
+        monitor = PrecisionMonitor()
+        monitor.record(9, 10)
+        self.assertGreater(monitor.margin(0.0), 0.0)
+        self.assertEqual(monitor.margin(float("inf")), -1.0)
+
+    def test_gate_records_usefulness_deltas_not_cumulative_totals(self):
+        """Recording the cumulative count re-counts every earlier interval.
+
+        That inflated the rolling ratio until it pinned at 1.0, which left the
+        gate permanently open at maximum depth on traces where real precision
+        was 32%.
+        """
+        gate = GateController("guard", break_even=0.5)
+        total = 0
+        for _ in range(5):
+            for _ in range(4):
+                gate.note_prefetch()
+            total += 4
+            gate.note_useful(total)
+            gate.decide()
+        self.assertEqual(gate.monitor.issued, 20)
+        self.assertEqual(gate.monitor.useful, 20,
+                         "usefulness must be counted once, not once per interval")
+        self.assertAlmostEqual(gate.precision, 1.0, places=12)
+
+    def test_gate_precision_tracks_a_declining_stream(self):
+        """Precision must fall when usefulness stops arriving."""
+        gate = GateController("guard", break_even=0.5)
+        for _ in range(20):
+            for _ in range(8):
+                gate.note_prefetch()
+            gate.note_useful(gate.monitor.useful + 8)
+            gate.decide()
+        first = gate.precision
+        for _ in range(20):
+            for _ in range(8):
+                gate.note_prefetch()
+            gate.note_useful(gate.monitor.useful)  # no new usefulness
+            gate.decide()
+        self.assertAlmostEqual(first, 1.0, places=12)
+        self.assertLess(gate.precision, first,
+                        "precision must decay once usefulness stops")
+
+    def test_deep_mode_issues_exactly_the_requested_depth(self):
+        requests = [Request(float(i) * 0.5, i * 64, 8) for i in range(3000)]
+        prev = 0
+        for depth in (0, 1, 2, 8, 16):
+            metrics, _ = replay(requests, capacity=256, mode="deep",
+                                read_ahead_depth=depth)
+            if depth == 0:
+                self.assertEqual(metrics.prefetches, 0)
+            else:
+                self.assertGreater(metrics.prefetches, prev)
+            prev = metrics.prefetches
+
+    def test_deep_mode_reaches_more_of_a_scan_than_sequential(self):
+        """Depth is the lever the old policy set was missing entirely.
+
+        On a contiguous scan each request starts where the previous ended, so
+        prefetching one whole request ahead (depth 8 for an 8-block request)
+        turns almost every read into a hit. The depth-2 baseline that every
+        earlier policy used only covers part of the next request.
+        """
+        scan = [Request(float(i) * 0.5, i * 8, 8) for i in range(6000)]
+        shallow, _ = replay(scan, capacity=256, mode="deep",
+                            read_ahead_depth=2)
+        deep, _ = replay(scan, capacity=256, mode="deep",
+                         read_ahead_depth=8)
+        fixed, _ = replay(scan, capacity=256, mode="sequential")
+        self.assertGreater(deep.hit_ratio, shallow.hit_ratio + 0.30)
+        self.assertGreater(deep.hit_ratio, fixed.hit_ratio + 0.30)
+        # Nearly every prefetched block is read, so this is not bought with
+        # waste. Not exactly 1.0: prefetches issued past the end of the
+        # stream are never consumed.
+        self.assertGreater(deep.prefetch_precision, 0.99)
+
+    def test_deep_mode_is_supported_by_replay_stream(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "t.revised"
+            path.write_text("".join(
+                f"{i * 0.001} RS {i * 8} 8 rand 1.0 0.1 0.9\n"
+                for i in range(2000)), encoding="utf-8")
+            whole = load_csv(path, "revised")
+            a, _ = replay(whole, capacity=128, mode="deep")
+            b = replay_stream(iter_csv_chunks(path, "revised", 1000),
+                              capacity=128, mode="deep")
+            self.assertAlmostEqual(a.hit_ratio, b.hit_ratio, places=12)
+            self.assertEqual(a.prefetches, b.prefetches)
+
+    def test_deep_mode_rejects_a_negative_depth(self):
+        with self.assertRaises(ValueError):
+            replay([Request(0.0, 0, 8)], mode="deep", read_ahead_depth=-1)
+
+    def test_read_ahead_stride_branch_covers_a_full_extent(self):
+        """F1: the stride branch returned one block per request, not `depth`."""
+        request = Request(0.0, 1000, 8)
+        for stride in (1, 4, 8, 512):
+            got = read_ahead(request, 4, stride, use_stride=True)
+            self.assertEqual(len(got), 4,
+                             f"stride {stride} issued {len(got)} of 4 blocks")
+        # stride == size lands exactly on the next request's extent.
+        self.assertEqual(read_ahead(request, 8, 8, use_stride=True),
+                         list(range(1008, 1016)))
+
+    def test_correlate_beats_plain_readahead_on_a_contiguous_scan(self):
+        """F1: correlate scored half of sequential on the commonest shape."""
+        scan = [Request(float(i) * 0.5, i * 8, 8) for i in range(4000)]
+        cheap = LatencyModel(hit_us=1.0, demand_miss_us=100.0, prefetch_us=5.0)
+        kwargs = dict(capacity=256, latency_model=cheap)
+        correlated, _ = replay(scan, mode="correlate", **kwargs)
+        guarded, _ = replay(scan, mode="guard", **kwargs)
+        # When the confirmed stride equals the request size the two branches
+        # address the same blocks, so they coincide. The regression is that
+        # correlate used to score *half* of guard here by proposing one block
+        # per future request and dropping every candidate inside the extent.
+        self.assertGreaterEqual(correlated.hit_ratio, guarded.hit_ratio)
+
+    def test_correlate_still_prefetches_when_the_stride_is_shorter(self):
+        """F1: stride < size_blocks used to yield an empty candidate set."""
+        dense = [Request(float(i) * 0.5, i, 8) for i in range(4000)]
+        cheap = LatencyModel(hit_us=1.0, demand_miss_us=100.0, prefetch_us=5.0)
+        metrics, _ = replay(dense, mode="correlate", capacity=256,
+                            latency_model=cheap)
+        self.assertGreater(metrics.prefetches, 0,
+                           "no prefetches at all when stride < request size")
+
+    def test_correlate_detector_follows_a_phase_change(self):
+        """F2: the memo was keyed on len(table), which a repeat never changed."""
+        detector = CorrelateDetector(order=1, min_repeat=3)
+        for i in range(50):
+            detector.update(Request(0.0, i * 100, 8))
+        self.assertEqual(detector.confirmed_stride(), 100)
+        for i in range(2000):
+            detector.update(Request(0.0, 500_000 + i * 200, 8))
+        self.assertEqual(detector.confirmed_stride(), 200,
+                         "detector kept reporting the pre-change stride")
+
+    def test_infinite_break_even_is_a_real_veto(self):
+        """F9: exploration and re-probe were overriding an impossible cost."""
+        scan = [Request(float(i) * 0.5, i * 64, 8) for i in range(4000)]
+        free_hit = LatencyModel(hit_us=100.0, demand_miss_us=100.0,
+                                prefetch_us=10.0)
+        self.assertEqual(free_hit.break_even_precision(), float("inf"))
+        metrics, _ = replay(scan, mode="guard", capacity=256,
+                            latency_model=free_hit)
+        self.assertEqual(metrics.prefetches, 0)
+
+    def test_replay_stream_validates_like_replay(self):
+        """F8: the streamed path silently accepted invalid parameters."""
+        stream = iter([[Request(0.0, i * 8, 8) for i in range(200)]])
+        for kwargs in ({"read_ahead_depth": -5}, {"window_size": 4},
+                       {"policy_interval": 2}, {"mode": "nonsense"}):
+            args = dict(kwargs)
+            with self.assertRaises(ValueError):
+                replay_stream(stream, **args)
+
+    def test_adaptive_evidence_switch_count_matches_across_paths(self):
+        """F6: replay_stream never counted a policy switch."""
+        rng = random.Random(11)
+        requests = [Request(i * 0.5, rng.randrange(0, 10 ** 6), 8)
+                    for i in range(4000)]
+        a, _ = replay(requests, mode="adaptive_evidence")
+        b = replay_stream(iter([iter(requests)]), mode="adaptive_evidence")
+        self.assertEqual(a.policy_switches, b.policy_switches)
+
+    def test_every_supported_mode_agrees_across_both_paths(self):
+        """C1, restated as a blanket invariant over the whole mode set."""
+        rng = random.Random(5)
+        requests = [Request(i * 0.5, rng.randrange(0, 100_000), 8)
+                    for i in range(3000)]
+        for mode in ("none", "sequential", "strided", "adaptive_evidence",
+                     "guard", "depth_adaptive", "correlate", "deep"):
+            a, _ = replay(requests, mode=mode)
+            b = replay_stream(iter([iter(requests)]), mode=mode)
+            for field in ("read_hits", "read_blocks", "prefetches",
+                          "useful_prefetches", "policy_switches",
+                          "prefetch_cost_us", "demand_latency_us"):
+                self.assertEqual(getattr(a, field), getattr(b, field),
+                                 f"{mode}.{field} differs between paths")
+
+    def test_observed_precision_is_none_before_any_measurement(self):
+        """W7: 'never measured' must differ from 'measured as zero'."""
+        writes = [Request(float(i), i * 10, 8, "W") for i in range(500)]
+        metrics, _ = replay(writes, mode="guard")
+        self.assertIsNone(metrics.observed_precision)
+        cheap = LatencyModel(hit_us=1.0, demand_miss_us=100.0, prefetch_us=5.0)
+        measured, _ = replay([Request(float(i), i * 64, 8)
+                              for i in range(4000)],
+                             mode="guard", capacity=64, latency_model=cheap)
+        self.assertIsNotNone(measured.observed_precision)
+
+    def test_correlate_uses_the_stride_it_confirms(self):
+        """W4: the confirmed stride was detected and then ignored.
+
+        On a stride-512 trace plain read-ahead (which assumes the next block
+        follows this one) is worth exactly nothing. Only a policy that
+        confirms the stride can score here, so this is the case that
+        distinguishes `correlate` from `guard`.
+        """
+        requests = [Request(float(i) * 0.5, i * 512, 8) for i in range(4000)]
+        cheap = LatencyModel(hit_us=1.0, demand_miss_us=100.0, prefetch_us=5.0)
+        kwargs = dict(capacity=256, latency_model=cheap)
+        correlated, _ = replay(requests, mode="correlate", **kwargs)
+        guarded, _ = replay(requests, mode="guard", **kwargs)
+        fixed, _ = replay(requests, mode="sequential", **kwargs)
+        self.assertEqual(correlated.observed_stride, 512)
+        self.assertGreater(correlated.hit_ratio, 0.10)
+        # The real claim: confirming the stride beats not confirming it.
+        self.assertGreater(correlated.hit_ratio, guarded.hit_ratio + 0.05)
+        self.assertGreater(correlated.hit_ratio, fixed.hit_ratio + 0.05)
+
+    def test_correlate_detector_memory_is_bounded(self):
+        """W5: the offset table used to grow without limit."""
+        detector = CorrelateDetector(capacity=256)
+        for i in range(20_000):
+            detector.update(Request(float(i), i * 1, 8))
+        self.assertLessEqual(len(detector.table), 512,
+                             "offset table must be capped")
+
+    def test_trailing_partial_interval_is_accounted(self):
+        """W6: a stream shorter than a whole number of intervals lost data."""
+        requests = [Request(float(i) * 0.5, i * 64, 8) for i in range(101)]
+        cheap = LatencyModel(hit_us=1.0, demand_miss_us=100.0, prefetch_us=5.0)
+        metrics, _ = replay(requests, mode="guard", capacity=64,
+                            policy_interval=32, latency_model=cheap)
+        self.assertIsNotNone(metrics.observed_precision)
+
+    def test_policy_interval_validated_only_where_it_applies(self):
+        requests, _ = transition_trace(3, windows_per_class=1)
+        with self.assertRaises(ValueError):
+            replay(requests, mode="sequential", policy_interval=4)
+        replay(requests, mode="sequential", policy_interval=8)
+
+    def test_policy_interval_equals_window_size_is_a_no_op(self):
+        requests, _ = transition_trace(3, windows_per_class=2)
+        implicit, _ = replay(requests, mode="guard")
+        explicit, _ = replay(requests, mode="guard", policy_interval=32)
+        self.assertEqual(implicit.prefetches, explicit.prefetches)
+        self.assertAlmostEqual(implicit.hit_ratio, explicit.hit_ratio, places=12)
 
 
 if __name__ == "__main__":

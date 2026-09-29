@@ -9,7 +9,7 @@ state and block ages across chunk boundaries.
 Two limits are always reported, never silent:
 
 * **Requests per trace.** The default is a sample, because replaying ~200M
-  requests through eight policies in Python takes hours. ``--full`` removes
+  requests through twelve policies in Python takes hours. ``--full`` removes
   the cap.
 * **``prefetch_recall`` is omitted** on streamed runs. It needs whole-stream
   future knowledge; the ranking metrics (hit ratio, precision, wasted I/O,
@@ -36,7 +36,8 @@ DEFAULT_REQUESTS_PER_TRACE = 250_000
 DEFAULT_CHUNK = 250_000
 
 RANKING_MODES = ("none", "sequential", "strided", "stride", "markov", "lstm",
-                 "adaptive", "adaptive_evidence")
+                 "adaptive", "adaptive_evidence", "guard", "depth_adaptive",
+                 "correlate", "deep")
 
 
 def discover_traces(directory: Path | None = None) -> list[Path]:
@@ -112,6 +113,12 @@ def sweep_collection(trace_dir: Path | None = None,
                 "total_prefetches": metrics.prefetches,
                 "mean_us": metrics.mean_access_latency_us,
                 "policy_switches": metrics.policy_switches,
+                # Why a feedback-gated mode throttled what it did. Without
+                # these the row says a mode issued 2,077 prefetches and gives
+                # no way to tell a deliberate decision from a stuck gate.
+                "observed_precision": metrics.observed_precision,
+                "precision_margin": metrics.precision_margin,
+                "observed_stride": metrics.observed_stride,
                 "read_blocks": metrics.read_blocks,
             })
         meta = {"trace": path.stem,

@@ -13,7 +13,8 @@ from .trace import (CLASSES, Request, synthetic_dataset, synthetic_window,
                     transition_trace)
 
 MODES = ("none", "sequential", "strided", "stride", "markov", "lstm",
-         "adaptive", "adaptive_evidence")
+         "adaptive", "adaptive_evidence", "guard", "depth_adaptive",
+         "correlate", "deep")
 COLUMNS = ("dataset", "mode", "status", "hit_ratio", "precision", "recall",
            "unused", "total_prefetches", "useful_prefetches",
            "mean_latency_us", "speedup_vs_none", "inference_us",

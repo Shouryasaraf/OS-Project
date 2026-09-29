@@ -26,7 +26,7 @@ REPO = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO / "src"))
 
 from adaptive_prefetch.benchmark import (  # noqa: E402
-    aggregate_results, analyze_results, benchmark_dataset, drift_report,
+    MODES, aggregate_results, analyze_results, benchmark_dataset, drift_report,
     markdown_table, write_results_csv,
 )
 from adaptive_prefetch.eda import (  # noqa: E402
@@ -39,8 +39,8 @@ from adaptive_prefetch.pipeline import (  # noqa: E402
 )
 from adaptive_prefetch.report import (  # noqa: E402
     benchmark_section, caveats_section, classifier_section, dataset_overview,
-    domain_shift_section, drift_section, files_section, full_report, header,
-    real_world_section,
+    cost_model_section, domain_shift_section, drift_section, files_section,
+    full_report, header, real_world_section,
 )
 from adaptive_prefetch.simulator import (  # noqa: E402
     DEFAULT_CAPACITY, LatencyModel, confusion_matrix, oracle_reference,
@@ -311,6 +311,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--seeds", type=int, default=6,
                         help="seed pairs per cell in the classifier regime sweep")
     parser.add_argument("--lstm-epochs", type=int, default=60)
+    parser.add_argument("--prefetch-multiple", type=float, default=1.0,
+                        help="cost of a speculative read relative to a demand "
+                             "read; <1.0 models overlapped prefetch")
     parser.add_argument("--cost-model", default="measured",
                         choices=("assumed", "measured"),
                         help="'measured' calibrates the cost model from the "
@@ -343,7 +346,8 @@ def main(argv: list[str] | None = None) -> None:
         merged = [r for _, reqs in datasets for r in reqs
                   if getattr(r, "service_ms", None) is not None]
         if merged:
-            latency = LatencyModel.measured(trace=merged)
+            latency = LatencyModel.measured(
+                trace=merged, prefetch_multiple=args.prefetch_multiple)
         else:
             print("  no recorded service times in the selected traces; "
                   "using the assumed cost model")
@@ -361,6 +365,9 @@ def main(argv: list[str] | None = None) -> None:
                        f"{latency.prefetch_us:g} us"),
         "mode": "interactive" if args.interactive else ("quick" if args.quick else "full"),
     }))
+
+    print(cost_model_section(latency,
+                            'measured' if measured_sources else 'assumed'))
 
     # ---- datasets -------------------------------------------------------
     cacheable = {}
@@ -459,7 +466,8 @@ def write_outputs(datasets, rows, drift, shifts, regime_rows, reference,
             ("Drift", drift_section(drift, 32)),
             ("Caveats", caveats_section()),
         ]) + f"\n<!-- lstm: {lstm_path or 'skipped'} -->\n", encoding="utf-8")
-    written["results.md"] = "narrative report with the full 7-mode table"
+    written["results.md"] = (
+        f"narrative report with the full {len(MODES)}-mode table")
 
     eda_path = OUTPUT_DIR / "eda.md"
     eda_path.write_text("\n\n".join(

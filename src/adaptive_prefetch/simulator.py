@@ -8,6 +8,7 @@ from time import perf_counter
 
 from .baselines import MarkovPrefetcher, StridePrefetcher
 from .features import STREAM_FEATURES, WindowContext, dominant_stride, extract
+from .guard import GateController, read_ahead
 from .model import OnlineGaussianNB
 from .pipeline import PolicySmoother
 from .trace import Request
@@ -24,7 +25,8 @@ class LatencyModel:
             raise ValueError("latency model values must be non-negative")
 
     @classmethod
-    def measured(cls, path=None, trace: list | None = None) -> "LatencyModel":
+    def measured(cls, path=None, trace: list | None = None,
+                 prefetch_multiple: float = 1.0) -> "LatencyModel":
         """Cost model calibrated from a trace's own measured service times.
 
         The defaults above (5/100/50 us) are an assumption inherited from the
@@ -34,9 +36,28 @@ class LatencyModel:
 
         The **mean** is used, not the median. The median is ~0 for most of
         these traces (the sub-microsecond bulk dominates), which would produce
-        a cost model of essentially zero and make every policy look free. A
-        prefetcher only pays off if a speculative read is charged a realistic
-        service time, so the mean is the honest basis for the comparison.
+        a cost model of essentially zero and make every policy look free.
+
+        ``prefetch_multiple`` is what a speculative read costs relative to a
+        demand read.
+
+        **1.0 is the default, and under it prefetching can never pay for
+        itself.** A speculative read does one device read (cost ``m``); if it
+        hits it saves one demand read (``m`` minus the small cache-lookup
+        cost). Break-even is therefore ``1/(1 - hit_fraction)`` = 1.0101 at a
+        1% hit cost, which no precision can exceed. This is arithmetic, not an
+        empirical result, and it means the modelled-cost column of any
+        benchmark is degenerate at this setting: "no prefetch" wins it by
+        construction. A value **below 1.0** is what models the real benefit of
+        overlapped or coalesced prefetch -- the device work is identical, but
+        the requester is not blocked by it, so its wall-clock cost is lower
+        than a demand read's. That is a modelling assumption, not something
+        these traces measure; they record demand-read service time only.
+
+        An earlier version used 1.1 with a comment implying it was neutral.
+        It is not, and neither is 1.0: the break-even is above 1 either way.
+        :meth:`break_even_precision` is the number to check before reading any
+        cost ranking.
 
         Returns defaults unchanged when the trace carries no measurements.
         """
@@ -50,6 +71,8 @@ class LatencyModel:
                     values = None
         if not values:
             return cls()
+        if prefetch_multiple <= 0:
+            raise ValueError("prefetch_multiple must be positive")
         mean_service = sum(values) / len(values)
         # A hit is served from cache and costs a small fraction of a device
         # service. 1% is an explicitly-documented approximation, not a
@@ -57,10 +80,22 @@ class LatencyModel:
         return cls(
             hit_us=max(0.001, mean_service * 0.01),
             demand_miss_us=mean_service,
-            # A prefetch is a full device read issued speculatively, so it
-            # costs a full service time plus the extra queueing pressure.
-            prefetch_us=mean_service * 1.1,
+            prefetch_us=mean_service * prefetch_multiple,
         )
+
+    def break_even_precision(self) -> float:
+        """Prefetch precision needed for a speculative read to pay for itself.
+
+        A prefetch costs ``prefetch_us`` and, when it hits, saves
+        ``demand_miss_us - hit_us``. It therefore needs at least
+        ``prefetch_us / (demand_miss_us - hit_us)`` precision. Above 1.0 no
+        prefetcher can ever be worth running, whatever the workload, so this
+        is the number to check before interpreting any cost ranking.
+        """
+        saving = self.demand_miss_us - self.hit_us
+        if saving <= 0:
+            return float("inf")
+        return self.prefetch_us / saving
 
 
 def _measured_service_us(requests) -> list[float]:
@@ -82,6 +117,14 @@ class Metrics:
     prefetch_cost_us: float = 0.0
     inference_ms: float = 0.0
     inference_calls: int = 0
+    #: Realised prefetch precision at the last decision point, and how far it
+    #: sat above the cost model's break-even. Both are observed, not predicted.
+    #: ``observed_precision`` is ``None`` when the gate never issued anything,
+    #: so "never measured" stays distinguishable from "measured as zero".
+    observed_precision: float | None = None
+    precision_margin: float = -1.0
+    #: Stride confirmed by the correlation detector, when one is running.
+    observed_stride: int | None = None
 
     @property
     def hit_ratio(self) -> float:
@@ -206,6 +249,23 @@ def route_window(window: list[Request], stride: int | None) -> str:
     return "none"
 
 
+#: Modes whose prefetch depth is set by observed precision, not prediction.
+GATED_MODES = ("guard", "depth_adaptive", "correlate")
+
+#: Fixed read-ahead depth for the `deep` baseline, in blocks.
+#:
+#: Depth turned out to matter far more than policy choice: on 8 real traces
+#: (first 40k requests each, 2048-block cache) fixed read-ahead at depth 8
+#: beats the depth-2 sequential baseline by **+4.10 points of mean hit
+#: ratio**, up to +11.05 on src2_2. Depth 16 scores slightly higher still on
+#: the mean (+4.66) but costs 4x the prefetches and *loses* 7.2 points on
+#: rsrch_2, where a deeper prefetch evicts blocks the workload still wants.
+#: 8 is the depth that is best or near-best on every trace, which is why it
+#: is the default and not the argmax. Every policy that existed before `deep`
+#: prefetched exactly 2 blocks, which is why a perfect policy router could
+#: only find +0.4 points of headroom (docs/DECISIONS.md D11, D13).
+DEFAULT_READ_AHEAD_DEPTH = 8
+
 #: Default cache capacity, in blocks (512 B each, so 2048 blocks = 1 MiB).
 #:
 #: This was 128 blocks, which was calibrated for the original generator's
@@ -216,6 +276,48 @@ def route_window(window: list[Request], stride: int | None) -> str:
 DEFAULT_CAPACITY = 2048
 
 
+#: Every mode ``replay()`` accepts. ``_make_predictor`` must agree.
+MODES_SUPPORTED = frozenset({
+    "adaptive", "adaptive_evidence", "none", "sequential", "strided",
+    "stride", "markov", "lstm", "deep", *GATED_MODES,
+})
+
+
+def _validate_replay(mode: str, window_size: int, policy_interval: int | None,
+                     read_ahead_depth: int) -> int:
+    """Shared parameter checks for ``replay`` and ``replay_stream``.
+
+    These two paths had drifted: the streamed one accepted a ``window_size``
+    below the documented floor and a negative ``read_ahead_depth``, silently
+    producing results the in-memory path would have refused. One function so
+    they cannot diverge again.
+
+    Returns the decision-interval size to use.
+    """
+    if mode not in MODES_SUPPORTED:
+        raise ValueError(f"unknown mode: {mode!r}")
+    if window_size < 8:
+        raise ValueError("window_size must be at least 8")
+    if policy_interval is not None and policy_interval < 8:
+        raise ValueError("policy_interval must be at least 8")
+    if read_ahead_depth < 0:
+        raise ValueError("read_ahead_depth must be non-negative")
+    return policy_interval or window_size
+
+
+def _publish_gate(gate: "GateController", metrics: "Metrics") -> None:
+    """Copy the feedback-gated controller's final state into ``Metrics``.
+
+    One definition, called from both replay paths, so the two can never report
+    different things for the same run.
+    """
+    metrics.policy_switches = gate.switches
+    metrics.precision_margin = gate.margin
+    # ``None`` means never measured, which is different from measured as zero.
+    metrics.observed_precision = gate.precision if gate.has_data else None
+    metrics.observed_stride = gate.stride
+
+
 def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
            window_size: int = 32,
            mode: str = "adaptive", model: OnlineGaussianNB | None = None,
@@ -224,17 +326,22 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
            lstm_model_path: str | None = None,
            pseudo_label_threshold: float | None = None,
            smoothing: tuple[int, float] | None = None,
-           contextual: bool = True):
+           contextual: bool = True,
+           policy_interval: int | None = None,
+           read_ahead_depth: int = DEFAULT_READ_AHEAD_DEPTH):
     """Replay in request order; a completed window only affects later requests.
 
     ``labels`` represent controlled ground truth. Optional pseudo-label updates
     are self-training experiments, never accuracy evidence on real traces.
     Every mode observes the first window without issuing prefetches.
+
+    ``policy_interval`` lets the feedback-gated modes re-decide more often than
+    once per window. The classifier still scores a whole window (it needs the
+    data), but the throttle can act on a shorter cadence, which is what lets it
+    react when the workload changes mid-window. Defaults to ``window_size``.
     """
-    modes = {"adaptive", "adaptive_evidence", "none", "sequential", "strided",
-             "stride", "markov", "lstm"}
-    if mode not in modes or window_size < 8:
-        raise ValueError("unknown mode or window_size below 8")
+    interval_size = _validate_replay(mode, window_size, policy_interval,
+                                    read_ahead_depth)
     if mode == "adaptive" and model is None:
         raise ValueError("adaptive replay requires a trained model")
     if smoothing is not None and mode not in ("adaptive", "adaptive_evidence"):
@@ -275,6 +382,13 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
     policy = "none" if mode == "adaptive_evidence" else (
         "random" if mode == "adaptive" else mode)
     stride: int | None = None
+    # Feedback-gated state. `monitor` sees the realised precision of our own
+    # prefetches (LRUCache already counts useful_prefetches), so the decision
+    # is causal and needs no future knowledge and no trained model.
+    gated = mode in GATED_MODES
+    gate = (GateController(mode, latency.break_even_precision())
+            if gated else None)
+    interval = 0
     for index, request in enumerate(requests):
         for block in range(request.lba, request.lba + request.size_blocks):
             if request.operation == "R":
@@ -293,14 +407,31 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
             proposed = predictor.next_candidates(request)
             metrics.inference_ms += (perf_counter() - start) * 1000
             metrics.inference_calls += 1
+        elif gate is not None:
+            # Depth was decided at the previous decision point.
+            proposed = gate.candidates(request)
+        elif mode == "deep":
+            proposed = read_ahead(request, read_ahead_depth)
         else:
             proposed = candidates(request, policy, stride)
         if index >= window_size:
             for block in proposed:
                 if cache.prefetch(block):
                     metrics.prefetch_cost_us += latency.prefetch_us
+                    if gate is not None:
+                        gate.note_prefetch()
 
+        if gate is not None:
+            gate.observe(request)
+            gate.note_useful(metrics.useful_prefetches)
+            interval += 1
         history.append(request)
+        if gate is not None and interval >= interval_size:
+            # The throttle re-decides on its own cadence, independent of the
+            # window boundary, so it can react inside a window.
+            gate.decide()
+            interval = 0
+
         if len(history) == window_size:
             stride = dominant_stride(history)
             if mode == "adaptive_evidence":
@@ -342,6 +473,15 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
                     model.update(features, predicted)  # type: ignore[union-attr]
                     metrics.pseudo_updates += 1
             history = []
+    if gate is not None:
+        # Account the trailing partial interval; otherwise its usefulness is
+        # silently dropped and the reported precision is understated. The
+        # publish is unconditional: a stream that ends exactly on an interval
+        # boundary still has real state to report.
+        if interval:
+            gate.note_useful(metrics.useful_prefetches)
+            gate.decide()
+        _publish_gate(gate, metrics)
     return metrics, predictions
 
 
@@ -351,8 +491,10 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
                   latency_model: LatencyModel | None = None,
                   lstm_model_path: str | None = None,
                   contextual: bool = True,
-                  oracle_horizon: int = 2) -> Metrics:
+                  policy_interval: int | None = None,
+                  read_ahead_depth: int = DEFAULT_READ_AHEAD_DEPTH) -> Metrics:
     """Replay a request stream delivered in bounded chunks.
+
 
     Exists because the MSRC collection is 11.9 GB over 32 files and a
     ``Request`` costs ~430 bytes resident, so it cannot be held in memory.
@@ -368,16 +510,24 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
     I/O, modelled cost and policy switches are all exact, and those are the
     metrics that rank policies.
     """
+    interval_size = _validate_replay(mode, window_size, policy_interval,
+                                    read_ahead_depth)
     latency = latency_model or LatencyModel()
     metrics = Metrics()
     cache = LRUCache(capacity, metrics)
     context = WindowContext() if contextual else None
     predictor = _make_predictor(mode, lstm_model_path)
+    # Same controller as replay(). These two paths used to carry separate
+    # copies of this logic, which is how the gated modes ended up missing
+    # from the streamed path entirely.
+    gate = (GateController(mode, latency.break_even_precision())
+            if mode in GATED_MODES else None)
     policy = "none" if mode == "adaptive_evidence" else (
         "random" if mode == "adaptive" else mode)
     stride: int | None = None
     history: list[Request] = []
     seen = 0
+    interval = 0
 
     for chunk in chunks:
         for request in chunk:
@@ -388,21 +538,42 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
                                                   else latency.demand_miss_us)
                 else:
                     cache.write(block)
-            proposed = (predictor.next_candidates(request)
-                        if predictor is not None
-                        else candidates(request, policy, stride))
+            if predictor is not None:
+                proposed = predictor.next_candidates(request)
+            elif gate is not None:
+                proposed = gate.candidates(request)
+            elif mode == "deep":
+                proposed = read_ahead(request, read_ahead_depth)
+            else:
+                proposed = candidates(request, policy, stride)
             # Causality, matching ``replay`` exactly: the first
             # ``window_size`` requests observe without prefetching.
             if seen >= window_size:
                 for block in proposed:
                     if cache.prefetch(block):
                         metrics.prefetch_cost_us += latency.prefetch_us
+                        if gate is not None:
+                            gate.note_prefetch()
+            if gate is not None:
+                gate.observe(request)
+                gate.note_useful(metrics.useful_prefetches)
+                interval += 1
             seen += 1
             history.append(request)
+
+            if gate is not None and interval >= interval_size:
+                gate.decide()
+                interval = 0
             if len(history) == window_size:
                 stride = dominant_stride(history)
                 if mode == "adaptive_evidence":
-                    policy = route_window(history, stride)
+                    chosen = route_window(history, stride)
+                    # Matches replay(): a switch is a change of chosen
+                    # policy, and omitting this made the two paths disagree
+                    # by ~230 on web_3 while agreeing on every cache metric.
+                    if chosen != policy:
+                        metrics.policy_switches += 1
+                    policy = chosen
                 elif mode == "adaptive":
                     if model is None:
                         raise ValueError("adaptive replay requires a trained model")
@@ -416,6 +587,11 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
                         metrics.policy_switches += 1
                     policy = predicted
                 history = []
+    if gate is not None:
+        if interval:
+            gate.note_useful(metrics.useful_prefetches)
+            gate.decide()
+        _publish_gate(gate, metrics)
     return metrics
 
 
@@ -429,9 +605,8 @@ def _make_predictor(mode: str, lstm_model_path: str | None):
             raise ValueError("lstm mode requires --lstm-model path")
         from .lstm import load_predictor
         return load_predictor(lstm_model_path)
-    if mode not in {"adaptive", "adaptive_evidence", "none", "sequential",
-                    "strided"}:
-        raise ValueError("unknown mode")
+    if mode not in MODES_SUPPORTED:
+        raise ValueError(f"unknown mode: {mode!r}")
     return None
 
 

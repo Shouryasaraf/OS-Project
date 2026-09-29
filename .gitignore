@@ -11,3 +11,7 @@ data/MSRC-trace-003
 .chart-data-*/
 models/*
 !models/msr_sample_gnb.json
+
+# Console transcript of a completed sweep run; nothing generates it and it
+# goes stale the moment a mode is added. outputs/ is gitignored already.
+sweep_run.txt

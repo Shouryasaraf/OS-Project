@@ -13,7 +13,7 @@ the repo root, `python -m adaptive_prefetch ...` fails with
 
 ```powershell
 $env:PYTHONPATH='src'
-python -m unittest discover -s tests -v     # 79 tests, ~20s
+python -m unittest discover -s tests -v     # 131 tests, ~15s
 python main.py                              # full research run, no prompts, ~6 min
 python main.py --quick                      # skip LSTM + regime sweep
 python main.py --interactive                # guided dataset/LSTM picker
@@ -31,7 +31,7 @@ python sweep_modes.py --per-trace 50000     # cheaper sample
 - `main.py` self-bootstraps `sys.path`; every other entry point needs
   `PYTHONPATH=src` or `pip install -e .`.
 - **`main.py` is the primary entry point.** It runs EDA, classifier
-  selection, domain shift, the 7-policy benchmark against a
+  selection, domain shift, the 12-policy benchmark against a
   perfect-predictor bound, and drift. The console deliberately shows
   *conclusions*; every raw row is written to `outputs/` by `report.py`. Do not
   dump wide tables back to the console — put them in the file map instead.
@@ -48,9 +48,23 @@ python sweep_modes.py --per-trace 50000     # cheaper sample
 
 ## Invariants the tests pin (do not break)
 
-- `simulator.replay()` is the single causal loop shared by all modes in
+- `simulator.replay()` is the causal loop shared by all modes in
   `benchmark.MODES` (`none, sequential, strided, stride, markov, lstm,
-  adaptive, adaptive_evidence`).
+  adaptive, adaptive_evidence, guard, depth_adaptive, correlate, deep`).
+  `replay_stream()` is a **second** loop that must stay bit-identical; both
+  drive `guard.GateController` rather than each reimplementing gated
+  decisions, and `_publish_gate()` is the only place gate state reaches
+  `Metrics`. Duplicating that logic is what made `replay_stream` crash on
+  the gated modes (D15), and omitting the policy-switch counter made the two
+  paths disagree by 230 on web_3 (D16). `test_every_supported_mode_agrees_
+  across_both_paths` now pins every mode over both paths.
+- `simulator._validate_replay()` is the **only** parameter validator, called
+  by both entry points. `MODES_SUPPORTED` is the single source of truth for
+  the mode set; `_make_predictor` reads it rather than keeping its own copy.
+- `read_ahead()` must return exactly `depth` blocks in **both** branches. The
+  stride branch used to return one block per future request and drop any
+  candidate inside the current extent, which made it issue *nothing* when
+  `stride < size_blocks` and score half of `guard` on a contiguous scan (D16).
   Prefetches are gated on `index >= window_size` — the **first window never
   prefetches** and a window's policy only affects later requests. Three tests
   assert this; keep the gate.
@@ -64,7 +78,20 @@ python sweep_modes.py --per-trace 50000     # cheaper sample
   `test_benchmark_includes_skipped_optional_lstm`, which asserts
   `rows[0]["mode"] == "none"` and `rows[5]["status"].startswith("skipped")`.
   It now checks `len(rows) == len(MODES)`, so appending is safe but reordering
-  is not.
+  is not. A new mode must be added in **four** places or it will be silently
+  wrong somewhere: `benchmark.MODES`, `sweep.RANKING_MODES`, the `modes` set
+  and `_make_predictor`'s allow-list in `simulator.py`, and the `GATED_MODES`
+  tuple if it is feedback-gated.
+- The feedback-gated modes (`guard`, `depth_adaptive`, `correlate`) decide
+  from **observed** precision, not prediction. `PrecisionMonitor.record()`
+  must receive the *delta* in useful prefetches since the last decision.
+  Recording the cumulative total instead re-counts every earlier interval,
+  pins the ratio at 1.0 and leaves the gate permanently open — this produced
+  a fake +12.3pp "win" that had to be retracted (D15). Two tests pin it.
+- A closed gate must be able to reopen. `GateController.REPROBE_AFTER`
+  forces a one-interval probe after eight consecutive closed decisions;
+  without it the gate stops issuing, never gathers evidence, and stays shut
+  for the rest of the trace.
 - `Metrics.prefetch_recall` is backed by a future-read `Counter` built at replay
   start. It is **measurement only**. Never feed it into candidate generation.
 - Classifier updates require trustworthy labels:
@@ -113,6 +140,10 @@ is **0.9688**, which is the intended outcome, not a regression.
   (`STREAM_FEATURES`), so any caller using `extract` against a 12-feature
   model will raise. `benchmark.make_model` lays training windows out as one
   continuous stream precisely so train and replay build the same vector.
+- `outputs/msrc_sweep.csv` carries `observed_precision`, `precision_margin`
+  and `observed_stride` per row. D12's claim is that a policy can observe its
+  own prefetch value and act on it; if those columns go missing the claim
+  becomes unfalsifiable from the output.
 - `models/*` (except `msr_sample_gnb.json`) and `outputs/` are gitignored, so
   regenerated LSTM/result artifacts will not be committed by accident.
 - `models/msr_sample_gnb.json` was adapted **in-sample** on
@@ -129,6 +160,26 @@ service times (`.revised` column 6, retained on `Request.service_ms`).
   and makes every policy look free. There is a regression test for this.
 - Measured means are **260-5491 µs**, so the original assumed 100 µs
   demand-miss cost understated a miss by 3-50x.
+- **`break_even_precision()` is 1.0101 at the default
+  `prefetch_multiple=1.0`, so the modelled-cost column is degenerate**: no
+  prefetcher can exceed 100% precision, so `none` wins that column by
+  arithmetic. This is not a bug to fix — a speculative read does the same
+  device work as the demand read it replaces and saves strictly less (the
+  hit still costs a cache lookup). Only `--prefetch-multiple < 1.0` models
+  overlapped prefetch, and that is an assumption these traces cannot support.
+  Read hit ratio, precision and wasted I/O; treat modelled cost as
+  degenerate unless the break-even is printed (D11).
+- Cost ranking is invariant to a **uniform rescale** of the calibration
+  (every mode's cost is linear in mean service), but it is **not** invariant
+  to `prefetch_multiple`, which re-weights only the prefetch term: `argmin`
+  flips from `none` to `deep` at 0.9. It never changes hit ratio, which is
+  what the cache actually produces. Both halves are pinned by
+  `test_cost_ranking_is_invariant_to_the_calibration_scale` and
+  `test_prefetch_multiple_does_change_the_cost_ranking` (D11, D16).
+- `CorrelateDetector.confirmed_stride()` is recomputed every call. It was
+  memoised on `len(table)`, which never changes when an existing key's count
+  is incremented, so it reported a stale stride across a phase change -- the
+  exact case the detector exists for (D16).
 - The **hit cost is still an approximation** (1% of mean service) and is
   labelled as such — the traces record device time only, never cache time.
 - `Request.pattern` holds the trace's own `seq`/`rand` flag. It is for
@@ -212,12 +263,32 @@ slide deck, preserve:
   accuracy 1.000 — frozen and online are identical because the task is
   saturated. The console prints that warning, but a reviewer skimming the
   table may miss it. The `transition_heavy` regime is the non-saturated task.
-- **The real-workload result is still mostly negative** and is reported as
-  such: fixed read-ahead beats the adaptive policy on 6 of 7 real traces at
-  the corrected 2048-block cache. `msrc_hm_1` is the one dataset where
-  adaptive wins. Do not soften this. See `docs/DECISIONS.md` D9 for the three
-  hypotheses tested and rejected, and D10 for why the generator fix changed
-  the numbers but not this conclusion.
+- **The trained classifier is still the wrong tool, and that is now a
+  measured conclusion rather than a shrug.** D9-D10: fixed read-ahead beats
+  the `adaptive` classifier on 6 of 7 real traces. D11-D15 sharpened *why*:
+  the oracle experiment showed a perfect four-way router had only +0.4 points
+  of headroom, because the whole policy set prefetched at most 2 blocks. The
+  target was therefore inverted to "will prefetching hurt", and read-ahead
+  depth was found to be the missing dimension: fixed depth-8 read-ahead is
+  worth **+4.10 points** of mean hit ratio over the depth-2 baseline every
+  earlier mode used, up to +11.05 on `src2_2` (D13).
+- **What actually wins on real data** (first 40k requests of 8 traces,
+  2048-block cache, `docs/DECISIONS.md` D14): `deep` (fixed depth-8
+  read-ahead) has the highest hit ratio on **6 of 8**, and is by far the most
+  wasteful. The feedback gate wins on exactly one trace — `web_3`, where
+  read-ahead wrecks the cache — taking +18.99 points of hit ratio over
+  `sequential` and cutting wasted I/O 86.9%. It does not beat `none` there
+  (50.61%). On the other seven it *loses* to `sequential` by 0.00-3.00
+  points. `none` wins on `web_3` and `msrc_hm_1`. None of this is a general
+  win for adaptive prefetching; report it as the specific, measured result it
+  is. Do not soften it and do not generalise from `web_3`.
+- **`depth_adaptive` is byte-identical to `guard` at the default cost
+  model**, on all 8 traces, because break-even 1.0101 exceeds any achievable
+  precision so its depth is always 0 outside exploration and re-probe (D14.1).
+  Measured and documented, not hidden.
+- **Break-even precision is necessary, not sufficient.** On `ts_0` the gate
+  opens on its own evidence (margin +0.068) and still scores 0.32 points
+  below `sequential` (D14).
 - `docs/architecture.md` claims `main.py` applies a "per-trace request limit"
   when training the LSTM; it does not — it trains on the whole selected sample
   and prints a duration warning.
@@ -230,7 +301,7 @@ tried, what the measurement said, and why the default stayed Naive Bayes.
 `docs/architecture.md` is the best module map, data-flow, and per-metric limits
 reference. `docs/CLASSIFIER_EVAL.md` holds the detailed classifier comparison,
 the LSTM rework, the full bug list, and the measured limits of the available
-data. `docs/PIPELINE.md` is the short pipeline/7-mode summary, `docs/REVIEW2.md`
+data. `docs/PIPELINE.md` is the short pipeline/12-mode summary, `docs/REVIEW2.md`
 the demo/viva script, `docs/implementation-stage2.md` and
 `implementation-stage3.md` the executed work plans, `docs/MSR_SAMPLE_TRAINING.md`
 the weak-supervision record. `README.md` is the user-facing command reference.

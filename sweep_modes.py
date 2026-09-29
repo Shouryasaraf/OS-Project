@@ -51,6 +51,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--modes", nargs="+", default=list(RANKING_MODES),
                         choices=list(RANKING_MODES))
     parser.add_argument("--lstm-model", default=None)
+    parser.add_argument("--prefetch-multiple", type=float, default=1.0,
+                        help="cost of a speculative read relative to a demand "
+                             "read; <1.0 models overlapped prefetch")
     parser.add_argument("--no-cost-model", action="store_true",
                         help="use the assumed 5/100/50 us model")
     args = parser.parse_args(argv)
@@ -83,7 +86,8 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_cost_model:
         from adaptive_prefetch.trace import iter_csv_chunks
         for chunk in iter_csv_chunks(traces[0], "revised", 20000):
-            latency = LatencyModel.measured(trace=chunk)
+            latency = LatencyModel.measured(
+                trace=chunk, prefetch_multiple=args.prefetch_multiple)
             break
     if latency is not None:
         print(f"  cost model      : MEASURED from {traces[0].name} - "
@@ -95,6 +99,14 @@ def main(argv: list[str] | None = None) -> int:
               f"{latency.hit_us:g}/{latency.demand_miss_us:g}/"
               f"{latency.prefetch_us:g} us")
     print()
+
+    print()
+    print(f"  break-even precision: {latency.break_even_precision():.3f}")
+    if latency.break_even_precision() > 1.0:
+        print("    Above 1.0, so NO prefetcher can pay for itself and the cost")
+        print("    column is degenerate: 'none' wins it by arithmetic. Read the")
+        print("    hit-ratio, precision and wasted-I/O columns instead.")
+        print("    Use --prefetch-multiple 0.5 to model overlapped prefetch.")
 
     started = perf_counter()
 
@@ -178,7 +190,11 @@ def write_outputs(rows, summary, win_counts, champ, metas, args, latency,
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     csv_path = OUTPUT_DIR / "msrc_sweep.csv"
     fields = ["trace", "mode", "hit_ratio", "precision", "unused",
-              "total_prefetches", "mean_us", "policy_switches", "read_blocks"]
+              "total_prefetches", "mean_us", "policy_switches", "read_blocks",
+              # Feedback-gate diagnostics: these explain *why* a gated mode
+              # issued the prefetches it did. `observed_precision` is None
+              # when the gate never measured anything.
+              "observed_precision", "precision_margin", "observed_stride"]
     with csv_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
