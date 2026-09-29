@@ -1,35 +1,102 @@
-"""Interactive final entry point (replaces run_review2.ps1).
+"""End-to-end entry point for the adaptive disk I/O prefetching project.
 
-Asks the user what to run, then executes the project modules and produces the
-final result: the 7-policy benchmark matrix + drift report, saved to outputs/.
+    python main.py                 # full research run, no prompts
+    python main.py --interactive   # guided run with dataset/LSTM selection
+    python main.py --quick         # skip LSTM training and the regime sweep
 
-Usage:  python main.py
+Running it with no arguments executes the whole pipeline and prints the
+findings. Raw tables, per-dataset EDA, and every numeric row are written to
+``outputs/``; the console deliberately shows conclusions rather than dumping
+28-row tables.
+
+The console/files split is the point: a reader should be able to see what the
+results *mean* without scrolling, and still recover every raw number.
 """
 
 from __future__ import annotations
 
+import argparse
+import csv
 import sys
 from pathlib import Path
+from statistics import mean
+from time import perf_counter
 
 REPO = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO / "src"))
 
 from adaptive_prefetch.benchmark import (  # noqa: E402
-    analyze_results,
-    benchmark_dataset,
-    drift_report,
-    markdown_table,
-    write_results_csv,
+    aggregate_results, analyze_results, benchmark_dataset, drift_report,
+    markdown_table, write_results_csv,
 )
-from adaptive_prefetch.cli import run_demo  # noqa: E402
-from adaptive_prefetch.simulator import LatencyModel  # noqa: E402
-from adaptive_prefetch.trace import CLASSES, load_csv, transition_trace  # noqa: E402
+from adaptive_prefetch.eda import (  # noqa: E402
+    domain_shift, label_support, locality_profile, profile_trace, window_features,
+)
+from adaptive_prefetch.features import FEATURE_NAMES, extract  # noqa: E402
+from adaptive_prefetch.model import DEFAULT_CLASSIFIER  # noqa: E402
+from adaptive_prefetch.pipeline import (  # noqa: E402
+    evaluate_classifier, labelled_dataset,
+)
+from adaptive_prefetch.report import (  # noqa: E402
+    benchmark_section, caveats_section, classifier_section, dataset_overview,
+    domain_shift_section, drift_section, files_section, full_report, header,
+    real_world_section,
+)
+from adaptive_prefetch.simulator import (  # noqa: E402
+    LatencyModel, confusion_matrix, oracle_reference,
+)
+from adaptive_prefetch.trace import (  # noqa: E402
+    CLASSES, load_csv, synthetic_dataset, transition_trace,
+)
 
-MSR_SAMPLE = REPO / "data" / "samples" / "msr-cambridge1-sample.csv"
+MSR_SAMPLES = {
+    "1": REPO / "data" / "samples" / "msr-cambridge1-sample.csv",
+    "2": REPO / "data" / "samples" / "msr-cambridge2-sample.csv",
+    "3": REPO / "data" / "samples" / "msr-cambridge-sample-merged.csv",
+}
+MSRC_TRACE_DIR = REPO / "data" / "MSRC-trace-003" / "final-trace"
 LSTM_ARTIFACT = REPO / "models" / "lstm_delta.pt"
 OUTPUT_DIR = REPO / "outputs"
-
 FORMATS = ("auto", "normalized", "msr", "iotta8", "alibaba", "revised")
+
+#: MSRC traces used for the default run. The full directory holds 32 files up
+#: to 2.6 GB each and ``load_csv`` materialises a whole file, so the default
+#: run samples a spread of read-heavy volumes rather than loading everything.
+#: All of these carry the recorded device service times used to calibrate the
+#: measured cost model.
+QUICK_MSRC = ("hm_1.revised", "mds_0.revised", "stg_0.revised",
+              "proj_3.revised", "ts_0.revised")
+
+
+# --------------------------------------------------------------------------
+# Dataset construction
+# --------------------------------------------------------------------------
+
+def default_datasets(window_size: int) -> list[tuple[str, list]]:
+    """The dataset set used when running non-interactively."""
+    datasets: list[tuple[str, list]] = []
+    for offset in range(3):
+        requests, _ = transition_trace(42 + 200000 + offset, 8, window_size)
+        datasets.append((f"synthetic_seed_{42 + offset}", requests))
+    for number in ("1", "2"):
+        path = MSR_SAMPLES[number]
+        if path.is_file():
+            datasets.append((path.stem, load_csv(path, "msr")))
+    if MSRC_TRACE_DIR.is_dir():
+        for name in QUICK_MSRC:
+            path = MSRC_TRACE_DIR / name
+            if path.is_file():
+                # Cap the sample: these files are large and a full load would
+                # dominate the runtime. 40k requests is ample for a stable
+                # hit-ratio comparison and keeps the run interactive.
+                requests = load_csv(path, "revised")
+                if len(requests) > 40000:
+                    requests = requests[:40000]
+                datasets.append((f"msrc_{path.stem}", requests))
+    demo = REPO / "data" / "samples" / "demo.csv"
+    if demo.is_file():
+        datasets.append(("demo_normalized", load_csv(demo, "auto")))
+    return datasets
 
 
 def ask(prompt: str, default: str = "", cast=None):
@@ -67,151 +134,375 @@ def ask_yes_no(prompt: str, default: bool = False) -> bool:
     return ask(f"{prompt} ({text})", fallback).lower() in ("y", "yes")
 
 
-def pick_datasets() -> list[tuple[str, list]]:  # list[tuple[name, requests]]
-    print("\n--- Datasets (pick one or more, comma-separated) ---")
+def interactive_datasets(window_size: int) -> list[tuple[str, list]]:
+    """Dataset picker. Only reachable with ``--interactive``."""
+    print("\n--- Datasets (comma-separated) ---")
     print("  1. Synthetic transition traces (default; labelled, multi-seed)")
-    print("  2. Bundled MSR Cambridge sample (real requests, unlabelled)")
-    print("  3. Custom trace file (normalized/msr/iotta8/alibaba/revised)")
-    wanted = ask("Datasets to benchmark", "1")
-    names = [token.strip() for token in wanted.split(",") if token.strip()]
+    print("  2. Bundled MSR Cambridge samples")
+    print("  3. MSRC-trace-003 traces (real, unlabelled; 'all' is very slow)")
+    print("  4. Custom trace file")
+    wanted = ask("Datasets", "1")
+    names = {t.strip() for t in wanted.split(",") if t.strip()}
     datasets: list[tuple[str, list]] = []
     if "1" in names:
         for offset in range(3):
-            requests, _ = transition_trace(42 + 200000 + offset, 8, 32)
+            requests, _ = transition_trace(42 + 200000 + offset, 8, window_size)
             datasets.append((f"synthetic_seed_{42 + offset}", requests))
     if "2" in names:
-        datasets.append(("msr_cambridge1_sample", load_csv(MSR_SAMPLE, "msr")))
+        for key, path in MSR_SAMPLES.items():
+            if path.is_file():
+                print(f"    {key}. {path.name}")
+        key = ask("Sample number (1-3, comma-separated)", "1")
+        for token in key.split(","):
+            if token.strip() in MSR_SAMPLES:
+                path = MSR_SAMPLES[token.strip()]
+                datasets.append((path.stem, load_csv(path, "msr")))
     if "3" in names:
-        path = ask("Trace file path", str(REPO / "data" / "samples" / "demo.csv"))
-        trace_path = REPO / path if not Path(path).is_absolute() else Path(path)
-        if not trace_path.is_file():
-            print(f"  File not found: {trace_path}")
-            return pick_datasets()
-        fmt = ask("Format", "auto")
-        fmt = fmt if fmt in FORMATS else "auto"
-        datasets.append((trace_path.stem, load_csv(trace_path, fmt)))
-    if not datasets:
-        print("  No valid selection; defaulting to synthetic.")
-        return pick_datasets()
-    return datasets
+        if not MSRC_TRACE_DIR.is_dir():
+            print(f"  Not found: {MSRC_TRACE_DIR}")
+        else:
+            paths = sorted(MSRC_TRACE_DIR.glob("*.revised"))
+            for number, path in enumerate(paths, 1):
+                print(f"    {number:2}. {path.name}")
+            selection = ask("Trace numbers (or 'all')", "1").lower()
+            if selection == "all":
+                selected = paths
+            else:
+                selected = []
+                for token in selection.split(","):
+                    if token.strip().isdigit() and 1 <= int(token) <= len(paths):
+                        selected.append(paths[int(token) - 1])
+            datasets.extend((f"msrc_{p.stem}", load_csv(p, "revised"))
+                            for p in dict.fromkeys(selected))
+    if "4" in names:
+        raw = ask("Trace file path", str(REPO / "data" / "samples" / "demo.csv"))
+        path = Path(raw)
+        path = path if path.is_absolute() else REPO / path
+        if path.is_file():
+            fmt = ask(f"Format {FORMATS}", "auto")
+            datasets.append((path.stem, load_csv(path, fmt if fmt in FORMATS else "auto")))
+        else:
+            print(f"  Not found: {path}")
+    return datasets or default_datasets(window_size)
 
 
-def ensure_lstm(real_traces: list[list] | None = None) -> str | None:
-    """Include the LSTM baseline; retrain or reuse the cached artifact."""
-    print("\n--- LSTM baseline (offline delta-prediction LSTM, optional) ---")
-    if not ask_yes_no("Include the LSTM baseline?"):
-        return None
+# --------------------------------------------------------------------------
+# LSTM
+# --------------------------------------------------------------------------
+
+def resolve_lstm(datasets: list[tuple[str, list]], interactive: bool,
+                 quick: bool, epochs: int) -> tuple[str | None, str]:
+    """Ensure a usable LSTM artifact; return (path_or_None, note)."""
+    if quick:
+        return None, "skipped (--quick)"
+    synthetic = [r for name, r in datasets if name.startswith("synthetic")]
+    real = [r for name, r in datasets if not name.startswith("synthetic")]
+    if not synthetic and not real:
+        return None, "no traces available to train on"
+    train_on = real if (real and not synthetic) else synthetic
+
     if LSTM_ARTIFACT.is_file():
-        if ask_yes_no("Retrain the LSTM from scratch?", True):
-            return _train_lstm(real_traces)
-        print(f"Using cached artifact: {LSTM_ARTIFACT}")
-        return str(LSTM_ARTIFACT)
-    print("No trained artifact found; training now (needs PyTorch).")
-    return _train_lstm(real_traces)
+        from adaptive_prefetch.lstm import load_predictor
+        try:
+            load_predictor(LSTM_ARTIFACT)
+            reuse = not interactive
+            if interactive:
+                reuse = not ask_yes_no("Retrain the LSTM from scratch?", False)
+            if reuse:
+                return str(LSTM_ARTIFACT), "reused cached artifact"
+        except (ValueError, RuntimeError) as exc:
+            print(f"  cached artifact unusable ({exc}); retraining")
+    elif interactive:
+        if not ask_yes_no("Train the LSTM baseline now (needs PyTorch)?", True):
+            return None, "declined"
 
-
-def _train_lstm(real_traces: list[list] | None = None) -> str | None:
-    """Train the offline LSTM; return the artifact path or None on failure."""
-    epochs = ask_int("Epochs", 2, 1)
-    traces = real_traces or None
-    if traces is None:
-        print("No real trace picked; training on synthetic traces.")
-    else:
-        total = sum(len(trace) for trace in traces)
-        print(f"{len(traces)} real trace(s) selected, {total:,} requests total.")
-        limit = ask_int("Requests per trace to train on (0 = all)", 0, 0)
-        if limit:
-            traces = [trace[:limit] for trace in traces]
-            total = sum(len(trace) for trace in traces)
-        print(f"Training on {total:,} requests for {epochs} epoch(s) "
-              f"-> may take a while...")
+    from adaptive_prefetch.lstm import train_lstm
+    total = sum(len(t) for t in train_on)
+    print(f"  training LSTM on {len(train_on)} trace(s) / {total:,} requests "
+          f"for {epochs} epochs...")
     try:
-        from adaptive_prefetch.lstm import train_lstm
-
         LSTM_ARTIFACT.parent.mkdir(parents=True, exist_ok=True)
-        result = train_lstm(LSTM_ARTIFACT, traces=traces, epochs=epochs)
-        print(f"Saved {LSTM_ARTIFACT}: {result}")
+        result = train_lstm(LSTM_ARTIFACT, traces=train_on, epochs=epochs)
     except (RuntimeError, ValueError) as exc:
-        print(f"LSTM skipped: {exc}")
-        return None
-    return str(LSTM_ARTIFACT)
+        return None, f"unavailable: {exc}"
+    return str(LSTM_ARTIFACT), (f"trained on {len(train_on)} trace(s), "
+                                f"{result['examples']:,} examples, "
+                                f"{result['classes']} classes")
 
 
-def ask_latency() -> LatencyModel:
-    if ask_yes_no("Use default latency model (hit 5us / miss 100us / prefetch 50us)?", True):
-        return LatencyModel()
-    return LatencyModel(
-        hit_us=float(ask("Hit latency (us)", "5")),
-        demand_miss_us=float(ask("Demand-miss latency (us)", "100")),
-        prefetch_us=float(ask("Prefetch cost (us)", "50")),
-    )
+# --------------------------------------------------------------------------
+# Analyses
+# --------------------------------------------------------------------------
+
+def classifier_facts(seed: int, train_per_class: int, test_per_class: int):
+    """Held-out accuracy, confusion matrix, and mean confidence."""
+    from adaptive_prefetch.benchmark import make_model
+
+    model = make_model(seed, train_per_class)
+    held_out = synthetic_dataset(test_per_class, seed + 100000)
+    pairs = []
+    for window, label in held_out:
+        predicted, confidence = model.predict(extract(window))
+        pairs.append((label, predicted, confidence))
+    correct = sum(t == p for t, p, _ in pairs)
+    confident = [c for t, p, c in pairs if t == p]
+    return (correct / len(pairs) if pairs else 0.0, correct, len(pairs),
+            confusion_matrix([(t, p) for t, p, _ in pairs]),
+            mean(confident) if confident else 0.0)
 
 
-def main() -> None:
-    print("=" * 72)
-    print("ML-BASED ADAPTIVE DISK I/O PREFETCHING — FINAL RUN")
-    print("Collecting inputs, then running the full project pipeline.")
-    print("=" * 72)
+def transfer_probe(seeds: int = 4) -> list[dict]:
+    """Block-size transfer: train at 1-block requests, test at larger sizes.
 
-    show_demo = ask_yes_no("First run the classifier demo (accuracy + confusion matrix)?", True)
-    cache_blocks = ask_int("Cache capacity (blocks)", 128, 1)
-    window_size = ask_int("Window size (requests)", 32, 8)
-    datasets = pick_datasets()
-    real_traces = [requests for name, requests in datasets if not name.startswith("synthetic")]
-    lstm_model = ensure_lstm(real_traces)
-    latency = ask_latency()
-    save_outputs = ask_yes_no("Save results to outputs/results.md + .csv?", True)
+    This is the measurement that decided the default classifier, so the run
+    reproduces it rather than asserting it.
+    """
+    import random
 
-    print("\nRunning...\n")
+    from adaptive_prefetch.model import make_classifier
+    from adaptive_prefetch.pipeline import make_harder_generator
 
-    if show_demo:
-        from argparse import Namespace
+    def build(size, seed, per_class):
+        rng = random.Random(seed)
+        rows = [(extract(make_harder_generator(label, rng, 32, noise=0.15,
+                                               lba_base=10**7, lba_span=10**9,
+                                               size=size)), label)
+                for label in CLASSES for _ in range(per_class)]
+        rng.shuffle(rows)
+        return rows
 
-        run_demo(Namespace(seed=42, train_per_class=100, test_per_class=40,
-                           windows_per_class=4, cache_blocks=cache_blocks))
-        print()
+    results = []
+    for test_size in (1, 8, 32, 128):
+        row: dict[str, object] = {"label": f"1 -> {test_size}"}
+        for name in ("gnb", "qda"):
+            accuracies = []
+            for i in range(seeds):
+                model = make_classifier(name, len(FEATURE_NAMES))
+                for values, label in build(1, 1000 + i, 60):
+                    model.update(values, label)
+                test = build(test_size, 900000 + i, 30)
+                correct = sum(model.predict(v)[0] == label for v, label in test)
+                accuracies.append(correct / len(test))
+            row[name] = sum(accuracies) / len(accuracies)
+        results.append(row)
+    return results
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--interactive", action="store_true",
+                        help="prompt for datasets, cache size and LSTM")
+    parser.add_argument("--quick", action="store_true",
+                        help="skip LSTM training and the regime sweep")
+    parser.add_argument("--cache-blocks", type=int, default=128)
+    parser.add_argument("--window-size", type=int, default=32)
+    parser.add_argument("--seeds", type=int, default=6,
+                        help="seed pairs per cell in the classifier regime sweep")
+    parser.add_argument("--lstm-epochs", type=int, default=60)
+    parser.add_argument("--cost-model", default="measured",
+                        choices=("assumed", "measured"),
+                        help="'measured' calibrates the cost model from the "
+                             "traces' own recorded device service times")
+    parser.add_argument("--no-outputs", action="store_true",
+                        help="print findings without writing files")
+    args = parser.parse_args(argv)
+
+    started = perf_counter()
+    window_size = max(8, args.window_size)
+    capacity = max(1, args.cache_blocks)
+
+    if args.interactive:
+        datasets = interactive_datasets(window_size)
+        latency = LatencyModel() if ask_yes_no(
+            "Default latency model (5/100/50 us)?", True) else LatencyModel(
+            float(ask("Hit us", "5")), float(ask("Miss us", "100")),
+            float(ask("Prefetch us", "50")))
+    else:
+        datasets = default_datasets(window_size)
+        latency = LatencyModel()
+
+    # Calibrate the cost model from the traces' own recorded device service
+    # times when available. The assumed 5/100/50 us model is off by 3-50x
+    # against these measurements.
+    measured_sources = [name for name, reqs in datasets
+                        if any(getattr(r, "service_ms", None) is not None
+                               for r in reqs)]
+    if args.cost_model == "measured":
+        merged = [r for _, reqs in datasets for r in reqs
+                  if getattr(r, "service_ms", None) is not None]
+        if merged:
+            latency = LatencyModel.measured(trace=merged)
+        else:
+            print("  no recorded service times in the selected traces; "
+                  "using the assumed cost model")
+
+    print(header("ML-BASED ADAPTIVE DISK I/O PREFETCHING", {
+        "datasets": len(datasets),
+        "cache capacity": f"{capacity} blocks",
+        "window size": f"{window_size} requests",
+        "classifier": DEFAULT_CLASSIFIER,
+        "cost model": (f"MEASURED from {len(measured_sources)} trace(s): "
+                       f"hit {latency.hit_us:.1f} / miss {latency.demand_miss_us:.0f} "
+                       f"/ prefetch {latency.prefetch_us:.0f} us"
+                       if measured_sources else
+                       f"assumed {latency.hit_us:g}/{latency.demand_miss_us:g}/"
+                       f"{latency.prefetch_us:g} us"),
+        "mode": "interactive" if args.interactive else ("quick" if args.quick else "full"),
+    }))
+
+    # ---- datasets -------------------------------------------------------
+    cacheable = {}
+    for name, requests in datasets:
+        reference = oracle_reference(requests, capacity)
+        if reference["read_blocks"]:
+            cacheable[name] = reference["hit_ratio"]
+    print(dataset_overview(datasets, capacity))
+
+    # ---- classifier -----------------------------------------------------
+    accuracy, correct, total, matrix, confidence = classifier_facts(42, 100, 40)
+    regime_rows: list[dict] = []
+    if not args.quick:
+        for regime_name in ("baseline", "noisy", "realistic",
+                            "transition_heavy"):
+            for name in ("gnb", "qda"):
+                regime_rows.append(evaluate_classifier(
+                    name, seeds=args.seeds, windows_per_class=100,
+                    test_per_class=40, regime_name=regime_name))
+    print(classifier_section(accuracy, correct, total, matrix, confidence,
+                             regime_rows, DEFAULT_CLASSIFIER,
+                             transfer_probe(seeds=3)))
+
+    # ---- domain shift ---------------------------------------------------
+    reference = [extract(w) for w, _ in labelled_dataset(100, 42, window_size)]
+    shifts: dict[str, dict] = {}
+    for name, requests in datasets:
+        if name.startswith("synthetic"):
+            continue
+        vectors = window_features(requests, window_size)
+        if vectors:
+            shifts[name] = domain_shift(reference, vectors)
+    if shifts:
+        worst_name = max(shifts, key=lambda n: shifts[n]["mean_abs_z"])
+        print(domain_shift_section(worst_name, shifts[worst_name]))
+
+    # ---- benchmark ------------------------------------------------------
+    lstm_path, lstm_note = resolve_lstm(datasets, args.interactive, args.quick,
+                                        args.lstm_epochs)
+    if lstm_path:
+        print(f"\n  LSTM: {lstm_note}")
+    else:
+        print(f"\n  LSTM: {lstm_note}")
 
     rows: list[dict] = []
     for name, requests in datasets:
         rows.extend(benchmark_dataset(
-            name, requests, seed=42, capacity=cache_blocks, window_size=window_size,
-            latency=latency, lstm_model_path=lstm_model))
-    table = markdown_table(rows)
+            name, requests, seed=42, capacity=capacity, window_size=window_size,
+            latency=latency, lstm_model_path=lstm_path))
+    if len(datasets) > 1:
+        rows.extend(aggregate_results(rows))
+    print(benchmark_section(rows, capacity, cacheable))
+    real = real_world_section(rows, capacity)
+    if real:
+        print(real)
 
-    print("FINAL RESULT — POLICIES COMPARED ON IDENTICAL REQUESTS/CACHE/LRU")
-    print(table)
-    print("\nNotes: latency is modelled (not measured device latency);")
-    print("recall uses measurement-only future-reaccess lookahead, never policy input;")
-    print("LSTM row appears only if a trained artifact was available.")
+    drift = drift_report(42, 8, window_size)
+    print(drift_section(drift, window_size))
 
-    print("\n" + analyze_results(rows))
+    # ---- outputs --------------------------------------------------------
+    written: dict[str, str] = {}
+    if not args.no_outputs:
+        written = write_outputs(datasets, rows, drift, shifts, regime_rows,
+                                reference, matrix, accuracy, correct, total,
+                                confidence, lstm_path)
+    print(caveats_section())
+    if written:
+        print(files_section(written))
+    print(f"Completed in {perf_counter() - started:.1f}s.")
 
-    print("\nDrift adaptation (labelled synthetic phases, frozen vs online GNB):")
-    print(f"  workload order: {' -> '.join(CLASSES)}")
-    for item in drift_report(42, 8, window_size):
-        print(f"  {item['variant']:15} {item['phase']:10} "
-              f"lag={item['switch_lag_windows']} windows "
-              f"phase_accuracy={item['phase_accuracy']:.3f}")
 
-    if save_outputs:
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        md_path = OUTPUT_DIR / "results.md"
-        csv_path = OUTPUT_DIR / "results.csv"
-        md_path.write_text("# Final results\n\n" + table + "\n\n"
-                           + analyze_results(rows) + "\n", encoding="utf-8")
-        write_results_csv(csv_path, rows)
-        print(f"\nSaved: {md_path}\n       {csv_path}")
+def write_outputs(datasets, rows, drift, shifts, regime_rows, reference,
+                  matrix, accuracy, correct, total, confidence,
+                  lstm_path) -> dict[str, str]:
+    """Write every raw table to ``outputs/``; return a description map."""
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    written: dict[str, str] = {}
 
-    print("\n=== WHAT THE FINAL OUTPUT IS ===")
-    print("A single comparison table of all prefetch policies on the same streams,")
-    print("cache capacity and LRU rules. Each row reports hit ratio, prefetch")
-    print("precision, oracle recall, unused prefetches, modelled mean latency, and")
-    print("latency speedup vs no prefetch. The adaptive ML policy row shows whether")
-    print("classify-then-prefetch beats the stride/Markov/LSTM baselines while")
-    print("issuing less wasted I/O. The result-interpretation section then names")
-    print("the winning policy per dataset with its quantified gains (speedup and")
-    print("hit-ratio improvement vs no prefetch). The drift report shows how")
-    print("quickly the online classifier re-learns when the workload changes.")
+    csv_path = OUTPUT_DIR / "results.csv"
+    write_results_csv(csv_path, rows)
+    written["results.csv"] = "every benchmark row (all datasets x all modes)"
+
+    md_path = OUTPUT_DIR / "results.md"
+    md_path.write_text(
+        full_report([
+            ("Datasets", dataset_overview(datasets, 128)),
+            ("Classifier", classifier_section(
+                accuracy, correct, total, matrix, confidence, regime_rows,
+                DEFAULT_CLASSIFIER, transfer_probe(seeds=3))),
+            ("Domain shift", "\n\n".join(
+                domain_shift_section(name, shift)
+                for name, shift in shifts.items()) or "(none)"),
+            ("Policy comparison", markdown_table(rows)),
+            ("Real-workload result", real_world_section(rows, 128) or "(none)"),
+            ("Result interpretation", analyze_results(rows)),
+            ("Drift", drift_section(drift, 32)),
+            ("Caveats", caveats_section()),
+        ]) + f"\n<!-- lstm: {lstm_path or 'skipped'} -->\n", encoding="utf-8")
+    written["results.md"] = "narrative report with the full 7-mode table"
+
+    eda_path = OUTPUT_DIR / "eda.md"
+    eda_path.write_text("\n\n".join(
+        profile_trace(requests, name, 32, 128)
+        for name, requests in datasets), encoding="utf-8")
+    written["eda.md"] = "per-trace request stream, locality, features, clusters"
+
+    if regime_rows:
+        eval_path = OUTPUT_DIR / "classifier_eval.csv"
+        with eval_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=[
+                "classifier", "regime", "accuracy", "accuracy_sd", "min", "max",
+                "predict_us", "train_ms"])
+            writer.writeheader()
+            writer.writerows(regime_rows)
+        written["classifier_eval.csv"] = "classifier x regime accuracy and cost"
+
+    if shifts:
+        shift_path = OUTPUT_DIR / "domain_shift.csv"
+        with shift_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=[
+                "dataset", "feature", "ref_mean", "ref_sd", "target_mean",
+                "shift_sd", "coverage"])
+            writer.writeheader()
+            for name, shift in shifts.items():
+                for feature in FEATURE_NAMES:
+                    stats = shift["features"][feature]
+                    writer.writerow({"dataset": name, "feature": feature,
+                                     "ref_mean": round(stats["ref_mean"], 6),
+                                     "ref_sd": round(stats["ref_sd"], 6),
+                                     "target_mean": round(stats["target_mean"], 6),
+                                     "shift_sd": round(stats["shift_sd"], 4),
+                                     "coverage": round(stats["coverage"], 4)})
+        written["domain_shift.csv"] = "per-feature shift vs the synthetic region"
+
+    drift_path = OUTPUT_DIR / "drift.csv"
+    with drift_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=[
+            "variant", "phase", "switch_lag_windows", "phase_accuracy"])
+        writer.writeheader()
+        writer.writerows(drift)
+    written["drift.csv"] = "frozen vs online switch lag per phase"
+
+    support = label_support(labelled_dataset(1, 42, 32))
+    labels_path = OUTPUT_DIR / "label_support.md"
+    labels_path.write_text(
+        "# Class support of the labelled population\n\n"
+        f"- present: {support['present']}\n"
+        f"- missing: {support['missing']}\n"
+        f"- counts: {support['counts']}\n\n"
+        "Real traces in `data/` carry no access-pattern label, so the four-class\n"
+        "problem can only be evaluated on generated windows.\n", encoding="utf-8")
+    written["label_support.md"] = "which classes the labelled data actually covers"
+    return written
 
 
 if __name__ == "__main__":

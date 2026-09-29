@@ -1,0 +1,198 @@
+# AGENTS.md
+
+ML-based adaptive disk I/O prefetching — a **user-space simulation** (replay of
+recorded I/O against a modelled LRU cache). It does not touch the OS or a real
+device. Read this before changing claims, numbers, or docs.
+
+## Commands
+
+The package lives in `src/` and is **not installed** in this environment. From
+the repo root, `python -m adaptive_prefetch ...` fails with
+`No module named adaptive_prefetch` unless you set the path first
+(PowerShell):
+
+```powershell
+$env:PYTHONPATH='src'
+python -m unittest discover -s tests -v     # 76 tests, ~20s
+python main.py                              # full research run, no prompts, ~6 min
+python main.py --quick                      # skip LSTM + regime sweep
+python main.py --interactive                # guided dataset/LSTM picker
+python main.py --cost-model assumed         # vs the 5/100/50 us model
+python -m adaptive_prefetch demo
+python -m adaptive_prefetch benchmark --cost-model measured
+python -m adaptive_prefetch evaluate        # classifier x regime accuracy + cost
+python -m adaptive_prefetch eda <trace>     # profile one trace
+python -m adaptive_prefetch shift <trace>   # domain shift vs synthetic region
+```
+
+- `main.py` self-bootstraps `sys.path`; every other entry point needs
+  `PYTHONPATH=src` or `pip install -e .`.
+- **`main.py` is the primary entry point.** It runs EDA, classifier
+  selection, domain shift, the 7-policy benchmark against a
+  perfect-predictor bound, and drift. The console deliberately shows
+  *conclusions*; every raw row is written to `outputs/` by `report.py`. Do not
+  dump wide tables back to the console — put them in the file map instead.
+- Single test / class: `python -m unittest tests.test_project.SimulatorTests` or
+  `python -m unittest discover -s tests -k LSTMTests`.
+- The unit suite is the **only** verification gate. There is no CI, no linter,
+  no formatter, no typechecker, no `pytest` config — do not assume any of these
+  run automatically. numpy/sklearn/matplotlib are **not** installed; the core
+  is stdlib-only by design. `torch` (2.14 CPU) is installed, so the LSTM path
+  is live, but it still needs a *trained* artifact.
+- `models/lstm_delta.pt` and `outputs/` are gitignored. The LSTM artifact is
+  versioned (`ARTIFACT_VERSION`); an older one is rejected with a "retrain"
+  message rather than crashing.
+
+## Invariants the tests pin (do not break)
+
+- `simulator.replay()` is the single causal loop shared by all modes in
+  `benchmark.MODES` (`none, sequential, strided, stride, markov, lstm,
+  adaptive, adaptive_evidence`).
+  Prefetches are gated on `index >= window_size` — the **first window never
+  prefetches** and a window's policy only affects later requests. Three tests
+  assert this; keep the gate.
+- `adaptive_evidence` (`simulator.route_window`) routes on the window's own
+  features — contiguity, repeated stride, jumpiness — and needs **no trained
+  model**. It is the mode to read for real-workload behaviour, because the
+  four-class classifier is trained on synthetic windows that sit ~12 sd from
+  real ones. Its thresholds were calibrated against the measured real-trace
+  feature distribution, not invented.
+- Adding, removing, or **reordering** a mode breaks
+  `test_benchmark_includes_skipped_optional_lstm`, which asserts
+  `rows[0]["mode"] == "none"` and `rows[5]["status"].startswith("skipped")`.
+  It now checks `len(rows) == len(MODES)`, so appending is safe but reordering
+  is not.
+- `Metrics.prefetch_recall` is backed by a future-read `Counter` built at replay
+  start. It is **measurement only**. Never feed it into candidate generation.
+- Classifier updates require trustworthy labels:
+  `replay(..., online_updates=True)` raises unless `labels` covers every complete
+  window. On real traces the model is frozen. `--online-real` /
+  `adaptive_pseudo` self-trains at `pseudo_label_threshold=0.95` and is not
+  accuracy evidence.
+- A missing/failed optional baseline must produce a row with
+  `status="skipped: <reason>"` and `None` metrics — never a substituted or
+  synthetic value.
+- Benchmark rows carry private `_read_blocks`, `_prefetchable_misses`,
+  `_total_latency_us`, `_inference_calls`, `_total_inference_us`, `_requests`
+  keys that `aggregate_results` depends on; `write_results_csv` strips them via
+  `COLUMNS`.
+- Two candidate sources feed the same cache: window-based `simulator.candidates()`
+  and per-request `next_candidates(request)` predictors (`baselines.py`,
+  `lstm.py`). A new baseline = implement `next_candidates` + register the mode
+  in `replay`.
+
+## Do not swap in a "better" classifier on intuition
+
+`DEFAULT_CLASSIFIER` is `gnb`, and that was measured, not assumed. Naive Bayes
+already scores 100.00% ± 0.00 over 12 disjoint seed pairs on the shipped
+generator. QDA wins only on windows that straddle a phase change (86.8% vs
+64.8%) and **loses badly under the covariate shift this project actually
+faces** — 79% vs 100% when block size changes 1→128. Full numbers and the
+reasoning are in `docs/CLASSIFIER_EVAL.md`. The real accuracy bug was in
+`features.py` (absolute 64/16-block thresholds), not in the algorithm.
+
+## Artifacts and feature changes
+
+- Classifier persistence is **JSON, not pickle** (`artifacts.py`, format
+  version 2). Payloads are tagged with `classifier` (`gnb` / `qda`) and carry
+  the statistics that kind needs. `load_model` rejects a mismatch in format
+  version, `FEATURE_NAMES`, `CLASSES`, classifier tag, `decay_factor`, or
+  `shrink` — with a message telling you to regenerate.
+- Changing `FEATURE_NAMES` or `CLASSES` invalidates the committed
+  `models/msr_sample_gnb.json`; regenerate it with
+  `python -m adaptive_prefetch train-msr-sample`.
+- `models/*` (except `msr_sample_gnb.json`) and `outputs/` are gitignored, so
+  regenerated LSTM/result artifacts will not be committed by accident.
+- `models/msr_sample_gnb.json` was adapted **in-sample** on
+  `msr-cambridge1-sample.csv` with a `random` proxy label. Replaying that same
+  sample with `--model-path` is a load check, not a held-out evaluation.
+
+## Cost model: measured, not assumed
+
+`LatencyModel.measured()` calibrates from the trace's own recorded device
+service times (`.revised` column 6, retained on `Request.service_ms`).
+
+- It uses the **mean**, never the median. 65-87% of real requests complete in
+  under a microsecond, so a median-based model collapses to a near-zero cost
+  and makes every policy look free. There is a regression test for this.
+- Measured means are **260-5491 µs**, so the original assumed 100 µs
+  demand-miss cost understated a miss by 3-50x.
+- The **hit cost is still an approximation** (1% of mean service) and is
+  labelled as such — the traces record device time only, never cache time.
+- `Request.pattern` holds the trace's own `seq`/`rand` flag. It is for
+  ground-truth scoring **only**; routing on it is not a result.
+
+## Data gotchas
+
+- `data/MSRC-trace-003/final-trace/*.revised` is present locally but **gitignored**
+  (32 files, 40 KB to 2.6 GB). `load_csv(..., "revised")` materializes the whole
+  file as a `list[Request]` — measured ~5.6 MB/s and ~17M dataclass instances per
+  GB. `main.py` samples five of them and caps each at 40k requests; do not
+  raise that without a runtime reason.
+- The default cache is **128 blocks**, but these traces issue 8-128-block
+  requests, so it holds 1-16 whole requests. On `proj_3`, 128 → 2048 blocks
+  moves no-prefetch hit ratio from 0.32% to 67.37%. This is a known
+  mis-specification, left in place because changing it would silently restate
+  every previously reported number. See `docs/DECISIONS.md` D9.
+- Five loader profiles: `normalized, msr, iotta8, alibaba, revised`. `auto`
+  detects by column name only; headerless `iotta8` and `.revised` need an
+  explicit `--format`. Loaders validate ascending timestamps and report the
+  offending line number; the MSR loader re-sorts by raw `Timestamp` first
+  because merged samples concatenate hosts.
+- Committed samples under `data/samples/` are small (1k requests). Their
+  provenance is explicitly unverified — see `data/samples/README.md`.
+
+## Claim discipline (the repo is explicit about this)
+
+This is a graded lab submission (`docs/reference/*.pdf`). Several docs
+independently forbid overclaiming. If you touch numbers, README, docs, or the
+slide deck, preserve:
+
+- Latency/speedup is a **configured cost model** (defaults 5 µs hit / 100 µs
+  demand miss / 50 µs prefetch), not measured device latency. No queueing,
+  bandwidth, or prefetch-completion modelling.
+- Classification accuracy is on **independently generated synthetic windows**,
+  never verified real-trace accuracy. The MSR sample has no four-class labels.
+- LSTM predicts address **deltas**, not workload classes — compare cache metrics
+  and inference cost, never its "accuracy".
+- Oracle re-access recall can look high while hit ratio is low; report both.
+- `docs/STAGE2_RESULTS.md`, `docs/REVIEW2.md`, and `presentation/README.md` all
+  state that stored numbers are from an earlier run and must be regenerated from
+  a fresh benchmark before presenting. Re-run the benchmark; do not hand-edit
+  numbers into docs or `.pptx`.
+- `presentation/Review2_Adaptive_Disk_IO_Prefetching_v5.pptx` is an outdated
+  draft — do not update it.
+
+## Known current state (fix or preserve deliberately)
+
+- **`docs/STAGE2_RESULTS.md` and both `presentation/*.pptx` decks are stale.**
+  They carry pre-fix numbers including the old LSTM rows (~7% hit ratio) and
+  the old "7.3x faster inference" claim (the real gap is ~640x per request).
+  They must be regenerated from a fresh `python main.py` before presenting.
+  `docs/CLASSIFIER_EVAL.md` and `docs/DECISIONS.md` are current.
+- **The drift report demonstrates nothing.** All eight rows are lag 0,
+  accuracy 1.000 — frozen and online are identical because the task is
+  saturated. The console prints that warning, but a reviewer skimming the
+  table may miss it. The `transition_heavy` regime is the non-saturated task.
+- **The real-workload result is negative** and is reported as such: no
+  prefetcher beats no-prefetch on hit ratio on real traces, under either cost
+  model. Do not soften this into a partial win. The defensible positive claim
+  is that the evidence router issues 3-4x fewer prefetches for comparable hit
+  ratio. See `docs/DECISIONS.md` D9 for the three hypotheses that were tested
+  and rejected before this conclusion.
+- `docs/architecture.md` claims `main.py` applies a "per-trace request limit"
+  when training the LSTM; it does not — it trains on the whole selected sample
+  and prints a duration warning.
+
+## Where the detail lives
+
+`docs/DECISIONS.md` is the decision and iteration log — read it before
+changing the classifier, the LSTM, or the report layout; it records what was
+tried, what the measurement said, and why the default stayed Naive Bayes.
+`docs/architecture.md` is the best module map, data-flow, and per-metric limits
+reference. `docs/CLASSIFIER_EVAL.md` holds the detailed classifier comparison,
+the LSTM rework, the full bug list, and the measured limits of the available
+data. `docs/PIPELINE.md` is the short pipeline/7-mode summary, `docs/REVIEW2.md`
+the demo/viva script, `docs/implementation-stage2.md` and
+`implementation-stage3.md` the executed work plans, `docs/MSR_SAMPLE_TRAINING.md`
+the weak-supervision record. `README.md` is the user-facing command reference.

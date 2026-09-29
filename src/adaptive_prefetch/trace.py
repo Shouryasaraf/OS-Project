@@ -25,12 +25,22 @@ class Request:
     size_blocks: int = 1
     operation: str = "R"
     stream_id: str = "default"
+    #: Observed device service time in milliseconds, when the source trace
+    #: recorded one. Only the ``revised`` profile populates this. ``None`` means
+    #: "not measured", which is distinct from a measured zero.
+    service_ms: float | None = None
+    #: Source access-pattern flag (``seq``/``rand`` in the revised profile).
+    #: Retained for ground-truth evaluation only; never used for candidate
+    #: generation, which would be lookahead.
+    pattern: str | None = None
 
     def __post_init__(self) -> None:
         if self.timestamp_ms < 0 or self.lba < 0 or self.size_blocks <= 0:
             raise ValueError("timestamp/lba must be non-negative and size_blocks positive")
         if self.operation not in {"R", "W"}:
             raise ValueError("operation must be R or W")
+        if self.service_ms is not None and self.service_ms < 0:
+            raise ValueError("service_ms must be non-negative")
 
 
 def load_csv(path: str | Path, format: str = "auto") -> list[Request]:
@@ -69,7 +79,7 @@ def load_csv(path: str | Path, format: str = "auto") -> list[Request]:
                     operation=row["operation"].strip().upper(),
                     stream_id=(row.get("stream_id") or "default").strip(),
                 ))
-            except (ValueError, TypeError) as exc:
+            except (ValueError, TypeError, KeyError, AttributeError) as exc:
                 raise ValueError(f"invalid trace row {line}: {exc}") from exc
     if not requests:
         raise ValueError("CSV trace is empty")
@@ -84,6 +94,9 @@ def _load_msr_rows(reader: csv.DictReader) -> list[Request]:
     if not rows:
         raise ValueError("CSV trace is empty")
     try:
+        # Merged MSR samples may concatenate host traces instead of preserving
+        # one global timestamp order; replay must use chronological requests.
+        rows.sort(key=lambda row: int(row["Timestamp"]))
         first_timestamp = int(rows[0]["Timestamp"])
         requests = []
         for row in rows:
@@ -170,13 +183,22 @@ def _load_alibaba_rows(reader: csv.DictReader) -> list[Request]:
 def _load_revised_rows(path: str | Path) -> list[Request]:
     """MSRC-trace-003 'final-trace' profile: 8 whitespace-separated columns.
 
-    Each line is  ``time_s op lba size seq|rand t1 t2 t3`` where op is RS
-    (read) or WS (write), lba and size are 512-byte sectors, time_s is in
-    seconds, and the trailing columns are per-request timing/flag fields
-    not needed by the simulator. Timestamps are normalized to elapsed
-    milliseconds from the first request, matching the canonical units.
+    Each line is ``time_s op lba size seq|rand t1 t2 t3`` where op is RS (read)
+    or WS (write), lba and size are 512-byte sectors, time_s is in seconds.
+
+    Columns 6-8 (``t1``, ``t2``, ``t3``) are the trace's own device timing
+    fields and are **retained** as ``service_ms`` / on the record. Measured
+    behaviour across the collection: ``t1`` is the total service time in
+    milliseconds, bimodal, with 65-87% of requests completing in under 1 us and
+    a heavy tail past 10 ms. ``t3`` is zero whenever ``t1`` is tiny, so it is
+    the device-queueing component and ``t2`` is a small fixed host overhead.
+    ``t1`` is *not* exactly ``t2 + t3`` (the residual reaches 9e-2 ms), so no
+    such identity is assumed.
+
+    Column 5 is kept as ``pattern`` for ground-truth scoring only. It must
+    never reach candidate generation, which would be lookahead.
     """
-    rows: list[tuple[float, str, int, int]] = []
+    rows: list[tuple[float, str, int, int, str, float]] = []
     with Path(path).open(encoding="utf-8-sig") as handle:
         for line_no, raw in enumerate(handle, start=1):
             columns = raw.split()
@@ -189,17 +211,22 @@ def _load_revised_rows(path: str | Path) -> list[Request]:
                 op = columns[1]
                 lba = int(columns[2])
                 size = int(columns[3])
+                service_ms = float(columns[5])
             except (ValueError, TypeError) as exc:
                 raise ValueError(f"invalid revised row {line_no}: {exc}") from exc
             if op not in {"RS", "WS"}:
                 raise ValueError(f"invalid revised row {line_no}: op must be RS or WS")
-            rows.append((seconds, op, lba, size))
+            if service_ms < 0:
+                raise ValueError(
+                    f"invalid revised row {line_no}: negative service time")
+            rows.append((seconds, op, lba, size, columns[4], service_ms))
     if not rows:
         raise ValueError("CSV trace is empty")
     first = rows[0][0]
     requests = [Request((seconds - first) * 1000, lba, size,
-                        "R" if op == "RS" else "W")
-                for seconds, op, lba, size in rows]
+                        "R" if op == "RS" else "W",
+                        service_ms=service_ms, pattern=pattern)
+                for seconds, op, lba, size, pattern, service_ms in rows]
     _validate_order(requests)
     return requests
 

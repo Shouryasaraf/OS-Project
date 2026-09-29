@@ -10,17 +10,18 @@ from .benchmark import (MODES, benchmark_dataset, drift_report, make_model,
                         markdown_table, write_results_csv)
 from .artifacts import load_model
 from .features import FEATURE_NAMES, extract
-from .model import OnlineGaussianNB
+from .model import CLASSIFIERS, DEFAULT_CLASSIFIER, OnlineGaussianNB
 from .simulator import LatencyModel, confusion_matrix, replay
 from .trace import CLASSES, load_csv, synthetic_dataset, transition_trace, write_csv
 
 
-def train(seed: int = 42, examples_per_class: int = 100) -> OnlineGaussianNB:
-    return make_model(seed, examples_per_class)
+def train(seed: int = 42, examples_per_class: int = 100,
+          classifier: str = DEFAULT_CLASSIFIER) -> OnlineGaussianNB:
+    return make_model(seed, examples_per_class, classifier=classifier)
 
 
 def run_demo(args: argparse.Namespace) -> None:
-    model = train(args.seed, args.train_per_class)
+    model = train(args.seed, args.train_per_class, args.classifier)
     # Different seed and independently generated traces prevent shared windows.
     held_out = synthetic_dataset(args.test_per_class, args.seed + 100000)
     start = perf_counter()
@@ -55,7 +56,7 @@ def run_demo(args: argparse.Namespace) -> None:
             for number, predicted, confidence in predictions:
                 print(f"  {number + 1:02d}: {labels[number]:10} -> {predicted:10} {confidence:.2f}")
 
-    online_model = train(args.seed, args.train_per_class)
+    online_model = train(args.seed, args.train_per_class, args.classifier)
     replay(requests, args.cache_blocks, model=online_model,
            labels=labels, online_updates=True)
     print(f"Online supervised updates: {len(labels)} labelled windows processed")
@@ -68,13 +69,17 @@ def run_replay(args: argparse.Namespace) -> None:
     print("Real-trace labels are unknown; classifier updates are disabled.")
     for mode in MODES:
         model = (load_model(args.model_path)[0] if args.model_path else
-                 train(args.seed, args.train_per_class)) if mode == "adaptive" else None
+                 train(args.seed, args.train_per_class,
+                       args.classifier)) if mode == "adaptive" else None
         if mode == "lstm" and not args.lstm_model:
             print("lstm        skipped: no trained artifact")
             continue
+        smoothing = ((args.smoothing, 0.0)
+                     if args.smoothing and mode == "adaptive" else None)
         try:
             metrics, predictions = replay(requests, args.cache_blocks, args.window_size,
-                                          mode, model, lstm_model_path=args.lstm_model)
+                                          mode, model, lstm_model_path=args.lstm_model,
+                                          smoothing=smoothing)
         except (RuntimeError, FileNotFoundError) as exc:
             if mode != "lstm":
                 raise
@@ -104,7 +109,23 @@ def run_benchmark(args: argparse.Namespace) -> None:
         if not args.trace:
             raise ValueError("--datasets iotta requires --trace and its --format")
         datasets.append(("iotta_supplied", load_csv(args.trace, args.format)))
-    latency = LatencyModel(args.hit_us, args.miss_us, args.prefetch_us)
+    if args.cost_model == "measured":
+        sources = [(name, reqs) for name, reqs in datasets
+                   if any(getattr(r, "service_ms", None) is not None for r in reqs)]
+        if sources:
+            merged = [r for _, reqs in sources for r in reqs]
+            latency = LatencyModel.measured(trace=merged)
+            print(f"  measured cost model from {len(sources)} trace(s) with "
+                  f"recorded service times")
+            print(f"    hit {latency.hit_us:.3f} us | demand miss "
+                  f"{latency.demand_miss_us:.1f} us | prefetch "
+                  f"{latency.prefetch_us:.1f} us")
+        else:
+            print("  no measured service times in the selected traces; "
+                  "using the default assumed model")
+            latency = LatencyModel()
+    else:
+        latency = LatencyModel(args.hit_us, args.miss_us, args.prefetch_us)
     rows = []
     for name, requests in datasets:
         rows.extend(benchmark_dataset(name, requests, seed=args.seed,
@@ -112,14 +133,16 @@ def run_benchmark(args: argparse.Namespace) -> None:
                                       window_size=args.window_size,
                                       latency=latency,
                                       lstm_model_path=args.lstm_model,
-                                      online_real=args.online_real and not name.startswith("synthetic")))
+                                      online_real=args.online_real and not name.startswith("synthetic"),
+                                      classifier=args.classifier))
     table = markdown_table(rows)
     print(table)
     print("\nModelled latency includes configured prefetch cost; it is not measured device latency.")
     print("Recall uses measurement-only future-reaccess lookahead, never policy input.")
     print("Skipped LSTM means no PyTorch/model artifact was available; no comparison claim is made.")
     print("\nDrift switch lag on labelled synthetic phases:")
-    for item in drift_report(args.seed, args.windows_per_class, args.window_size):
+    for item in drift_report(args.seed, args.windows_per_class, args.window_size,
+                             args.classifier):
         print(f"  {item['variant']:15} {item['phase']:10} "
               f"lag={item['switch_lag_windows']} windows "
               f"phase_accuracy={item['phase_accuracy']:.3f}")
@@ -141,7 +164,7 @@ def run_normalize(args: argparse.Namespace) -> None:
 def run_train_lstm(args: argparse.Namespace) -> None:
     from .lstm import train_lstm
     traces = [load_csv(path, args.format) for path in args.trace] if args.trace else None
-    result = train_lstm(args.save, traces, args.epochs, args.seed)
+    result = train_lstm(args.save, traces, args.epochs, seed=args.seed)
     print(f"Saved offline LSTM to {args.save}: {result}")
 
 
@@ -157,6 +180,55 @@ def run_train_msr_sample(args: argparse.Namespace) -> None:
           f"{result['synthetic_held_out_accuracy_after']:.3f}")
 
 
+def run_evaluate(args: argparse.Namespace) -> None:
+    """Model selection and regime evaluation."""
+    from .pipeline import BLENDED_REGIMES, REGIMES, evaluate_classifier, select_classifier
+
+    if args.regime:
+        stats = evaluate_classifier(args.classifier, args.seeds,
+                                    args.train_per_class, args.test_per_class,
+                                    args.regime, args.standardize)
+        print(f"classifier={stats['classifier']}  regime={stats['regime']}")
+        print(f"  accuracy   {100 * stats['accuracy']:.2f}% +/- "
+              f"{100 * stats['accuracy_sd']:.2f} "
+              f"(min {100 * stats['min']:.2f}%, max {100 * stats['max']:.2f}%)")
+        print(f"  predict    {stats['predict_us']:.2f} us/call")
+        print(f"  train      {stats['train_ms']:.2f} ms")
+        return
+    known = list(REGIMES) + list(BLENDED_REGIMES)
+    print(select_classifier(args.seeds, args.train_per_class,
+                            args.test_per_class)["report"])
+
+
+def run_eda(args: argparse.Namespace) -> None:
+    """Profile a trace: request stream, locality, window features, clusters."""
+    from .eda import profile_trace
+
+    requests = load_csv(args.trace, args.format)
+    print(profile_trace(requests, Path(args.trace).name, args.window_size,
+                        args.cache_blocks))
+
+
+def run_shift(args: argparse.Namespace) -> None:
+    """Measure how far a real trace sits from the synthetic training region."""
+    from .eda import domain_shift, label_support, report_shift, window_features
+    from .pipeline import labelled_dataset
+
+    reference = [extract(window) for window, _ in
+                 labelled_dataset(args.train_per_class, args.seed, args.window_size)]
+    target = window_features(load_csv(args.trace, args.format), args.window_size)
+    if not target:
+        print("target trace has no complete windows; nothing to compare")
+        return
+    print(report_shift(reference, target,
+                       f"synthetic training windows (seed {args.seed})",
+                       Path(args.trace).name))
+    support = label_support(labelled_dataset(1, args.seed, args.window_size))
+    print(f"synthetic class support: {support['present']}")
+    print("real traces carry no access-pattern label, so no supervised accuracy")
+    print("can be computed on them; only the distance above is meaningful.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -166,12 +238,18 @@ def main() -> None:
     demo.add_argument("--test-per-class", type=int, default=40)
     demo.add_argument("--windows-per-class", type=int, default=4)
     demo.add_argument("--cache-blocks", type=int, default=128)
+    demo.add_argument("--classifier", default=DEFAULT_CLASSIFIER,
+                      choices=tuple(CLASSIFIERS))
     replay_command = commands.add_parser("replay", help="replay a normalized CSV trace")
     replay_command.add_argument("trace")
     replay_command.add_argument("--seed", type=int, default=42)
     replay_command.add_argument("--train-per-class", type=int, default=100)
     replay_command.add_argument("--window-size", type=int, default=32)
     replay_command.add_argument("--cache-blocks", type=int, default=128)
+    replay_command.add_argument("--classifier", default=DEFAULT_CLASSIFIER,
+                                choices=tuple(CLASSIFIERS))
+    replay_command.add_argument("--smoothing", type=int, default=0,
+                                help="require N agreeing windows before switching policy")
     replay_command.add_argument("--format", default="auto",
                                 choices=("auto", "normalized", "msr", "iotta8", "alibaba", "revised"))
     replay_command.add_argument("--lstm-model")
@@ -190,8 +268,14 @@ def main() -> None:
     benchmark.add_argument("--hit-us", type=float, default=5)
     benchmark.add_argument("--miss-us", type=float, default=100)
     benchmark.add_argument("--prefetch-us", type=float, default=50)
+    benchmark.add_argument("--cost-model", default="assumed",
+                           choices=("assumed", "measured"),
+                           help="'measured' calibrates from the trace's own "
+                                "recorded device service times")
     benchmark.add_argument("--lstm-model")
     benchmark.add_argument("--online-real", action="store_true")
+    benchmark.add_argument("--classifier", default=DEFAULT_CLASSIFIER,
+                           choices=tuple(CLASSIFIERS))
     benchmark.add_argument("--output-markdown")
     benchmark.add_argument("--output-csv")
     normalize = commands.add_parser("normalize", help="convert a known trace schema to canonical CSV")
@@ -204,7 +288,7 @@ def main() -> None:
     lstm.add_argument("--trace", action="append", default=[])
     lstm.add_argument("--format", default="auto",
                       choices=("auto", "normalized", "msr", "iotta8", "alibaba", "revised"))
-    lstm.add_argument("--epochs", type=int, default=2)
+    lstm.add_argument("--epochs", type=int, default=60)
     lstm.add_argument("--seed", type=int, default=42)
     msr_train = commands.add_parser("train-msr-sample", help="weakly adapt classifier on the unlabelled MSR sample")
     msr_train.add_argument("--trace", default=str(Path(__file__).resolve().parents[2] /
@@ -215,6 +299,31 @@ def main() -> None:
     export = commands.add_parser("export-demo", help="write synthetic transition CSV")
     export.add_argument("path")
     export.add_argument("--seed", type=int, default=42)
+    evaluate = commands.add_parser(
+        "evaluate", help="compare classifiers across evaluation regimes")
+    evaluate.add_argument("--classifier", default=DEFAULT_CLASSIFIER,
+                          choices=tuple(CLASSIFIERS))
+    evaluate.add_argument("--regime", default=None,
+                          help="evaluate one regime only; omit to compare all")
+    evaluate.add_argument("--seeds", type=int, default=12)
+    evaluate.add_argument("--train-per-class", type=int, default=100)
+    evaluate.add_argument("--test-per-class", type=int, default=40)
+    evaluate.add_argument("--standardize", action="store_true",
+                          help="zero-mean/unit-variance feature scaling")
+    eda = commands.add_parser("eda", help="exploratory profile of one trace")
+    eda.add_argument("trace")
+    eda.add_argument("--format", default="auto",
+                     choices=("auto", "normalized", "msr", "iotta8", "alibaba", "revised"))
+    eda.add_argument("--window-size", type=int, default=32)
+    eda.add_argument("--cache-blocks", type=int, default=128)
+    shift = commands.add_parser(
+        "shift", help="domain shift between synthetic training and a real trace")
+    shift.add_argument("trace")
+    shift.add_argument("--format", default="auto",
+                       choices=("auto", "normalized", "msr", "iotta8", "alibaba", "revised"))
+    shift.add_argument("--window-size", type=int, default=32)
+    shift.add_argument("--train-per-class", type=int, default=100)
+    shift.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
     try:
         if args.command == "demo":
@@ -229,6 +338,12 @@ def main() -> None:
             run_train_lstm(args)
         elif args.command == "train-msr-sample":
             run_train_msr_sample(args)
+        elif args.command == "evaluate":
+            run_evaluate(args)
+        elif args.command == "eda":
+            run_eda(args)
+        elif args.command == "shift":
+            run_shift(args)
         else:
             requests, _ = transition_trace(args.seed)
             write_csv(args.path, requests)

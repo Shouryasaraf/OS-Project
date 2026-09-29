@@ -1,0 +1,239 @@
+# Architecture
+
+User-space, simulation-first prototype for *ML-Based Adaptive Disk I/O
+Prefetching Using Workload Pattern Classification*. It does **not** modify the
+operating system or perform physical disk reads; it replays recorded I/O
+requests against a modelled cache and reports the cache-level outcomes of each
+prefetch policy.
+
+## Design principles
+
+1. **Simulation over OS hooks.** Everything runs on recorded request streams;
+   no kernel module, device firmware, or real latency measurements.
+2. **Fair comparison.** Every policy sees the identical request stream, cache
+   capacity, first-window warm-up, and LRU rules. Differences in outcome are
+   attributable to the policy, not the harness.
+3. **Causal replay.** A window is classified only after all its requests have
+   occurred, and its policy affects *later* requests only. The first window
+   never prefetches.
+4. **Stdlib-only core.** The entire pipeline except the optional LSTM runs on
+   the Python standard library. PyTorch is an optional extra
+   (`pip install -e ".[lstm]"`); without it, the LSTM row is *skipped*, never
+   silently replaced.
+5. **Honest labels.** Ground truth exists only for synthetic workloads. On real
+   traces the classifier is frozen (or, opt-in, self-trained with a documented
+   weak label); updates require a trustworthy label and are never assumed.
+
+## High-level data flow
+
+```text
+ trace file (normalized / msr / iotta8 / alibaba / revised)
+ or synthetic generator
+        |
+        v
+ Request records (timestamp_ms, lba, size_blocks, operation, stream_id)
+        |
+        +-- gathered into fixed-size windows (window_size, default 32)
+        |                      |
+        |                      v
+        |            feature extraction (8 features)
+        |                      |
+        |                      v
+        |          OnlineGaussianNB (frozen or incremental)
+        |                      |
+        |                      v
+        |           class -> policy routing (seq/strided/random/mixed)
+        |                      |
+        `----> candidate generation (per request)
+                          |
+                          v
+                 LRU cache replay + latency model
+                          |
+                          v
+              Metrics -> benchmark table -> result interpretation
+```
+
+Two independent candidate sources feed the same cache: fixed heuristics and
+the ML classifier (`simulator.candidates`) on one side, and the learned
+per-request predictors (`baselines.py`, `lstm.py`, exposing
+`next_candidates(request)`) on the other.
+
+## Module map
+
+| Module | Responsibility | Entry points |
+| --- | --- | --- |
+| `trace.py` | Canonical `Request` record, CSV/trace import for five schemas, synthetic labelled workload generation | `load_csv`, `write_csv`, `synthetic_window`, `synthetic_dataset`, `transition_trace` |
+| `features.py` | Fixed-size window to 8 numeric features | `extract`, `dominant_stride` |
+| `model.py` | `OnlineGaussianNB` (diagonal, default) and `OnlineQDA` (full covariance + shrinkage), both with exponential decay | `make_classifier`, `CLASSIFIERS`, `DEFAULT_CLASSIFIER` |
+| `baselines.py` | Causal per-request stride and Markov prefetchers | `StridePrefetcher`, `MarkovPrefetcher` |
+| `lstm.py` | Optional offline LSTM predicting the next address *delta* as (sign, magnitude-bucket) with explicit abstention | `train_lstm`, `load_predictor`, `LSTMPrefetcher` |
+| `simulator.py` | Causal block-level LRU replay, latency model, class->policy routing, perfect-predictor bound | `replay`, `LRUCache`, `LatencyModel`, `oracle_reference`, `confusion_matrix` |
+| `benchmark.py` | Seven-policy comparison, drift diagnostics, aggregation, result interpretation | `benchmark_dataset`, `drift_report`, `aggregate_results`, `analyze_results`, `markdown_table` |
+| `training.py` | Conservative weak-label adaptation for the unlabelled MSR sample | `adapt_msr_sample` |
+| `artifacts.py` | Versioned JSON persistence tagged by classifier kind (no pickle) | `save_model`, `load_model` |
+| `eda.py` | Trace profiling, locality/reuse analysis, k-means elbow, domain-shift and label-support measurement | `profile_trace`, `domain_shift`, `label_support`, `locality_profile` |
+| `pipeline.py` | Preprocessing, policy postprocessing, configurable regimes, model selection | `StandardScaler`, `PolicySmoother`, `evaluate_classifier`, `select_classifier` |
+| `report.py` | Findings-vs-raw-data split for the console and the `outputs/` file map | `dataset_overview`, `classifier_section`, `benchmark_section`, `drift_section` |
+| `cli.py` | argparse front-end: `demo`, `replay`, `benchmark`, `normalize`, `train-lstm`, `train-msr-sample`, `export-demo`, `evaluate`, `eda`, `shift` | `main` |
+| `main.py` | End-to-end run: EDA, classifier selection, domain shift, benchmark, drift. Console shows findings; `outputs/` holds every raw row | `main` |
+
+## Trace layer (`trace.py`)
+
+`Request` is an immutable dataclass validated in `__post_init__`:
+`timestamp_ms >= 0`, `lba >= 0`, `size_blocks > 0`, `operation in {R, W}`.
+
+`load_csv(path, format)` dispatches on an explicit profile or auto-detects by
+column names:
+
+| Profile | Schema | Unit conversion |
+| --- | --- | --- |
+| `normalized` | `timestamp_ms,lba,size_blocks,operation[,stream_id]` | none (canonical) |
+| `msr` | `Timestamp,Hostname,DiskNumber,Type,Offset,Size,ResponseTime` | timestamps→elapsed ms, byte offset/size→512-B blocks, Read/Write→R/W |
+| `iotta8` | `device,sector,size,op,offset,timestamp,lifetime,count` | µs→ms; sector index/count kept |
+| `alibaba` | `device_id,opcode,offset,length,timestamp` | µs→ms, byte offset/length→blocks |
+| `revised` | whitespace-separated `time_s op lba size seq\|rand t1 t2 t3` (MSRC-trace-003 final-trace) | s→ms elapsed; RS/WS→R/W; sector lba/size kept |
+
+All real-trace loaders validate ascending timestamps and reject malformed
+rows with a line number. The synthetic generators produce labelled windows
+(`sequential`, `strided`, `random`, `mixed`) with configurable noise; the
+label describes the construction, never a real trace.
+
+## Feature layer (`features.py`)
+
+For each complete window of `n >= 8` requests, 8 size-aware features in
+`FEATURE_NAMES`:
+
+1. `contiguous_ratio` - adjacent LBAs continuing the previous request's size
+2. `dominant_stride_ratio` - most frequent non-contiguous, non-zero delta
+3. `random_jump_ratio` - deltas with `abs > 64`
+4. `short_run_ratio` - deltas with `abs <= 16`
+5. `unique_ratio` - distinct LBAs / window length
+6. `gap_cv` - coefficient of variation of inter-request timing (capped at 10)
+7. `fast_gap_ratio` - fraction of gaps below 0.15 ms
+8. `read_ratio` - fraction of read requests
+
+`dominant_stride(window)` is reused by the simulator as a separate heuristic:
+the most common delta between 1 and 1024 blocks, required at least
+`max(2, len/4)` times.
+
+## Classifier (`model.py`)
+
+Two interchangeable classifiers share one `update`/`predict` contract. The
+default is `OnlineGaussianNB`; `OnlineQDA` keeps a full per-class scatter
+matrix with diagonal shrinkage and a cached Cholesky factor, and is selected
+with `--classifier qda`. The choice was made on measurement, not preference:
+see [DECISIONS.md](DECISIONS.md) D1 for the regime table and the
+block-size transfer test that demoted QDA back to opt-in.
+
+`OnlineGaussianNB` is a Gaussian Naive Bayes classifier with:
+
+- per-class running means and M2 variances updated incrementally
+- **exponential decay** (`decay_factor`, default 0.995) applied to historical
+  counts and variances on every update, so old observations fade and the
+  model can follow concept drift
+- a `variance_floor` (0.0025) preventing log(0) and over-confident fits
+- softmax-like confidence: `1 / sum(exp(score_i - score_max))`
+
+`update(values, label)` requires a trustworthy label (synthetic only). On real
+traces the model is frozen by default; `training.py` demonstrates an opt-in
+weak-label adaptation for the bundled MSR sample with an explicit proxy rule,
+and `--online-real` adds a confidence-gated self-training row that is
+documented as *not* evidence of real-trace accuracy.
+
+Persistence is JSON (`artifacts.py`): means, M2s, counts, hyperparameters,
+and metadata, with format/feature/class compatibility checks on load.
+
+## Simulator (`simulator.py`)
+
+`replay(requests, ...)` is the single causal evaluation loop:
+
+1. Builds an oracle `Counter` of future re-accesses for recall scoring only.
+2. Creates one `LRUCache` (capacity, default 128) and one latency model.
+3. For each request, in order:
+   - touches every block (`R` → `cache.read`, `W` → `cache.write`)
+   - asks the active candidate source for prefetch blocks
+   - prefetches only after the first `window_size` requests (warm-up)
+4. After each completed window: refreshes `dominant_stride`, and in adaptive
+   mode classifies the window, possibly switching policy
+   (`policy_switches`), optionally updating the model with a label or a
+   confident pseudo-label.
+
+Class→policy routing (fixed mapping):
+
+| Class | Candidate policy |
+| --- | --- |
+| `sequential` | two-block read-ahead |
+| `strided` | learned window stride, one block |
+| `random` | none |
+| `mixed` | one-block read-ahead |
+
+`Metrics` accumulate read blocks/hits, prefetches, useful prefetches,
+prefetchable misses, policy switches, pseudo updates, modelled latency, and
+timed inference. Derived properties: hit ratio, prefetch precision, oracle
+re-access recall, unused prefetches, mean access latency, inference µs/call.
+
+`LatencyModel` defaults: 5 µs hit, 100 µs demand miss, 50 µs prefetch. It is
+a *configured cost model*, not a measurement.
+
+## Baselines (`baselines.py`, `lstm.py`)
+
+All baselines implement `next_candidates(request) -> list[int]` and are
+causal: they consume the current request and propose blocks for later reads.
+
+- `StridePrefetcher` - detects a repeated delta, then prefetches up to
+  `degree` blocks at that stride.
+- `MarkovPrefetcher` - 1st/2nd-order transitions between address deltas;
+  proposes the top-k most probable next deltas above a confidence threshold.
+- `LSTMPrefetcher` - offline LSTM (1 input unit, 64 hidden, softmax over a
+  256-delta vocabulary) predicting the next delta from the last 16 deltas;
+  prefetches up to two positive in-range candidates from the top-10 scores.
+  It predicts *deltas*, so compare cache outcomes and compute cost, never
+  four-class accuracy.
+
+## Benchmark (`benchmark.py`)
+
+`benchmark_dataset` replays one trace under all `MODES = (none, sequential,
+strided, stride, markov, lstm, adaptive)` with identical parameters, computes
+`speedup_vs_none = baseline_mean_latency / mode_mean_latency`, and returns one
+row per mode. Missing LSTM → row with `status="skipped: ..."`, not a fake
+result. `aggregate_results` merges per-trace rows with request-weighted
+counters. `drift_report` compares frozen vs genuinely labelled online GNB on
+a synthetic transition trace, reporting per-phase switch lag and phase
+accuracy. `analyze_results` interprets the table: winning policy per dataset
+with speedup and hit-ratio gains, flags degenerate ties, calls out a
+different best-hit-ratio mode, and adds relative adaptive-vs-baseline gains.
+
+## CLI and interactive entry points
+
+`cli.py` exposes subcommands for targeted runs (`demo`, `replay`,
+`benchmark`, `normalize`, `train-lstm`, `train-msr-sample`, `export-demo`);
+all real-trace commands accept `--format` and the LSTM-related commands a
+`--lstm-model`/`--save` path.
+
+`main.py` is the guided full run: it asks for demo/cache/window/dataset
+selection (synthetic, MSR sample, MSRC-trace-003 final traces, custom file),
+optional LSTM inclusion with retrain-or-cached prompt and per-trace request
+limit, latency model, and output saving; then prints the classifier demo, the
+benchmark table, the result interpretation, and the drift report, and saves
+`outputs/results.md` + `outputs/results.csv`.
+
+## Evaluation metrics and their limits
+
+- **Hit ratio** - read hits / requested read blocks (cache-level).
+- **Prefetch precision** - useful prefetches / prefetches issued.
+- **Oracle re-access recall** - uses future-read information *only* for
+  scoring, never for candidate generation; it can be high even with low hit
+  ratio, so read it alongside hit ratio and wasted work.
+- **Unused prefetches** - prefetches never used during replay (including
+  still-resident at stream end): a proxy for cache pollution.
+- **Modelled latency/speedup** - under configured hit/miss/prefetch costs;
+  queueing, bandwidth, asynchronous completion, and device scheduling are not
+  modelled.
+
+## Non-goals
+
+- OS/kernel integration, real device benchmarks
+- Real-trace four-class ground truth (unavailable; classifier kept frozen by
+  default on real traces)
+- Redistribution of MSR Cambridge or SNIA IOTTA traces (licensing)
+- Performance claims beyond the modelled cache simulation

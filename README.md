@@ -13,7 +13,7 @@ system or perform physical disk reads.
 | `src/adaptive_prefetch/` | Trace loading, features, models, policies, replay, benchmark, and CLI |
 | `tests/` | Automated checks |
 | `data/samples/` | Small demonstration traces and format notes |
-| `docs/` | Pipeline, implementation plan, Review 2 guide, and results |
+| `docs/` | Pipeline, implementation plan, architecture, Review 2 guide, and results |
 | `docs/reference/` | Original lab brief |
 | `presentation/` | Review 2 slide deck |
 
@@ -25,26 +25,59 @@ folder before writing results there).
 
 - Reproducible synthetic sequential, strided, random, and mixed I/O traces.
 - Validated CSV trace import and export.
-- Window-level, size-aware sequentiality and stride features.
-- A supervised Gaussian Naive Bayes model with incremental updates.
+- Window-level, size-aware sequentiality and stride features. The jump and
+  short-run features are measured *relative to the request size*, so the same
+  access pattern classifies identically on devices with different block sizes.
+- A supervised Gaussian Naive Bayes model with incremental updates, plus an
+  optional shrinkage-regularized online QDA (`--classifier qda`) for
+  workloads whose classes overlap in correlated feature space.
 - Class-to-policy routing, LRU cache replay, and seven comparison modes:
   no prefetch, fixed sequential, window-based strided, classic stride,
   delta Markov, optional offline LSTM, and adaptive classification.
 - Benchmark tables with oracle re-access recall, configurable modelled latency,
   inference timing, synthetic drift comparison, and optional pseudo-label tests.
+- Exploratory data analysis: trace profiling, locality and reuse ceilings,
+  cluster structure, and domain-shift measurement against the synthetic
+  training region.
 - Held-out synthetic classification test, confusion matrix, workload-transition
   demonstration, cache hit ratio, prefetch precision, and unused-prefetch count.
 - Standard-library unit tests. No packages need to be downloaded to run from source.
 
 ## Run
 
-From the repository root. The quick, **guided full run** — asks for inputs,
-then runs the classifier demo, the seven-policy benchmark, and the drift
-report, saving `outputs/results.md` + `outputs/results.csv`:
+From the repository root. The **complete research run** — no prompts. It
+profiles every dataset, evaluates the classifier against alternative models,
+measures domain shift, replays all seven policies against a perfect-predictor
+bound, and reports drift adaptation. The console shows conclusions; every raw
+row goes to `outputs/`:
 
 ```powershell
-python main.py
+python main.py                          # full run, ~6 min (11 datasets)
+python main.py --quick                  # skip LSTM training + regime sweep
+python main.py --interactive            # guided dataset/LSTM picker
+python main.py --cost-model assumed     # compare vs the 5/100/50 us model
 ```
+
+The default run calibrates the cost model from the traces' own recorded device
+service times (`.revised` columns 6-8) and prints a `REAL-WORKLOAD RESULT`
+section comparing every policy against doing nothing.
+
+**The headline finding is negative and is reported as such.** On real traces no
+prefetcher -- adaptive, fixed read-ahead, or the learned baselines -- beats
+doing nothing on hit ratio, under either cost model. The cause is measured and
+printed. The evidence router does issue 3-4x fewer prefetches than fixed
+read-ahead for comparable hit ratio: a real reduction in wasted I/O, but not a
+hit-ratio win. See `docs/DECISIONS.md` D9.
+
+| Output file | Contents |
+| --- | --- |
+| `outputs/results.csv` | every benchmark row (all datasets × all modes) |
+| `outputs/results.md` | narrative report with the full 7-mode table and interpretation |
+| `outputs/eda.md` | per-trace request stream, locality, feature distributions, cluster structure |
+| `outputs/classifier_eval.csv` | classifier × regime accuracy, spread, predict and train cost |
+| `outputs/domain_shift.csv` | per-feature shift and coverage vs the synthetic training region |
+| `outputs/drift.csv` | frozen vs online switch lag per phase |
+| `outputs/label_support.md` | which classes the labelled population actually covers |
 
 For specific tasks, call the modules directly (set `PYTHONPATH=src` first,
 or install with `pip install -e .`):
@@ -60,6 +93,17 @@ python -m adaptive_prefetch replay data/samples/msr-cambridge1-sample.csv --mode
 python -m adaptive_prefetch train-msr-sample     # weakly adapt classifier on the MSR sample
 python -m adaptive_prefetch normalize --input trace.csv --format alibaba --output normalized.csv
 python -m adaptive_prefetch export-demo demo.csv # export a synthetic transition trace
+```
+
+Research and analysis commands:
+
+```powershell
+python -m adaptive_prefetch evaluate            # classifier x regime accuracy + cost table
+python -m adaptive_prefetch evaluate --classifier qda --regime transition_heavy
+python -m adaptive_prefetch eda data\samples\msr-cambridge1-sample.csv --format msr
+python -m adaptive_prefetch shift data\samples\msr-cambridge1-sample.csv --format msr
+python -m adaptive_prefetch benchmark --classifier qda
+python -m adaptive_prefetch replay trace.csv --smoothing 3   # consecutive-run policy hysteresis
 ```
 
 On macOS/Linux, prefix the same way
@@ -116,7 +160,10 @@ For the optional offline LSTM baseline, install the extra with
 run `python -m adaptive_prefetch train-lstm --save models/lstm_delta.pt` and
 `python -m adaptive_prefetch benchmark --lstm-model models/lstm_delta.pt`.
 The core project and all other modes work without PyTorch; an unavailable
-LSTM is shown as *skipped*, not silently replaced by another predictor.
+LSTM is shown as *skipped*, not silently replaced by another predictor. The
+delta model must be trained on the distribution it will be scored against:
+`main.py` trains it on the traces in the current run rather than mixing a
+real-trace artifact into a synthetic comparison table.
 
 ## How the demonstration avoids a timing mistake
 
@@ -159,6 +206,14 @@ cannot be compared directly.
 
 See [Review 2 guide](docs/REVIEW2.md) for architecture, module completion,
 demonstration steps, and discussion questions. See the
+[architecture document](docs/architecture.md) for the module map, data flow,
+and design principles. See
+[docs/DECISIONS.md](docs/DECISIONS.md) for the decision log: what was tried,
+what the measurement said, and why the default classifier is still Naive
+Bayes despite QDA being available and better on some regimes. See
+[docs/CLASSIFIER_EVAL.md](docs/CLASSIFIER_EVAL.md) for the detailed
+classifier comparison, the LSTM rework, the bug list, and the measured limits
+of what the available data can support. See the
 [Stage 2 verification snapshot](docs/STAGE2_RESULTS.md) for actual results
 and explicit gaps; rerun the benchmark before presenting any numbers. The
 [pipeline guide](docs/PIPELINE.md) and [Stage 2 plan](docs/implementation-stage2.md)

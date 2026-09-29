@@ -9,6 +9,7 @@ from time import perf_counter
 from .baselines import MarkovPrefetcher, StridePrefetcher
 from .features import dominant_stride, extract
 from .model import OnlineGaussianNB
+from .pipeline import PolicySmoother
 from .trace import Request
 
 
@@ -21,6 +22,51 @@ class LatencyModel:
     def __post_init__(self) -> None:
         if min(self.hit_us, self.demand_miss_us, self.prefetch_us) < 0:
             raise ValueError("latency model values must be non-negative")
+
+    @classmethod
+    def measured(cls, path=None, trace: list | None = None) -> "LatencyModel":
+        """Cost model calibrated from a trace's own measured service times.
+
+        The defaults above (5/100/50 us) are an assumption inherited from the
+        original design. Measured ``t1`` values in the MSRC-trace-003
+        collection are milliseconds, strongly right-skewed: 65-87% of requests
+        complete in under 1 us while the mean is 260-2058 us.
+
+        The **mean** is used, not the median. The median is ~0 for most of
+        these traces (the sub-microsecond bulk dominates), which would produce
+        a cost model of essentially zero and make every policy look free. A
+        prefetcher only pays off if a speculative read is charged a realistic
+        service time, so the mean is the honest basis for the comparison.
+
+        Returns defaults unchanged when the trace carries no measurements.
+        """
+        values = _measured_service_us(trace) if trace is not None else None
+        if not values:
+            if path is not None:
+                from .trace import load_csv
+                try:
+                    values = _measured_service_us(load_csv(path, "revised"))
+                except (ValueError, OSError):
+                    values = None
+        if not values:
+            return cls()
+        mean_service = sum(values) / len(values)
+        # A hit is served from cache and costs a small fraction of a device
+        # service. 1% is an explicitly-documented approximation, not a
+        # measurement: the traces record device time only, never cache time.
+        return cls(
+            hit_us=max(0.001, mean_service * 0.01),
+            demand_miss_us=mean_service,
+            # A prefetch is a full device read issued speculatively, so it
+            # costs a full service time plus the extra queueing pressure.
+            prefetch_us=mean_service * 1.1,
+        )
+
+
+def _measured_service_us(requests) -> list[float]:
+    """Service times in microseconds for requests that recorded one."""
+    return [r.service_ms * 1000.0 for r in requests
+            if getattr(r, "service_ms", None) is not None]
 
 
 @dataclass
@@ -121,23 +167,66 @@ def candidates(request: Request, policy: str, stride: int | None) -> list[int]:
     return []
 
 
+#: Minimum evidence before the adaptive router is allowed to prefetch at all.
+#: Calibrated against the measured real-trace window distribution, where
+#: ``contiguous_ratio`` has median 0.032 and p90 0.097 -- so a window has to be
+#: clearly more contiguous than a typical real window before read-ahead pays.
+MIN_CONTIGUITY = 0.10
+#: A repeated non-contiguous stride must be this common in the window before
+#: we trust it enough to issue a stride prefetch.
+MIN_STRIDE_RATIO = 0.10
+#: Above this fraction of distant jumps, prefetching is not worth the pollution.
+RANDOM_JUMP_CEILING = 0.97
+
+
+def route_window(window: list[Request], stride: int | None) -> str:
+    """Choose a prefetch policy from the window's own measurements.
+
+    This replaces the four-class lookup for real traces. The classifier's
+    classes come from the synthetic generator, and measured real windows sit
+    ~12 sd outside that region, so a class prediction on a real trace is
+    extrapolation. Routing directly on the three features that carry the
+    decision (contiguity, repeated stride, jumpiness) needs no training data
+    and degrades gracefully on any distribution.
+
+    Returns one of ``sequential``, ``strided``, ``mixed``, ``none``.
+    """
+    features = extract(window)
+    contiguous, stride_ratio, random_jump = features[0], features[1], features[2]
+    # Bursty arrivals plus heavy jumping means the next address is not
+    # recoverable; polluting the cache costs more than a speculative hit wins.
+    if random_jump > RANDOM_JUMP_CEILING and contiguous < MIN_CONTIGUITY * 2:
+        return "none"
+    if contiguous >= MIN_CONTIGUITY:
+        return "sequential"
+    if stride_ratio >= MIN_STRIDE_RATIO and stride:
+        return "strided"
+    if contiguous > 0:
+        return "mixed"
+    return "none"
+
+
 def replay(requests: list[Request], capacity: int = 128, window_size: int = 32,
            mode: str = "adaptive", model: OnlineGaussianNB | None = None,
            labels: list[str] | None = None, online_updates: bool = False,
            latency_model: LatencyModel | None = None,
            lstm_model_path: str | None = None,
-           pseudo_label_threshold: float | None = None):
+           pseudo_label_threshold: float | None = None,
+           smoothing: tuple[int, float] | None = None):
     """Replay in request order; a completed window only affects later requests.
 
     ``labels`` represent controlled ground truth. Optional pseudo-label updates
     are self-training experiments, never accuracy evidence on real traces.
     Every mode observes the first window without issuing prefetches.
     """
-    modes = {"adaptive", "none", "sequential", "strided", "stride", "markov", "lstm"}
+    modes = {"adaptive", "adaptive_evidence", "none", "sequential", "strided",
+             "stride", "markov", "lstm"}
     if mode not in modes or window_size < 8:
         raise ValueError("unknown mode or window_size below 8")
     if mode == "adaptive" and model is None:
         raise ValueError("adaptive replay requires a trained model")
+    if smoothing is not None and mode not in ("adaptive", "adaptive_evidence"):
+        raise ValueError("policy smoothing only applies to adaptive replay")
     if online_updates and (labels is None or len(labels) < len(requests) // window_size):
         raise ValueError("online updates require a label for each complete window")
     if pseudo_label_threshold is not None:
@@ -147,6 +236,7 @@ def replay(requests: list[Request], capacity: int = 128, window_size: int = 32,
     latency = latency_model or LatencyModel()
     metrics = Metrics()
     cache = LRUCache(capacity, metrics)
+    smoother = PolicySmoother(*smoothing) if smoothing else None
     remaining_reads = Counter(block for req in requests if req.operation == "R"
                               for block in range(req.lba, req.lba + req.size_blocks))
     predictor = None
@@ -162,14 +252,21 @@ def replay(requests: list[Request], capacity: int = 128, window_size: int = 32,
 
     history: list[Request] = []
     predictions: list[tuple[int, str, float]] = []
-    policy = "random" if mode == "adaptive" else mode
+    # A block is a "prefetchable miss" once. Counting it again after eviction
+    # inflated the oracle-recall denominator whenever the cache was smaller
+    # than the working set, which silently biased recall.
+    counted_misses: set[int] = set()
+    policy = "none" if mode == "adaptive_evidence" else (
+        "random" if mode == "adaptive" else mode)
     stride: int | None = None
     for index, request in enumerate(requests):
         for block in range(request.lba, request.lba + request.size_blocks):
             if request.operation == "R":
                 remaining_reads[block] -= 1
                 hit = cache.read(block)
-                if not hit and remaining_reads[block] > 0:
+                if (not hit and remaining_reads[block] > 0
+                        and block not in counted_misses):
+                    counted_misses.add(block)
                     metrics.prefetchable_misses += 1
                 metrics.demand_latency_us += latency.hit_us if hit else latency.demand_miss_us
             else:
@@ -190,7 +287,23 @@ def replay(requests: list[Request], capacity: int = 128, window_size: int = 32,
         history.append(request)
         if len(history) == window_size:
             stride = dominant_stride(history)
-            if mode == "adaptive":
+            if mode == "adaptive_evidence":
+                # Route on the window's own measurements: no training
+                # distribution is assumed, so this behaves the same on real
+                # traces as on synthetic ones.
+                start = perf_counter()
+                chosen = route_window(history, stride)
+                metrics.inference_ms += (perf_counter() - start) * 1000
+                metrics.inference_calls += 1
+                window_number = index // window_size
+                predictions.append((window_number, chosen, 1.0))
+                if smoother is not None:
+                    policy = smoother.update(chosen, 1.0)
+                else:
+                    if chosen != policy:
+                        metrics.policy_switches += 1
+                    policy = chosen
+            elif mode == "adaptive":
                 features = extract(history)
                 start = perf_counter()
                 predicted, confidence = model.predict(features)  # type: ignore[union-attr]
@@ -198,9 +311,14 @@ def replay(requests: list[Request], capacity: int = 128, window_size: int = 32,
                 metrics.inference_calls += 1
                 window_number = index // window_size
                 predictions.append((window_number, predicted, confidence))
-                if predicted != policy:
-                    metrics.policy_switches += 1
-                policy = predicted
+                # Optional postprocessing: a single misclassified window would
+                # otherwise flip the policy for a whole window of requests.
+                if smoother is not None:
+                    policy = smoother.update(predicted, confidence)
+                else:
+                    if predicted != policy:
+                        metrics.policy_switches += 1
+                    policy = predicted
                 if online_updates:
                     model.update(features, labels[window_number])  # type: ignore[union-attr,index]
                 elif pseudo_label_threshold is not None and confidence >= pseudo_label_threshold:
@@ -208,6 +326,46 @@ def replay(requests: list[Request], capacity: int = 128, window_size: int = 32,
                     metrics.pseudo_updates += 1
             history = []
     return metrics, predictions
+
+
+def oracle_reference(requests: list[Request], capacity: int = 128,
+                     window_size: int = 32,
+                     latency_model: LatencyModel | None = None) -> dict:
+    """Perfect-foreknowledge reference: the ceiling for *any* predictor.
+
+    Every read is prefetched one request ahead, so this isolates "can the
+    cache and prefetch mechanism turn an access into a hit" from "can a
+    predictor know the address". It is a bound, not a policy, and is reported
+    separately from the seven benchmark modes.
+
+    Note this is a *prefetch* ceiling. A demand-cache reuse ceiling is a
+    different and much smaller number on these traces, because most read
+    blocks are never requested twice: a synthetic scan reads each block once,
+    so a perfect predictor can still convert the first touch into a hit.
+    """
+    latency = latency_model or LatencyModel()
+    metrics = Metrics()
+    cache = LRUCache(capacity, metrics)
+    for index, request in enumerate(requests):
+        for block in range(request.lba, request.lba + request.size_blocks):
+            if request.operation == "R":
+                hit = cache.read(block)
+                metrics.demand_latency_us += (latency.hit_us if hit
+                                              else latency.demand_miss_us)
+            else:
+                cache.write(block)
+        if index >= window_size and index + 1 < len(requests):
+            upcoming = requests[index + 1]
+            if upcoming.operation == "R":
+                for block in range(upcoming.lba, upcoming.lba + upcoming.size_blocks):
+                    if cache.prefetch(block):
+                        metrics.prefetch_cost_us += latency.prefetch_us
+    return {
+        "hit_ratio": metrics.hit_ratio,
+        "mean_access_latency_us": metrics.mean_access_latency_us,
+        "prefetches": metrics.prefetches,
+        "read_blocks": metrics.read_blocks,
+    }
 
 
 def confusion_matrix(pairs: list[tuple[str, str]]) -> dict[str, Counter]:

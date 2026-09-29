@@ -56,6 +56,9 @@ class MarkovPrefetcher:
         self.confidence_threshold = confidence_threshold
         self.max_delta = max_delta
         self.last_lba: int | None = None
+        # Only the last `order` deltas are ever read, so the buffer is trimmed
+        # rather than grown: on a multi-million-request trace an unbounded
+        # list would retain one int per read for no benefit.
         self.deltas: list[int] = []
         self.transitions: dict[tuple[int, ...], Counter[int]] = defaultdict(Counter)
 
@@ -68,11 +71,13 @@ class MarkovPrefetcher:
         delta = request.lba - self.last_lba
         self.last_lba = request.lba
         if len(self.deltas) >= self.order and abs(delta) <= self.max_delta:
-            self.transitions[tuple(self.deltas[-self.order:])][delta] += 1
+            self.transitions[tuple(self.deltas)][delta] += 1
         self.deltas.append(delta)
+        if len(self.deltas) > self.order:
+            del self.deltas[0]
         if len(self.deltas) < self.order:
             return []
-        counts = self.transitions.get(tuple(self.deltas[-self.order:]))
+        counts = self.transitions.get(tuple(self.deltas))
         if not counts:
             return []
         total = sum(counts.values())
