@@ -951,5 +951,39 @@ class SweepTests(unittest.TestCase):
         self.assertEqual(markov["total_unused"], 5)
 
 
+    def test_cost_ranking_is_invariant_to_the_calibration_scale(self):
+        """mean_us is linear in the calibration constant, so argmin cannot move.
+
+        Every mode's modelled cost is k * (per-mode constant) for the shared
+        shape hit=0.01m, miss=m, prefetch=1.1m, so rescaling m rescales all
+        modes equally. Only the absolute microsecond figures should change.
+        """
+        rng = random.Random(11)
+        requests = [Request(float(i) * 0.5, rng.randrange(0, 4000) * 16, 8)
+                    for i in range(4000)]
+        orders = []
+        for scale in (100.0, 1488.0, 7590.0, 50_000.0):
+            model = LatencyModel(hit_us=0.01 * scale, demand_miss_us=scale,
+                                 prefetch_us=1.1 * scale)
+            costs = {}
+            for mode in ("none", "sequential", "strided", "adaptive_evidence"):
+                m, _ = replay(requests, 2048, 32, mode, latency_model=model)
+                costs[mode] = m.mean_access_latency_us
+            orders.append(tuple(sorted(costs, key=costs.get)))
+        self.assertEqual(len(set(orders)), 1,
+                         f"ranking changed with calibration: {orders}")
+
+    def test_measured_cost_model_is_linear_in_the_mean(self):
+        """Guards the invariance claim above: cost scales exactly with m."""
+        requests = [Request(float(i) * 0.5, i * 8, 8) for i in range(2048)]
+        low = LatencyModel(hit_us=1.0, demand_miss_us=100.0, prefetch_us=110.0)
+        high = LatencyModel(hit_us=10.0, demand_miss_us=1000.0,
+                            prefetch_us=1100.0)
+        a, _ = replay(requests, 2048, 32, "sequential", latency_model=low)
+        b, _ = replay(requests, 2048, 32, "sequential", latency_model=high)
+        self.assertAlmostEqual(b.mean_access_latency_us,
+                               10.0 * a.mean_access_latency_us, places=6)
+
+
 if __name__ == "__main__":
     unittest.main()
