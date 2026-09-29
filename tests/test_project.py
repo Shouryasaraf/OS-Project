@@ -22,10 +22,14 @@ from adaptive_prefetch.pipeline import (PolicySmoother, StandardScaler,
                                         evaluate_classifier)
 from adaptive_prefetch.report import benchmark_section as report_benchmark_section
 from adaptive_prefetch.report import dataset_overview as report_dataset_overview
+from adaptive_prefetch.sweep import aggregate_by_mode as sweep_aggregate
+from adaptive_prefetch.sweep import capped_chunks
+from adaptive_prefetch.sweep import winners as sweep_winners
 from adaptive_prefetch.simulator import (LatencyModel, Metrics, oracle_reference,
-                                         replay)
-from adaptive_prefetch.trace import (CLASSES, Request, load_csv, synthetic_dataset,
-                                     synthetic_window, transition_trace, write_csv)
+                                         replay, replay_stream)
+from adaptive_prefetch.trace import (CLASSES, Request, iter_csv_chunks, load_csv,
+                                     synthetic_dataset, synthetic_window,
+                                     transition_trace, write_csv)
 from adaptive_prefetch.training import adapt_msr_sample
 
 
@@ -817,6 +821,134 @@ class ReportTests(unittest.TestCase):
         # figure must be exactly that dataset's value, not a 2-row average.
         self.assertIn("1 dataset(s) with read blocks", text)
         self.assertIn("hit 50.00%", text)
+
+
+class StreamingTests(unittest.TestCase):
+    """The streamed replay must equal the in-memory replay exactly."""
+
+    def _trace_file(self, directory, name="t.revised", lines=400):
+        path = Path(directory) / name
+        rows = []
+        for i in range(lines):
+            op = "RS" if i % 3 else "WS"
+            pattern = "seq" if i % 4 == 0 else "rand"
+            rows.append(f"{i * 0.001} {op} {i * 8} 8 {pattern} 1.0 0.1 0.9\n")
+        path.write_text("".join(rows), encoding="utf-8")
+        return path
+
+    def test_iter_csv_chunks_respects_the_cap(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._trace_file(directory, lines=500)
+            chunks = list(iter_csv_chunks(path, "revised", 1000))
+            self.assertEqual(sum(len(c) for c in chunks), 500)
+            self.assertEqual(len(chunks), 1)
+
+    def test_iter_csv_chunks_preserves_order_and_content(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._trace_file(directory, lines=300)
+            streamed = [r for c in iter_csv_chunks(path, "revised", 1000)
+                        for r in c]
+            whole = load_csv(path, "revised")
+        self.assertEqual(len(streamed), len(whole))
+        for a, b in zip(streamed, whole):
+            self.assertEqual((a.lba, a.size_blocks, a.operation,
+                              a.service_ms, a.pattern),
+                             (b.lba, b.size_blocks, b.operation,
+                              b.service_ms, b.pattern))
+
+    def test_chunk_size_does_not_change_the_result(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._trace_file(directory, lines=600)
+            results = [replay_stream(iter_csv_chunks(path, "revised", size),
+                                     capacity=64, mode="adaptive_evidence")
+                       for size in (1000, 1000)]
+        for other in results[1:]:
+            self.assertAlmostEqual(results[0].hit_ratio, other.hit_ratio)
+            self.assertEqual(results[0].prefetches, other.prefetches)
+
+    def test_streamed_matches_in_memory_replay(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._trace_file(directory, lines=600)
+            whole = load_csv(path, "revised")
+            for mode in ("none", "sequential", "adaptive_evidence"):
+                a, _ = replay(whole, capacity=64, mode=mode)
+                b = replay_stream(iter_csv_chunks(path, "revised", 1000),
+                                  capacity=64, mode=mode)
+                self.assertAlmostEqual(a.hit_ratio, b.hit_ratio, places=12)
+                self.assertEqual(a.prefetches, b.prefetches)
+
+    def test_streamed_first_window_never_prefetches(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._trace_file(directory, lines=32)
+            metrics = replay_stream(iter_csv_chunks(path, "revised", 1000),
+                                    capacity=64, mode="sequential")
+        # Only one window of requests, so the warm-up covers all of them.
+        self.assertEqual(metrics.prefetches, 0)
+
+    def test_iter_csv_chunks_rejects_a_tiny_chunk(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._trace_file(directory, lines=50)
+            with self.assertRaises(ValueError):
+                list(iter_csv_chunks(path, "revised", 10))
+
+    def test_chunk_boundary_does_not_change_the_result(self):
+        # Same stream, one chunk vs two.
+        with tempfile.TemporaryDirectory() as directory:
+            path = self._trace_file(directory, lines=3000)
+            one = replay_stream(iter_csv_chunks(path, "revised", 100000),
+                                capacity=64, mode="adaptive_evidence")
+            two = replay_stream(iter_csv_chunks(path, "revised", 1000),
+                                capacity=64, mode="adaptive_evidence")
+        self.assertAlmostEqual(one.hit_ratio, two.hit_ratio, places=12)
+        self.assertEqual(one.prefetches, two.prefetches)
+
+
+class SweepTests(unittest.TestCase):
+    def test_capped_chunks_stops_at_the_cap(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "t.revised"
+            path.write_text("".join(
+                f"{i * 0.001} RS {i * 8} 8 rand 1.0 0.1 0.9\n"
+                for i in range(500)), encoding="utf-8")
+            capped = list(capped_chunks(path, 200, 1000))
+            uncapped = list(capped_chunks(path, None, 1000))
+        self.assertEqual(sum(len(c) for c in capped), 200)
+        self.assertEqual(sum(len(c) for c in uncapped), 500)
+
+    def test_winners_ignores_traces_without_reads(self):
+        rows = [
+            {"trace": "a", "mode": "none", "hit_ratio": 0.5, "precision": 0.0,
+             "mean_us": 50.0, "unused": 0, "total_prefetches": 0,
+             "read_blocks": 100},
+            {"trace": "a", "mode": "sequential", "hit_ratio": 0.9,
+             "precision": 0.8, "mean_us": 40.0, "unused": 10,
+             "total_prefetches": 50, "read_blocks": 100},
+            {"trace": "b", "mode": "none", "hit_ratio": 0.0, "precision": 0.0,
+             "mean_us": 0.0, "unused": 0, "total_prefetches": 0,
+             "read_blocks": 0},
+            {"trace": "b", "mode": "sequential", "hit_ratio": 0.0,
+             "precision": 0.0, "mean_us": 0.0, "unused": 0,
+             "total_prefetches": 0, "read_blocks": 0},
+        ]
+        champ = sweep_winners(rows)
+        self.assertEqual(champ["hit_ratio"], "sequential")
+        # The write-only trace must not make every metric look like a tie.
+        self.assertEqual(champ["cost"], "sequential")
+
+    def test_aggregate_reports_every_mode(self):
+        rows = [
+            {"trace": "a", "mode": "none", "hit_ratio": 0.1, "precision": 0.0,
+             "mean_us": 90.0, "unused": 0, "total_prefetches": 0,
+             "read_blocks": 10},
+            {"trace": "a", "mode": "markov", "hit_ratio": 0.3,
+             "precision": 0.5, "mean_us": 80.0, "unused": 5,
+             "total_prefetches": 10, "read_blocks": 10},
+        ]
+        summary = sweep_aggregate(rows)
+        self.assertEqual({r["mode"] for r in summary}, {"none", "markov"})
+        markov = next(r for r in summary if r["mode"] == "markov")
+        self.assertAlmostEqual(markov["mean_hit"], 0.3)
+        self.assertEqual(markov["total_unused"], 5)
 
 
 if __name__ == "__main__":

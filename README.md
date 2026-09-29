@@ -95,6 +95,21 @@ python -m adaptive_prefetch normalize --input trace.csv --format alibaba --outpu
 python -m adaptive_prefetch export-demo demo.csv # export a synthetic transition trace
 ```
 
+Full-collection sweep (every MSRC trace, every mode, streamed so memory stays
+flat regardless of file size):
+
+```powershell
+python sweep_modes.py                    # 250k requests x 32 traces, all modes
+python sweep_modes.py --full             # every request in every file (hours)
+python sweep_modes.py --per-trace 50000  # cheaper sample
+python sweep_modes.py --modes none sequential adaptive adaptive_evidence
+```
+
+Writes `outputs/msrc_sweep.csv` (per-trace rows) and
+`outputs/msrc_sweep.md` (winner table plus the full per-trace matrix).
+Prefetch recall is omitted on streamed runs because it needs whole-stream
+future knowledge; every other metric is exact.
+
 Research and analysis commands:
 
 ```powershell

@@ -43,6 +43,70 @@ class Request:
             raise ValueError("service_ms must be non-negative")
 
 
+def iter_csv_chunks(path: str | Path, format: str = "auto",
+                    chunk_requests: int = 250_000):
+    """Yield ``list[Request]`` chunks without materialising the whole file.
+
+    ``load_csv`` holds an entire trace as dataclass instances, which costs
+    roughly 5x the on-disk size. The MSRC collection is 11 GB across 32
+    files, so the whole set cannot be resident. This generator keeps at most
+    one chunk alive, which makes the full-collection sweep feasible.
+
+    Chunking is by **request count, not bytes**: a 500 MB slice of a
+    ``.revised`` file is about 8.9M requests, which costs ~2.6 GB resident and
+    would exhaust a small machine.
+    """
+    if format not in {"auto", "normalized", "msr", "iotta8", "alibaba", "revised"}:
+        raise ValueError("format must be auto, normalized, msr, iotta8, alibaba, or revised")
+    if chunk_requests < 1000:
+        raise ValueError("chunk_requests must be at least 1000")
+    if format == "revised":
+        yield from _iter_revised_chunks(path, chunk_requests)
+        return
+    # Other profiles are small enough to load whole; chunk after the fact so
+    # callers see one uniform interface.
+    for start in range(0, len(load_csv(path, format)), chunk_requests):
+        yield load_csv(path, format)[start:start + chunk_requests]
+
+
+def _iter_revised_chunks(path: str | Path, chunk_requests: int):
+    """Stream the 8-column revised profile into bounded chunks."""
+    chunk: list[Request] = []
+    first: float | None = None
+    with Path(path).open(encoding="utf-8-sig") as handle:
+        for line_no, raw in enumerate(handle, start=1):
+            columns = raw.split()
+            if len(columns) != len(REVISED_COLUMNS):
+                raise ValueError(
+                    f"invalid revised row {line_no}: expected "
+                    f"{len(REVISED_COLUMNS)} columns, got {len(columns)}")
+            try:
+                seconds = float(columns[0])
+                op = columns[1]
+                lba = int(columns[2])
+                size = int(columns[3])
+                service_ms = float(columns[5])
+            except (ValueError, TypeError) as exc:
+                raise ValueError(f"invalid revised row {line_no}: {exc}") from exc
+            if op not in {"RS", "WS"}:
+                raise ValueError(f"invalid revised row {line_no}: op must be RS or WS")
+            if service_ms < 0:
+                raise ValueError(
+                    f"invalid revised row {line_no}: negative service time")
+            if first is None:
+                first = seconds
+            chunk.append(Request((seconds - first) * 1000, lba, size,
+                                 "R" if op == "RS" else "W",
+                                 service_ms=service_ms, pattern=columns[4]))
+            if len(chunk) >= chunk_requests:
+                _validate_order(chunk)
+                yield chunk
+                chunk = []
+    if chunk:
+        _validate_order(chunk)
+        yield chunk
+
+
 def load_csv(path: str | Path, format: str = "auto") -> list[Request]:
     """Read a known trace schema; ambiguous units require an explicit profile."""
     if format not in {"auto", "normalized", "msr", "iotta8", "alibaba", "revised"}:

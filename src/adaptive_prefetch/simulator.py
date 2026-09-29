@@ -345,6 +345,96 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
     return metrics, predictions
 
 
+def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
+                  window_size: int = 32, mode: str = "adaptive",
+                  model: OnlineGaussianNB | None = None,
+                  latency_model: LatencyModel | None = None,
+                  lstm_model_path: str | None = None,
+                  contextual: bool = True,
+                  oracle_horizon: int = 2) -> Metrics:
+    """Replay a request stream delivered in bounded chunks.
+
+    Exists because the MSRC collection is 11.9 GB over 32 files and a
+    ``Request`` costs ~430 bytes resident, so it cannot be held in memory.
+    Cache contents, metrics, partial-window state, block ages, the current
+    stride and the active policy all carry across chunk boundaries, so the
+    result is identical to calling :func:`replay` on the concatenated stream
+    with one caveat:
+
+    ``Metrics.prefetch_recall`` is **not** reported by this function. Recall
+    needs to know whether a missed block is read *again later*, which is
+    whole-stream knowledge that a bounded-memory pass cannot have without
+    holding a block index for the entire trace. Hit ratio, precision, wasted
+    I/O, modelled cost and policy switches are all exact, and those are the
+    metrics that rank policies.
+    """
+    latency = latency_model or LatencyModel()
+    metrics = Metrics()
+    cache = LRUCache(capacity, metrics)
+    context = WindowContext() if contextual else None
+    predictor = _make_predictor(mode, lstm_model_path)
+    policy = "none" if mode == "adaptive_evidence" else (
+        "random" if mode == "adaptive" else mode)
+    stride: int | None = None
+    history: list[Request] = []
+    seen = 0
+
+    for chunk in chunks:
+        for request in chunk:
+            for block in range(request.lba, request.lba + request.size_blocks):
+                if request.operation == "R":
+                    hit = cache.read(block)
+                    metrics.demand_latency_us += (latency.hit_us if hit
+                                                  else latency.demand_miss_us)
+                else:
+                    cache.write(block)
+            proposed = (predictor.next_candidates(request)
+                        if predictor is not None
+                        else candidates(request, policy, stride))
+            # Causality, matching ``replay`` exactly: the first
+            # ``window_size`` requests observe without prefetching.
+            if seen >= window_size:
+                for block in proposed:
+                    if cache.prefetch(block):
+                        metrics.prefetch_cost_us += latency.prefetch_us
+            seen += 1
+            history.append(request)
+            if len(history) == window_size:
+                stride = dominant_stride(history)
+                if mode == "adaptive_evidence":
+                    policy = route_window(history, stride)
+                elif mode == "adaptive":
+                    if model is None:
+                        raise ValueError("adaptive replay requires a trained model")
+                    values = (context.observe(history, stride)
+                              if context is not None else extract(history))
+                    start = perf_counter()
+                    predicted, _ = model.predict(values)  # type: ignore[union-attr]
+                    metrics.inference_ms += (perf_counter() - start) * 1000
+                    metrics.inference_calls += 1
+                    if predicted != policy:
+                        metrics.policy_switches += 1
+                    policy = predicted
+                history = []
+    return metrics
+
+
+def _make_predictor(mode: str, lstm_model_path: str | None):
+    if mode == "stride":
+        return StridePrefetcher()
+    if mode == "markov":
+        return MarkovPrefetcher()
+    if mode == "lstm":
+        if not lstm_model_path:
+            raise ValueError("lstm mode requires --lstm-model path")
+        from .lstm import load_predictor
+        return load_predictor(lstm_model_path)
+    if mode not in {"adaptive", "adaptive_evidence", "none", "sequential",
+                    "strided"}:
+        raise ValueError("unknown mode")
+    return None
+
+
 def oracle_reference(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
                      window_size: int = 32,
                      latency_model: LatencyModel | None = None) -> dict:

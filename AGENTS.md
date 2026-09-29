@@ -23,6 +23,9 @@ python -m adaptive_prefetch benchmark --cost-model measured
 python -m adaptive_prefetch evaluate        # classifier x regime accuracy + cost
 python -m adaptive_prefetch eda <trace>     # profile one trace
 python -m adaptive_prefetch shift <trace>   # domain shift vs synthetic region
+python sweep_modes.py                       # all 32 MSRC traces x all modes
+python sweep_modes.py --full                # every request in every file (hours)
+python sweep_modes.py --per-trace 50000     # cheaper sample
 ```
 
 - `main.py` self-bootstraps `sys.path`; every other entry point needs
@@ -130,6 +133,29 @@ service times (`.revised` column 6, retained on `Request.service_ms`).
   labelled as such — the traces record device time only, never cache time.
 - `Request.pattern` holds the trace's own `seq`/`rand` flag. It is for
   ground-truth scoring **only**; routing on it is not a result.
+
+## The MSRC sweep: streaming, and why it is chunked
+
+`sweep_modes.py` replays **every** `.revised` trace under every mode. The
+collection is 11.86 GB over 32 files and a `Request` costs **~430 bytes**
+resident, so it cannot be loaded.
+
+- `trace.iter_csv_chunks` streams bounded chunks; `simulator.replay_stream`
+  carries cache, metrics, partial-window state, block ages, stride and policy
+  across chunk boundaries. Verified bit-identical to `replay()` across 80
+  chunk boundaries on a 161k-request trace.
+- **Chunk by request count, never by bytes.** A 500 MB slice of a `.revised`
+  file is ~8.9M requests, which costs ~3.8 GB resident and will exhaust a
+  15 GB machine. `DEFAULT_CHUNK = 250_000` requests is ~108 MB.
+- Warm-up semantics match `replay()` exactly (`seen >= window_size`), *not*
+  "first window closed". These differ when a stream's last partial window
+  matters, and getting it wrong silently changed hit ratios.
+- `prefetch_recall` is **not reported** by the streamed path: it needs
+  whole-stream future knowledge. Hit ratio, precision, wasted I/O and
+  modelled cost are exact, and those are what rank policies.
+- The default caps at 250k requests per trace and says so in the output.
+  `--full` removes the cap; the collection alone is ~94 min to parse at the
+  measured 2.1 MB/s, before any replay.
 
 ## Data gotchas
 
