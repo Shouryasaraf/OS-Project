@@ -248,7 +248,12 @@ def _fit_and_test(train: list[tuple], test: list[tuple], classifier: str,
         train_x = scaler.transform_rows(train_x)
         test_x = scaler.transform_rows(test_x)
 
-    model = make_classifier(classifier, len(FEATURE_NAMES))
+    # Contextual features are accumulated per stream, not per shuffled example,
+    # so train and test are built through the same WindowContext path used at
+    # replay time. The pipeline's own generators are not the project's trace
+    # generator, so they feed the stream features only and train a model sized
+    # for them; the deployed model is built by ``benchmark.make_model``.
+    model = make_classifier(classifier, len(train_x[0]))
     start = perf_counter()
     for values, (_, label) in zip(train_x, train):
         model.update(values, label)

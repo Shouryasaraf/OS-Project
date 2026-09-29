@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections import Counter
 from statistics import mean, pstdev
 
-from .features import FEATURE_NAMES, extract
+from .features import FEATURE_NAMES, STREAM_FEATURES, extract
 from .trace import CLASSES, Request
 
 
@@ -163,7 +163,9 @@ def domain_shift(reference: list[tuple], target: list[tuple]) -> dict:
     result = {"features": {}, "mean_abs_z": 0.0, "max_abs_z": 0.0,
               "coverage": 0.0, "nearest_centroid_ratio": None}
     total_z, worst_z, covered, total = 0.0, 0.0, 0, 0
-    for i, name in enumerate(FEATURE_NAMES):
+    # Domain shift is reported over the stream features only; the contextual
+    # block depends on replay position and has no meaningful reference spread.
+    for i, name in enumerate(FEATURE_NAMES[:STREAM_FEATURES]):
         ref = [p[i] for p in reference]
         tgt = [p[i] for p in target]
         sd = pstdev(ref) or 1.0
@@ -180,7 +182,7 @@ def domain_shift(reference: list[tuple], target: list[tuple]) -> dict:
         worst_z = max(worst_z, abs(z))
         covered += inside
         total += len(tgt)
-    result["mean_abs_z"] = total_z / len(FEATURE_NAMES)
+    result["mean_abs_z"] = total_z / STREAM_FEATURES
     result["max_abs_z"] = worst_z
     result["coverage"] = covered / total
     return result
@@ -281,7 +283,7 @@ def profile_trace(requests: list[Request], name: str,
         return "\n".join(out + [""])
     out.append(f"- complete windows: {len(vectors)}")
     out.append("- per-feature mean / sd / min / max:")
-    for i, feature in enumerate(FEATURE_NAMES):
+    for i, feature in enumerate(FEATURE_NAMES[:STREAM_FEATURES]):
         column = [v[i] for v in vectors]
         out.append(f"    {feature:22} mean {mean(column):7.4f}  "
                    f"sd {pstdev(column):7.4f}  "

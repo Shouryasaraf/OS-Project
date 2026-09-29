@@ -255,6 +255,9 @@ Statistics:
   effective count `1/(1-γ)`, biasing the variance ~4% low. Now rescaled.
 
 
+
+---
+
 ---
 
 ## D7. Deliberately not done
@@ -280,10 +283,11 @@ Also unchanged: the four-class framing. It is a property of
 `shift` measures the real windows at ~12 sd from the training region. Every
 accuracy number in this project describes the generator.
 
-The default cache capacity is still expressed in **blocks** (128), which is
-too small for traces issuing 8-128-block requests. See D9 for the measurement.
-Changing it would silently restate every previously reported number, so it is
-a deliberate decision to leave and document rather than quietly fix.
+~~The default cache capacity is still expressed in **blocks** (128)~~ --
+**superseded by D10.** Once the generator was corrected to issue realistic
+8-128-block requests, a 128-block cache held only ~16 whole requests and
+starved every policy, so `DEFAULT_CAPACITY` is now 2048 blocks (1 MiB). This
+restates every cache number reported before D10.
 ---
 
 ## D8. Real device latencies replace the assumed cost model
@@ -405,5 +409,103 @@ positive result available from this data. It is not a hit-ratio win.
 and sub-1.5pp differences, tuning would find a configuration that wins on
 these traces and fails on any new workload -- overfitting to the evaluation
 set while appearing to succeed.
+
+---
+
+---
+
+## D10. Feature engineering pass: the generator was the root cause
+
+**Requested:** implement (1) a realistic generator, (2) cross-window features,
+(3) a reuse-distance feature, (4) a scale-relative `dominant_stride`.
+
+### (1) The generator -- by far the largest effect
+
+The old generator drew addresses from `randrange(1000, 100000)`, request sizes
+from `randint(1, 3)`, read ratio fixed at 0.9, and never revisited an LBA. Its
+within-class feature standard deviation was **0.0000-0.056** against
+**0.03-1.28** measured on real traces. The model was fitted to a degenerate
+distribution.
+
+New generator draws, per window: pattern strength (0.55-1.0), block size
+(1-128, median 8), timing dispersion, a bimodal read/write ratio, a varying
+address span (1e6-4e8 blocks), and occasional re-access. `random` windows also
+get weak local clusters -- previously that class had **exactly zero** feature
+variance.
+
+| measurement | before | after |
+| --- | ---: | ---: |
+| domain shift, mean abs | 11.97 sd | **0.86 sd** |
+| worst feature | 76.82 sd | **1.63 sd** |
+| coverage of target in reference range | 58.5% | **97.2%** |
+| model prediction on real windows | 124/124 "mixed" @ confidence 1.000 | 22 random / 9 mixed @ 0.978 |
+| held-out synthetic accuracy | 1.0000 | 0.9688 |
+
+The model used to be *confidently wrong* on every real window. It now reports
+"random" for most of them, which is correct: real traces are overwhelmingly
+random-looking. The drop from 1.0000 to 0.9688 is the intended effect -- the
+task is no longer trivially separable.
+
+**Second defect found while fixing this:** strides were drawn as
+`block * randint(1, 4)`, so a stride of exactly one request length is
+geometrically identical to a sequential read. That collapsed two classes and
+22/40 sequential windows were labelled strided. Strides are now 2-8 request
+lengths.
+
+### (2) and (3) Contextual features
+
+Four features were added, bringing the vector from 8 to 12:
+
+- `reuse_ratio` -- share of the window touching a previously-seen block.
+- `reuse_distance_log` -- mean log2 reuse distance (scale-free across a range
+  that spans 1 to ~1e6).
+- `contiguous_delta` -- contiguity versus the previous window.
+- `stride_persist` -- whether the stride or contiguity is continuing.
+
+These use `features.WindowContext`, which maintains a block-age table and the
+previous window's spatial features. That information is what a real system
+gets from block-age tracking, so it is available at decision time and is not
+lookahead. `extract()` still returns the 8 stream features alone
+(`STREAM_FEATURES = 8`), so every existing caller keeps working.
+
+**Train/deploy consistency matters here.** `benchmark.make_model` now lays
+each class out as one continuous stream so `WindowContext` accumulates values
+exactly as replay does. Training on shuffled isolated windows would have
+taught the model that all four contextual features are always zero.
+
+Measured at replay: `reuse_ratio` mean 0.155 (15 distinct values),
+`reuse_distance_log` 0.033 (17 distinct), `contiguous_delta` -0.007 (16
+distinct), `stride_persist` 0.438. None is degenerate.
+
+### (4) `dominant_stride`
+
+The old candidate filter was `d > size_blocks and d <= 1024` -- an absolute
+ceiling. It returned `None` on **100%** of real windows measured (0/31, 0/62,
+0/1562), making the window-level stride detector structurally blind on real
+data.
+
+Both an absolute cap and a relative one (tried at 64x request size, which
+still rejected a legitimate 4096-block stride) conflate "jump" with "stride".
+A stride is defined by **repetition, not magnitude**: 4096 seen 15 times is a
+stride, 4096 seen once is a seek. The cap is removed entirely; only the
+repetition requirement remains, expressed as a fraction of the window.
+
+### (5) Cache default -- a consequence of (1), not a separate change
+
+The default capacity was 128 **blocks**, calibrated for the old generator's
+1-3 block requests. Once requests became a realistic 8-128 blocks, 128 blocks
+held ~16 whole requests and starved every policy. Measured saturation point:
+
+| capacity | ~requests | synthetic `none` | synthetic `adaptive` |
+| ---: | ---: | ---: | ---: |
+| 128 | 16 | 3.14% | 5.15% |
+| 2048 | 256 | 5.68% | 7.86% |
+| 32768 | 4096 | 5.68% | 7.86% |
+
+Hit ratios saturate by 2048 blocks (1 MiB at 512 B). `DEFAULT_CAPACITY` is now
+2048. This restates every previously reported cache number, which is why
+`DECISIONS.md` D7 and D9 previously described 128 blocks as a known
+mis-specification to be left alone; fixing the generator made leaving it
+incorrect.
 
 ---

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from time import perf_counter
 
 from .baselines import MarkovPrefetcher, StridePrefetcher
-from .features import dominant_stride, extract
+from .features import STREAM_FEATURES, WindowContext, dominant_stride, extract
 from .model import OnlineGaussianNB
 from .pipeline import PolicySmoother
 from .trace import Request
@@ -206,13 +206,25 @@ def route_window(window: list[Request], stride: int | None) -> str:
     return "none"
 
 
-def replay(requests: list[Request], capacity: int = 128, window_size: int = 32,
+#: Default cache capacity, in blocks (512 B each, so 2048 blocks = 1 MiB).
+#:
+#: This was 128 blocks, which was calibrated for the original generator's
+#: 1-3 block requests. Once the generator was corrected to issue realistic
+#: 8-128 block requests, a 128-block cache held only ~16 whole requests and
+#: starved every policy; measured hit ratios saturated by 2048 blocks. The
+#: default now matches the request geometry rather than the old toy.
+DEFAULT_CAPACITY = 2048
+
+
+def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
+           window_size: int = 32,
            mode: str = "adaptive", model: OnlineGaussianNB | None = None,
            labels: list[str] | None = None, online_updates: bool = False,
            latency_model: LatencyModel | None = None,
            lstm_model_path: str | None = None,
            pseudo_label_threshold: float | None = None,
-           smoothing: tuple[int, float] | None = None):
+           smoothing: tuple[int, float] | None = None,
+           contextual: bool = True):
     """Replay in request order; a completed window only affects later requests.
 
     ``labels`` represent controlled ground truth. Optional pseudo-label updates
@@ -252,6 +264,10 @@ def replay(requests: list[Request], capacity: int = 128, window_size: int = 32,
 
     history: list[Request] = []
     predictions: list[tuple[int, str, float]] = []
+    # Contextual feature state: block ages and the previous window's spatial
+    # features. This is stream information a real system has at decision time
+    # (block-age tracking), not lookahead.
+    context = WindowContext() if contextual else None
     # A block is a "prefetchable miss" once. Counting it again after eviction
     # inflated the oracle-recall denominator whenever the cache was smaller
     # than the working set, which silently biased recall.
@@ -304,7 +320,8 @@ def replay(requests: list[Request], capacity: int = 128, window_size: int = 32,
                         metrics.policy_switches += 1
                     policy = chosen
             elif mode == "adaptive":
-                features = extract(history)
+                features = (context.observe(history, stride) if context is not None
+                            else extract(history))
                 start = perf_counter()
                 predicted, confidence = model.predict(features)  # type: ignore[union-attr]
                 metrics.inference_ms += (perf_counter() - start) * 1000
@@ -328,7 +345,7 @@ def replay(requests: list[Request], capacity: int = 128, window_size: int = 32,
     return metrics, predictions
 
 
-def oracle_reference(requests: list[Request], capacity: int = 128,
+def oracle_reference(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
                      window_size: int = 32,
                      latency_model: LatencyModel | None = None) -> dict:
     """Perfect-foreknowledge reference: the ceiling for *any* predictor.

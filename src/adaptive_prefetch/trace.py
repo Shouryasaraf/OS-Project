@@ -244,40 +244,142 @@ def write_csv(path: str | Path, requests: Iterable[Request]) -> None:
             writer.writerow([req.timestamp_ms, req.lba, req.size_blocks, req.operation, req.stream_id])
 
 
+#: Real-trace geometry. The previous generator drew addresses from
+#: ``randrange(1000, 100000)`` (< 100k blocks) and request sizes from
+#: ``randint(1, 3)``, while the MSRC volumes span 1e7-1e8 blocks and issue
+#: median 8-block, max 1024-block requests. That 350x scale gap is part of why
+#: synthetic windows sat ~12 sd away from real ones.
+REALISTIC_LBA_BASE = 10 ** 7
+REALISTIC_LBA_SPAN = 10 ** 8
+#: Typical 4 KiB-aligned request size, in blocks.
+TYPICAL_BLOCK_SIZE = 8
+
+
+def block_stride(rng: random.Random, size: int = TYPICAL_BLOCK_SIZE) -> int:
+    """A phase stride that is at least two request lengths.
+
+    A one-request stride is indistinguishable from a sequential read, so the
+    two classes must not overlap.
+    """
+    return max(1, size) * rng.randint(2, 8)
+
+
+def _window_profile(rng: random.Random) -> dict:
+    """Per-window draw controlling how strongly a pattern expresses itself.
+
+    This is what creates *within-class* variance. The old generator used fixed
+    constants, so every window of a class had nearly identical features
+    (within-class sd 0.0000-0.056 against 0.03-1.28 measured on real traces).
+    Real workloads vary in how regular they are, and the classifier has to
+    cope with that spread rather than memorising a degenerate distribution.
+    """
+    return {
+        # 0.55-1.0: how cleanly the window follows its class pattern.
+        "strength": rng.uniform(0.55, 1.0),
+        # Per-window block size, so size is correlated within a window (real
+        # workloads issue bursts of uniform-sized I/O) but varies across them.
+        "block_size": rng.choice(
+            [TYPICAL_BLOCK_SIZE, TYPICAL_BLOCK_SIZE, TYPICAL_BLOCK_SIZE,
+             1, 2, 4, 16, 32, 64, 128]),
+        # Timing dispersion; drives gap_cv and fast_gap_ratio variance.
+        "gap_sigma": rng.uniform(0.3, 2.2),
+        # A window is read-heavy or write-heavy rather than a fixed 90% reads.
+        # Real traces are strongly bimodal (a write phase, then a read phase).
+        "write_probability": rng.choice(
+            [0.0, 0.0, 0.0, 0.02, 0.5, 1.0, 1.0, 1.0]),
+        # Address span varies per window; a real volume is not one uniform
+        # range, and the jump features must not depend on a fixed span.
+        "span": rng.choice([REALISTIC_LBA_SPAN, REALISTIC_LBA_SPAN,
+                            REALISTIC_LBA_SPAN // 8, REALISTIC_LBA_SPAN // 64,
+                            REALISTIC_LBA_SPAN * 4]),
+        "base_lba": rng.randrange(REALISTIC_LBA_BASE,
+                                  REALISTIC_LBA_BASE + REALISTIC_LBA_SPAN),
+    }
+
+
+def _gap(rng: random.Random, profile: dict, bursty: bool) -> float:
+    """Log-normal inter-arrival gap: real service times are heavy-tailed."""
+    sigma = profile["gap_sigma"]
+    mean = 0.05 if bursty else 0.5
+    value = mean * pow(2.718281828, rng.gauss(0.0, sigma))
+    return min(value, 5_000.0)
+
+
 def synthetic_window(label: str, rng: random.Random, n: int = 32,
                      timestamp_start: float = 0.0, start_lba: int | None = None,
-                     stride_override: int | None = None) -> list[Request]:
-    """Generate one labelled window; label describes the construction, not a real trace."""
+                     stride_override: int | None = None,
+                     profile: dict | None = None) -> list[Request]:
+    """Generate one labelled window.
+
+    The label describes the *construction*, never a real trace. Realism knobs
+    (pattern strength, block size, timing dispersion, write ratio, address
+    scale, occasional re-access) vary per window so the class distributions
+    have the spread real workloads show instead of being near-degenerate.
+    """
     if label not in CLASSES or n < 8:
         raise ValueError("label must be a known class and n >= 8")
-    current = start_lba if start_lba is not None else rng.randrange(1000, 100000)
-    stride = stride_override if stride_override is not None else rng.randint(4, 16)
+    if profile is None:
+        profile = _window_profile(rng)
+    strength = profile["strength"]
+    block = profile["block_size"]
+    current = (start_lba if start_lba is not None
+               else rng.randrange(profile["base_lba"],
+                                  profile["base_lba"] + profile["span"]))
+    # Strides are whole request lengths, and always at least 2x. A stride of
+    # exactly one request length is geometrically identical to a sequential
+    # read, so including it made "strided" and "sequential" the same class and
+    # the classifier could not separate them (22/40 sequential windows were
+    # labelled strided).
+    stride = (stride_override if stride_override is not None
+              else block * rng.randint(2, 8))
+    noise = (1.0 - strength) * 0.5
     time = timestamp_start
     result: list[Request] = []
+    seen: list[int] = []
     for i in range(n):
-        size = rng.randint(1, 3)
+        size = max(1, block + rng.randint(-1, 1) if block > 2 else block)
+        revisit = 0.0
         if label == "sequential":
-            if i and rng.random() < 0.04:
-                current += rng.randint(5, 20)
+            if i:
+                current += size
+                if rng.random() < noise:
+                    current += block * rng.randint(1, 4)
+            # Real scans re-read recently touched blocks occasionally.
+            revisit = 0.10 * strength if seen else 0.0
         elif label == "strided":
             if i:
-                current += stride + (rng.randint(1, 5) if rng.random() < 0.04 else 0)
+                current += stride
+                if rng.random() < noise:
+                    current += block * rng.randint(1, 3)
+            revisit = 0.08 * strength if seen else 0.0
         elif label == "random":
-            current = rng.randrange(1000, 100000)
+            # Real "random-looking" windows are not pure uniform draws: some
+            # have weak local clusters, some are a single flat scatter. Without
+            # this the class had *exactly zero* feature variance, which is
+            # what made the previous generator degenerate.
+            if rng.random() < 0.15 * strength:
+                current += block * rng.randint(1, 3)
+            else:
+                current = rng.randrange(profile["base_lba"],
+                                        profile["base_lba"] + profile["span"])
         else:
-            # Interleave short sequential runs and distant random jumps.
-            if i % 8 == 0:
-                current = rng.randrange(1000, 100000)
-            elif i % 8 >= 4:
-                current = rng.randrange(1000, 100000)
-        gap = rng.uniform(0.2, 2.0)
-        if label == "mixed" and i % 8 < 4:
-            gap = rng.uniform(0.01, 0.1)
-        time += gap
+            # Interleaved short runs and distant jumps: half the window reads
+            # like a sequential burst, half like random access.
+            if i % 8 >= 4 or i % 8 == 0:
+                current = rng.randrange(profile["base_lba"],
+                                        profile["base_lba"] + profile["span"])
+            else:
+                current += size
+            revisit = 0.05 * strength if seen else 0.0
+        if revisit and len(seen) > 1 and rng.random() < revisit:
+            low = max(0, len(seen) - 8)
+            current = seen[rng.randrange(low, len(seen))]
+        seen.append(current)
+        bursty = label == "mixed" and i % 8 < 4
+        time += _gap(rng, profile, bursty)
         result.append(Request(round(time, 4), current, size,
-                              "R" if rng.random() < 0.9 else "W"))
-        if label in {"sequential", "mixed"} and (label != "mixed" or i % 8 < 3):
-            current += size
+                              "W" if rng.random() < profile["write_probability"]
+                              else "R"))
     return result
 
 
@@ -294,7 +396,7 @@ def transition_trace(seed: int, windows_per_class: int = 8, n: int = 32):
     stream: list[Request] = []
     labels: list[str] = []
     for label in CLASSES:
-        phase_stride = rng.randint(4, 16)
+        phase_stride = block_stride(rng)
         next_lba: int | None = None
         for _ in range(windows_per_class):
             window = synthetic_window(label, rng, n,

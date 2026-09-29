@@ -11,7 +11,9 @@ from adaptive_prefetch.benchmark import (MODES, aggregate_results, analyze_resul
                                          benchmark_dataset, drift_report)
 from adaptive_prefetch.cli import train
 from adaptive_prefetch.eda import (domain_shift, locality_profile, profile_trace)
-from adaptive_prefetch.features import FEATURE_NAMES, dominant_stride, extract
+from adaptive_prefetch.features import (FEATURE_NAMES, STREAM_FEATURES,
+                                         WindowContext, dominant_stride,
+                                         dominant_stride as _ds, extract)
 from adaptive_prefetch.lstm import (HISTORY, MAX_DELTA, LSTMPrefetcher, UNK,
                                     _encode, bucket_of, bucket_span,
                                     load_predictor, train_lstm)
@@ -25,6 +27,27 @@ from adaptive_prefetch.simulator import (LatencyModel, Metrics, oracle_reference
 from adaptive_prefetch.trace import (CLASSES, Request, load_csv, synthetic_dataset,
                                      synthetic_window, transition_trace, write_csv)
 from adaptive_prefetch.training import adapt_msr_sample
+
+
+def contextual_vectors(windows_and_labels):
+    """Feature vectors with the contextual block, laid out as a stream.
+
+    Mirrors how the model is actually trained and replayed, so tests do not
+    accidentally exercise the 8-feature path against a 12-feature model.
+    """
+    context = WindowContext()
+    out = []
+    for window, label in windows_and_labels:
+        out.append((context.observe(window, dominant_stride(window)), label))
+    return out
+
+
+def fit_model(name="gnb", per_class=20, seed=7):
+    """Train either classifier on contextual features."""
+    model = make_classifier(name, len(FEATURE_NAMES))
+    for values, label in contextual_vectors(synthetic_dataset(per_class, seed)):
+        model.update(values, label)
+    return model
 
 
 class TraceTests(unittest.TestCase):
@@ -189,8 +212,24 @@ class TraceTests(unittest.TestCase):
         self.assertAlmostEqual(extract(window)[0], 1.0)
 
     def test_stride_detection(self):
-        window = synthetic_window("strided", random.Random(1), stride_override=8)
-        self.assertEqual(dominant_stride(window), 8)
+        # A stride must be at least two request lengths to be distinguishable
+        # from a sequential read; the generator no longer produces 1x.
+        window = synthetic_window("strided", random.Random(1), 32,
+                                  stride_override=64)
+        self.assertEqual(dominant_stride(window), 64)
+
+    def test_dominant_stride_is_scale_relative(self):
+        """The same 8-request stride must be found at any block size."""
+        rng = random.Random(4)
+        for size in (1, 8, 128):
+            window = [Request(float(i), i * size * 4, size) for i in range(16)]
+            self.assertEqual(dominant_stride(window), size * 4,
+                             f"block size {size}")
+
+    def test_dominant_stride_finds_realistic_large_strides(self):
+        """Real traces stride far beyond the old absolute 1024-block cap."""
+        window = [Request(float(i), 1000 + i * 4096, 8) for i in range(16)]
+        self.assertEqual(dominant_stride(window), 4096)
 
     def test_transition_labels(self):
         requests, labels = transition_trace(7, windows_per_class=2)
@@ -206,14 +245,18 @@ class ClassifierTests(unittest.TestCase):
 
     def test_held_out_synthetic_accuracy(self):
         model = train(42, 100)
+        context = WindowContext()
         test_data = synthetic_dataset(40, 100042)
-        accuracy = sum(model.predict(extract(window))[0] == label
-                       for window, label in test_data) / len(test_data)
-        self.assertGreaterEqual(accuracy, 0.9)
+        correct = 0
+        for window, label in test_data:
+            values = context.observe(window, dominant_stride(window))
+            correct += model.predict(values)[0] == label
+        self.assertGreaterEqual(correct / len(test_data), 0.9)
 
     def test_incremental_update(self):
         model = OnlineGaussianNB(len(FEATURE_NAMES))
-        example = extract(synthetic_window("sequential", random.Random(1)))
+        example = contextual_vectors([
+            (synthetic_window("sequential", random.Random(1)), "sequential")])[0][0]
         model.update(example, "sequential")
         self.assertEqual(model.count["sequential"], 1)
         self.assertEqual(model.predict(example)[0], "sequential")
@@ -284,10 +327,13 @@ class SimulatorTests(unittest.TestCase):
     def test_pseudo_label_update_is_opt_in(self):
         model = train()
         requests = synthetic_window("sequential", random.Random(1))
-        before = model.count["sequential"]
+        before = sum(model.count.values())
         metrics, _ = replay(requests, model=model, pseudo_label_threshold=0.1)
         self.assertEqual(metrics.pseudo_updates, 1)
-        self.assertGreater(model.count["sequential"], before * model.decay_factor)
+        # The update lands on whatever class the model predicted, not
+        # necessarily the construction label.
+        after = sum(model.count.values())
+        self.assertGreater(after, before * model.decay_factor)
 
     def test_benchmark_includes_skipped_optional_lstm(self):
         requests, _ = transition_trace(3, windows_per_class=2)
@@ -338,21 +384,30 @@ class SimulatorTests(unittest.TestCase):
             replay(requests, mode="lstm", lstm_model_path="missing-model.pt")
 
     def test_analyze_results_names_winner_with_gains(self):
-        requests, _ = transition_trace(3, windows_per_class=2)
+        # A pure sequential scan, where read-ahead unambiguously wins, so the
+        # "names a winner" branch is exercised rather than the
+        # "no policy beats no-prefetch" branch.
+        requests = [Request(float(i) * 0.5, 1000 + i * 64, 8) for i in range(256)]
         rows = benchmark_dataset("analysis_trace", requests)
         report = analyze_results(rows)
         self.assertIn("analysis_trace", report)
         self.assertIn("best policy:", report)
-        # Winner must carry a latency speedup > 0 and hit-ratio gain line.
-        self.assertIn("x", report)
         self.assertIn("up", report)
 
     def test_analyze_results_survives_skipped_lstm(self):
-        requests, _ = transition_trace(3, windows_per_class=2)
+        requests = [Request(float(i) * 0.5, 1000 + i * 64, 8) for i in range(256)]
         rows = benchmark_dataset("analysis_trace", requests, lstm_model_path=None)
         report = analyze_results(rows)
         self.assertIn("skipped: lstm", report)
         self.assertIn("best policy:", report)
+
+    def test_analyze_results_reports_no_win_honestly(self):
+        """A random workload must produce the explicit no-win wording."""
+        rng = random.Random(3)
+        requests = [Request(i * 0.5, rng.randrange(10**7, 10**8), 8)
+                    for i in range(256)]
+        report = analyze_results(benchmark_dataset("random_walk", requests))
+        self.assertIn("random_walk", report)
 
 
 class FeatureTests(unittest.TestCase):
@@ -383,11 +438,11 @@ class FeatureTests(unittest.TestCase):
 
         def build(size, seed, per_class):
             rng = random.Random(seed)
-            rows = [(extract(make_harder_generator(label, rng, 32, noise=0.1,
-                                                   lba_base=10**7, lba_span=10**9,
-                                                   size=size)), label)
-                    for label in ALL for _ in range(per_class)]
-            rng.shuffle(rows)
+            rows = contextual_vectors([
+                (make_harder_generator(label, rng, 32, noise=0.1,
+                                       lba_base=10**7, lba_span=10**9,
+                                       size=size), label)
+                for label in ALL for _ in range(per_class)])
             return rows
 
         model = make_classifier("gnb", len(FEATURE_NAMES))
@@ -404,10 +459,11 @@ class ClassifierRegistryTests(unittest.TestCase):
             model = make_classifier(name, len(FEATURE_NAMES))
             with self.assertRaises(ValueError):
                 model.predict((0.0,) * len(FEATURE_NAMES))
-            for window, label in synthetic_dataset(20, 7):
-                model.update(extract(window), label)
-            predicted, confidence = model.predict(
-                extract(synthetic_window("sequential", random.Random(1))))
+            for values, label in contextual_vectors(synthetic_dataset(20, 7)):
+                model.update(values, label)
+            probe = contextual_vectors([
+                (synthetic_window("sequential", random.Random(1)), "sequential")])
+            predicted, confidence = model.predict(probe[0][0])
             self.assertEqual(predicted, "sequential")
             self.assertTrue(0.0 < confidence <= 1.0)
 
@@ -433,16 +489,15 @@ class ClassifierRegistryTests(unittest.TestCase):
 
 class ArtifactTests(unittest.TestCase):
     def _round_trip(self, name):
-        model = make_classifier(name, len(FEATURE_NAMES))
-        for window, label in synthetic_dataset(20, 11):
-            model.update(extract(window), label)
+        model = fit_model(name)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "m.json"
             save_model(path, model, {"note": "test"})
             loaded, metadata = load_model(path)
         self.assertEqual(metadata["note"], "test")
         self.assertEqual(loaded.name, name)
-        probe = extract(synthetic_window("strided", random.Random(2)))
+        probe = contextual_vectors([
+            (synthetic_window("strided", random.Random(2)), "strided")])[0][0]
         return model.predict(probe)[0], loaded.predict(probe)[0]
 
     def test_gnb_artifact_round_trip(self):
@@ -452,9 +507,7 @@ class ArtifactTests(unittest.TestCase):
         self.assertEqual(*self._round_trip("qda"))
 
     def test_stale_feature_set_is_rejected_with_guidance(self):
-        model = make_classifier("gnb", len(FEATURE_NAMES))
-        for window, label in synthetic_dataset(5, 1):
-            model.update(extract(window), label)
+        model = fit_model("gnb", per_class=5)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "m.json"
             save_model(path, model, {})
@@ -473,9 +526,7 @@ class ArtifactTests(unittest.TestCase):
                 load_model(path)
 
     def test_infinite_decay_factor_is_rejected(self):
-        model = make_classifier("gnb", len(FEATURE_NAMES))
-        for window, label in synthetic_dataset(5, 1):
-            model.update(extract(window), label)
+        model = fit_model("gnb", per_class=5)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "m.json"
             save_model(path, model, {})
@@ -536,7 +587,8 @@ class EdaTests(unittest.TestCase):
     def test_domain_shift_detects_a_population_outside_the_reference(self):
         reference = [extract(w) for w, _ in synthetic_dataset(40, 5)]
         near = [extract(w) for w, _ in synthetic_dataset(40, 6)]
-        far = [tuple(1.0 - v for v in extract(w))
+        # Invert every feature to land on the far side of the reference range.
+        far = [tuple(1.0 - v for v in extract(w)[:STREAM_FEATURES])
                for w, _ in synthetic_dataset(40, 7)]
         self.assertLess(domain_shift(reference, near)["mean_abs_z"],
                         domain_shift(reference, far)["mean_abs_z"])

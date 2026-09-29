@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import csv
+import random
 from pathlib import Path
 
 from .features import FEATURE_NAMES, extract
 from .model import DEFAULT_CLASSIFIER, make_classifier
-from .simulator import LatencyModel, replay
-from .trace import CLASSES, Request, synthetic_dataset, transition_trace
+from .simulator import DEFAULT_CAPACITY, LatencyModel, replay
+from .trace import (CLASSES, Request, synthetic_dataset, synthetic_window,
+                    transition_trace)
 
 MODES = ("none", "sequential", "strided", "stride", "markov", "lstm",
          "adaptive", "adaptive_evidence")
@@ -19,15 +21,44 @@ COLUMNS = ("dataset", "mode", "status", "hit_ratio", "precision", "recall",
 
 
 def make_model(seed: int = 42, examples_per_class: int = 100,
-               classifier: str = DEFAULT_CLASSIFIER):
+               classifier: str = DEFAULT_CLASSIFIER, contextual: bool = True):
+    """Fit a classifier on labelled synthetic windows.
+
+    With ``contextual=True`` the windows of a class are laid out as one
+    continuous stream so ``WindowContext`` accumulates block ages and
+    previous-window features exactly as it does at replay time. Training on
+    shuffled isolated windows would teach the model that the four contextual
+    features are always zero, which is a train/deploy mismatch.
+    """
+    from .features import WindowContext, dominant_stride
+
     model = make_classifier(classifier, len(FEATURE_NAMES))
-    for window, label in synthetic_dataset(examples_per_class, seed):
-        model.update(extract(window), label)
+    if not contextual:
+        for window, label in synthetic_dataset(examples_per_class, seed):
+            model.update(extract(window), label)
+        return model
+
+    for label in CLASSES:
+        rng = random.Random(seed)
+        context = WindowContext()
+        # One continuous run so block ages and window-to-window persistence
+        # carry real values rather than the cold-start defaults.
+        flat: list = []
+        time = 0.0
+        for _ in range(examples_per_class):
+            window = synthetic_window(label, rng, 32, time)
+            flat.extend(window)
+            time = window[-1].timestamp_ms
+        for start in range(0, len(flat), 32):
+            window = flat[start:start + 32]
+            if len(window) < 32:
+                break
+            model.update(context.observe(window, dominant_stride(window)), label)
     return model
 
 
 def benchmark_dataset(name: str, requests: list[Request], *, seed: int = 42,
-                      capacity: int = 128, window_size: int = 32,
+                      capacity: int = DEFAULT_CAPACITY, window_size: int = 32,
                       latency: LatencyModel | None = None,
                       lstm_model_path: str | None = None,
                       online_real: bool = False,

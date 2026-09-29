@@ -11,7 +11,8 @@ from .benchmark import (MODES, benchmark_dataset, drift_report, make_model,
 from .artifacts import load_model
 from .features import FEATURE_NAMES, extract
 from .model import CLASSIFIERS, DEFAULT_CLASSIFIER, OnlineGaussianNB
-from .simulator import LatencyModel, confusion_matrix, replay
+from .simulator import (DEFAULT_CAPACITY, LatencyModel, confusion_matrix,
+                         replay)
 from .trace import CLASSES, load_csv, synthetic_dataset, transition_trace, write_csv
 
 
@@ -237,7 +238,7 @@ def main() -> None:
     demo.add_argument("--train-per-class", type=int, default=100)
     demo.add_argument("--test-per-class", type=int, default=40)
     demo.add_argument("--windows-per-class", type=int, default=4)
-    demo.add_argument("--cache-blocks", type=int, default=128)
+    demo.add_argument("--cache-blocks", type=int, default=DEFAULT_CAPACITY)
     demo.add_argument("--classifier", default=DEFAULT_CLASSIFIER,
                       choices=tuple(CLASSIFIERS))
     replay_command = commands.add_parser("replay", help="replay a normalized CSV trace")
@@ -245,7 +246,7 @@ def main() -> None:
     replay_command.add_argument("--seed", type=int, default=42)
     replay_command.add_argument("--train-per-class", type=int, default=100)
     replay_command.add_argument("--window-size", type=int, default=32)
-    replay_command.add_argument("--cache-blocks", type=int, default=128)
+    replay_command.add_argument("--cache-blocks", type=int, default=DEFAULT_CAPACITY)
     replay_command.add_argument("--classifier", default=DEFAULT_CLASSIFIER,
                                 choices=tuple(CLASSIFIERS))
     replay_command.add_argument("--smoothing", type=int, default=0,
@@ -264,7 +265,7 @@ def main() -> None:
     benchmark.add_argument("--seeds", type=int, default=3)
     benchmark.add_argument("--windows-per-class", type=int, default=8)
     benchmark.add_argument("--window-size", type=int, default=32)
-    benchmark.add_argument("--cache-blocks", type=int, default=128)
+    benchmark.add_argument("--cache-blocks", type=int, default=DEFAULT_CAPACITY)
     benchmark.add_argument("--hit-us", type=float, default=5)
     benchmark.add_argument("--miss-us", type=float, default=100)
     benchmark.add_argument("--prefetch-us", type=float, default=50)
@@ -315,7 +316,7 @@ def main() -> None:
     eda.add_argument("--format", default="auto",
                      choices=("auto", "normalized", "msr", "iotta8", "alibaba", "revised"))
     eda.add_argument("--window-size", type=int, default=32)
-    eda.add_argument("--cache-blocks", type=int, default=128)
+    eda.add_argument("--cache-blocks", type=int, default=DEFAULT_CAPACITY)
     shift = commands.add_parser(
         "shift", help="domain shift between synthetic training and a real trace")
     shift.add_argument("trace")

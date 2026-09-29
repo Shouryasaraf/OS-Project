@@ -7,14 +7,15 @@ from pathlib import Path
 
 from .artifacts import save_model
 from .benchmark import make_model
-from .features import extract
+from .features import WindowContext, dominant_stride
 from .trace import CLASSES, load_csv, synthetic_dataset
 
 
 def synthetic_accuracy(model, seed: int) -> float:
+    context = WindowContext()
     held_out = synthetic_dataset(40, seed + 100000)
-    return sum(model.predict(extract(window))[0] == label
-               for window, label in held_out) / len(held_out)
+    return sum(model.predict(context.observe(w, dominant_stride(w)))[0] == label
+               for w, label in held_out) / len(held_out)
 
 
 def adapt_msr_sample(trace_path: str | Path, save_path: str | Path,
@@ -27,9 +28,12 @@ def adapt_msr_sample(trace_path: str | Path, save_path: str | Path,
     before = synthetic_accuracy(model, seed)
     complete_windows = len(requests) // window_size
     selected = 0
+    context = WindowContext()
     for index in range(complete_windows):
         window = requests[index * window_size:(index + 1) * window_size]
-        features = extract(window)
+        # Contextual features must be built the same way replay builds them,
+        # or the artifact would be trained on a different feature layout.
+        features = context.observe(window, dominant_stride(window))
         contiguous, repeated_stride, distant_jumps = features[:3]
         read_ratio = features[7]
         # A deliberately narrow proxy label. This does not certify workload

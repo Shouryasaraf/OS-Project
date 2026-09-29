@@ -43,7 +43,7 @@ from adaptive_prefetch.report import (  # noqa: E402
     real_world_section,
 )
 from adaptive_prefetch.simulator import (  # noqa: E402
-    LatencyModel, confusion_matrix, oracle_reference,
+    DEFAULT_CAPACITY, LatencyModel, confusion_matrix, oracle_reference,
 )
 from adaptive_prefetch.trace import (  # noqa: E402
     CLASSES, load_csv, synthetic_dataset, transition_trace,
@@ -237,12 +237,16 @@ def resolve_lstm(datasets: list[tuple[str, list]], interactive: bool,
 def classifier_facts(seed: int, train_per_class: int, test_per_class: int):
     """Held-out accuracy, confusion matrix, and mean confidence."""
     from adaptive_prefetch.benchmark import make_model
+    from adaptive_prefetch.features import WindowContext, dominant_stride
 
     model = make_model(seed, train_per_class)
+    # Contextual features need a stream, exactly as at replay time.
+    context = WindowContext()
     held_out = synthetic_dataset(test_per_class, seed + 100000)
     pairs = []
     for window, label in held_out:
-        predicted, confidence = model.predict(extract(window))
+        values = context.observe(window, dominant_stride(window))
+        predicted, confidence = model.predict(values)
         pairs.append((label, predicted, confidence))
     correct = sum(t == p for t, p, _ in pairs)
     confident = [c for t, p, c in pairs if t == p]
@@ -259,15 +263,22 @@ def transfer_probe(seeds: int = 4) -> list[dict]:
     """
     import random
 
+    from adaptive_prefetch.features import WindowContext, dominant_stride
     from adaptive_prefetch.model import make_classifier
     from adaptive_prefetch.pipeline import make_harder_generator
 
     def build(size, seed, per_class):
+        """Contextual vectors laid out as a stream, matching replay."""
         rng = random.Random(seed)
-        rows = [(extract(make_harder_generator(label, rng, 32, noise=0.15,
+        context = WindowContext()
+        rows = []
+        for label in CLASSES:
+            for _ in range(per_class):
+                window = make_harder_generator(label, rng, 32, noise=0.15,
                                                lba_base=10**7, lba_span=10**9,
-                                               size=size)), label)
-                for label in CLASSES for _ in range(per_class)]
+                                               size=size)
+                rows.append((context.observe(window, dominant_stride(window)),
+                             label))
         rng.shuffle(rows)
         return rows
 
@@ -295,7 +306,7 @@ def main(argv: list[str] | None = None) -> None:
                         help="prompt for datasets, cache size and LSTM")
     parser.add_argument("--quick", action="store_true",
                         help="skip LSTM training and the regime sweep")
-    parser.add_argument("--cache-blocks", type=int, default=128)
+    parser.add_argument("--cache-blocks", type=int, default=DEFAULT_CAPACITY)
     parser.add_argument("--window-size", type=int, default=32)
     parser.add_argument("--seeds", type=int, default=6,
                         help="seed pairs per cell in the classifier regime sweep")
@@ -474,7 +485,7 @@ def write_outputs(datasets, rows, drift, shifts, regime_rows, reference,
                 "shift_sd", "coverage"])
             writer.writeheader()
             for name, shift in shifts.items():
-                for feature in FEATURE_NAMES:
+                for feature, stats in shift["features"].items():
                     stats = shift["features"][feature]
                     writer.writerow({"dataset": name, "feature": feature,
                                      "ref_mean": round(stats["ref_mean"], 6),

@@ -13,7 +13,7 @@ the repo root, `python -m adaptive_prefetch ...` fails with
 
 ```powershell
 $env:PYTHONPATH='src'
-python -m unittest discover -s tests -v     # 76 tests, ~20s
+python -m unittest discover -s tests -v     # 79 tests, ~20s
 python main.py                              # full research run, no prompts, ~6 min
 python main.py --quick                      # skip LSTM + regime sweep
 python main.py --interactive                # guided dataset/LSTM picker
@@ -53,10 +53,10 @@ python -m adaptive_prefetch shift <trace>   # domain shift vs synthetic region
   assert this; keep the gate.
 - `adaptive_evidence` (`simulator.route_window`) routes on the window's own
   features — contiguity, repeated stride, jumpiness — and needs **no trained
-  model**. It is the mode to read for real-workload behaviour, because the
-  four-class classifier is trained on synthetic windows that sit ~12 sd from
-  real ones. Its thresholds were calibrated against the measured real-trace
-  feature distribution, not invented.
+  model**. Its thresholds were calibrated against the measured real-trace
+  feature distribution, not invented. Since the generator was corrected (D10)
+  it is much closer to the classifier than it was, and it wins outright on
+  `msrc_hm_1`.
 - Adding, removing, or **reordering** a mode breaks
   `test_benchmark_includes_skipped_optional_lstm`, which asserts
   `rows[0]["mode"] == "none"` and `rows[5]["status"].startswith("skipped")`.
@@ -83,13 +83,15 @@ python -m adaptive_prefetch shift <trace>   # domain shift vs synthetic region
 
 ## Do not swap in a "better" classifier on intuition
 
-`DEFAULT_CLASSIFIER` is `gnb`, and that was measured, not assumed. Naive Bayes
-already scores 100.00% ± 0.00 over 12 disjoint seed pairs on the shipped
-generator. QDA wins only on windows that straddle a phase change (86.8% vs
-64.8%) and **loses badly under the covariate shift this project actually
-faces** — 79% vs 100% when block size changes 1→128. Full numbers and the
-reasoning are in `docs/CLASSIFIER_EVAL.md`. The real accuracy bug was in
-`features.py` (absolute 64/16-block thresholds), not in the algorithm.
+`DEFAULT_CLASSIFIER` is `gnb`, and that was measured, not assumed. QDA wins
+only on windows that straddle a phase change (86.6% vs 60.5%) and **loses
+under the covariate shift this project faces** — 91.7% vs 100% when block size
+changes 1→128. Reasoning is in `docs/DECISIONS.md` D1.
+
+Note the pre-D10 figures quoted in `docs/CLASSIFIER_EVAL.md` (100.00% ± 0.00
+held-out accuracy) were a property of the *degenerate* generator. The
+generator now produces realistic within-class variance and held-out accuracy
+is **0.9688**, which is the intended outcome, not a regression.
 
 ## Artifacts and feature changes
 
@@ -101,6 +103,13 @@ reasoning are in `docs/CLASSIFIER_EVAL.md`. The real accuracy bug was in
 - Changing `FEATURE_NAMES` or `CLASSES` invalidates the committed
   `models/msr_sample_gnb.json`; regenerate it with
   `python -m adaptive_prefetch train-msr-sample`.
+- `FEATURE_NAMES` is now **12**: 8 stream features plus 4 contextual ones
+  (`reuse_ratio`, `reuse_distance_log`, `contiguous_delta`, `stride_persist`).
+  They are produced by `features.WindowContext`, which carries a block-age
+  table across windows. `extract()` still returns only the 8 stream features
+  (`STREAM_FEATURES`), so any caller using `extract` against a 12-feature
+  model will raise. `benchmark.make_model` lays training windows out as one
+  continuous stream precisely so train and replay build the same vector.
 - `models/*` (except `msr_sample_gnb.json`) and `outputs/` are gitignored, so
   regenerated LSTM/result artifacts will not be committed by accident.
 - `models/msr_sample_gnb.json` was adapted **in-sample** on
@@ -129,11 +138,11 @@ service times (`.revised` column 6, retained on `Request.service_ms`).
   file as a `list[Request]` — measured ~5.6 MB/s and ~17M dataclass instances per
   GB. `main.py` samples five of them and caps each at 40k requests; do not
   raise that without a runtime reason.
-- The default cache is **128 blocks**, but these traces issue 8-128-block
-  requests, so it holds 1-16 whole requests. On `proj_3`, 128 → 2048 blocks
-  moves no-prefetch hit ratio from 0.32% to 67.37%. This is a known
-  mis-specification, left in place because changing it would silently restate
-  every previously reported number. See `docs/DECISIONS.md` D9.
+- The default cache is `simulator.DEFAULT_CAPACITY` = **2048 blocks** (1 MiB
+  at 512 B). It was 128, which was calibrated for the old generator's 1-3
+  block requests; with realistic 8-128-block requests 128 blocks held ~16
+  whole requests and starved every policy. Hit ratios saturate by 2048. See
+  `docs/DECISIONS.md` D10.5.
 - Five loader profiles: `normalized, msr, iotta8, alibaba, revised`. `auto`
   detects by column name only; headerless `iotta8` and `.revised` need an
   explicit `--format`. Loaders validate ascending timestamps and report the
@@ -148,9 +157,12 @@ This is a graded lab submission (`docs/reference/*.pdf`). Several docs
 independently forbid overclaiming. If you touch numbers, README, docs, or the
 slide deck, preserve:
 
-- Latency/speedup is a **configured cost model** (defaults 5 µs hit / 100 µs
-  demand miss / 50 µs prefetch), not measured device latency. No queueing,
-  bandwidth, or prefetch-completion modelling.
+- Latency/speedup comes from a **cost model**. `LatencyModel.measured()`
+  calibrates hit/miss/prefetch from the trace's own recorded device service
+  times (means 260-5491 µs, vs the 100 µs the original assumption used). The
+  **hit** cost is still an approximation (1% of mean service) because the
+  traces record device time only, never cache time. No queueing, bandwidth,
+  or prefetch-completion modelling.
 - Classification accuracy is on **independently generated synthetic windows**,
   never verified real-trace accuracy. The MSR sample has no four-class labels.
 - LSTM predicts address **deltas**, not workload classes — compare cache metrics
@@ -174,12 +186,12 @@ slide deck, preserve:
   accuracy 1.000 — frozen and online are identical because the task is
   saturated. The console prints that warning, but a reviewer skimming the
   table may miss it. The `transition_heavy` regime is the non-saturated task.
-- **The real-workload result is negative** and is reported as such: no
-  prefetcher beats no-prefetch on hit ratio on real traces, under either cost
-  model. Do not soften this into a partial win. The defensible positive claim
-  is that the evidence router issues 3-4x fewer prefetches for comparable hit
-  ratio. See `docs/DECISIONS.md` D9 for the three hypotheses that were tested
-  and rejected before this conclusion.
+- **The real-workload result is still mostly negative** and is reported as
+  such: fixed read-ahead beats the adaptive policy on 6 of 7 real traces at
+  the corrected 2048-block cache. `msrc_hm_1` is the one dataset where
+  adaptive wins. Do not soften this. See `docs/DECISIONS.md` D9 for the three
+  hypotheses tested and rejected, and D10 for why the generator fix changed
+  the numbers but not this conclusion.
 - `docs/architecture.md` claims `main.py` applies a "per-trace request limit"
   when training the LSTM; it does not — it trains on the whole selected sample
   and prints a duration warning.
