@@ -272,6 +272,13 @@ slide deck, preserve:
   depth was found to be the missing dimension: fixed depth-8 read-ahead is
   worth **+4.10 points** of mean hit ratio over the depth-2 baseline every
   earlier mode used, up to +11.05 on `src2_2` (D13).
+- **The collection-wide result (D17)** settles it: across the full sweep
+  (32 traces x 250k requests) all eleven non-deep modes fall within **0.55
+  points** of mean hit ratio, and `deep` sits **4.42 points above the best of
+  them**. The trained `adaptive` classifier is the *worst* of the twelve,
+  below `none`. Per-trace winners: `deep` 29, `none` 2, `adaptive` 1. Any
+  future work that wants to show the classifier is competitive has to beat
+  depth, not depth-2 read-ahead.
 - **What actually wins on real data** (first 40k requests of 8 traces,
   2048-block cache, `docs/DECISIONS.md` D14): `deep` (fixed depth-8
   read-ahead) has the highest hit ratio on **6 of 8**, and is by far the most

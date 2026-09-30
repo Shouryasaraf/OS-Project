@@ -869,6 +869,93 @@ columns in `outputs/msrc_sweep.csv`.
 tests were not exercising the window they named. The floor is now a named
 `MIN_WINDOW` and the tests use it explicitly and prove the window rolls.
 
+## D17. Collection-wide confirmation: depth is the whole result
+
+The full MSRC collection, all 32 traces at 250,000 requests each (the default
+cap), 2048-block cache, 12 modes, 384 rows, 3362 s. 31 traces score; `wdev_1`
+has no read requests.
+
+Request-weighted means, as reported by `sweep_modes.py`:
+
+| mode | mean hit | mean precision | mean us/read | wasted / issued | traces won |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `deep` | **51.48%** | 45.26% | 4952.02 | 5,862,075 / 11,180,287 | **29/31** |
+| `sequential` | 46.91% | 45.40% | 4367.04 | 1,437,248 / 2,756,740 | 0/31 |
+| `lstm` | 46.59% | 41.60% | 4166.49 | 305,111 / 620,325 | 0/31 |
+| `adaptive_evidence` | 46.56% | 50.17% | 4228.30 | 605,842 / 1,362,927 | 0/31 |
+| `correlate` | 46.55% | 40.74% | 4163.99 | 188,334 / 326,028 | 0/31 |
+| `guard` | 46.44% | 43.57% | 4172.56 | 182,298 / 338,519 | 0/31 |
+| `depth_adaptive` | 46.44% | 43.57% | 4172.56 | 182,298 / 338,519 | 0/31 |
+| `markov` | 46.54% | 49.65% | 4134.76 | 132,401 / 358,838 | 0/31 |
+| `strided` | 46.41% | 46.83% | 4106.31 | 9,436 / 32,898 | 0/31 |
+| `none` | 46.38% | 0.00% | **4104.80** | - | 1/31 |
+| `stride` | 46.38% | 61.23% | 4119.06 | 33,412 / 121,992 | 0/31 |
+| `adaptive` | 46.34% | 53.79% | 4179.61 | 313,072 / 874,017 | 1/31 |
+
+Unweighted per-trace means (each trace counts once, so one huge trace cannot
+dominate), which is the fairer comparison:
+
+| | mean hit | vs `none` |
+| --- | ---: | ---: |
+| `deep` | 49.87% | **+4.94 pp** |
+| `sequential` | 45.45% | +0.52 pp |
+| `lstm` | 45.13% | +0.20 pp |
+| `adaptive_evidence` | 45.10% | +0.17 pp |
+| `correlate` | 45.10% | +0.16 pp |
+| `markov` | 45.09% | +0.15 pp |
+| `guard` | 44.99% | +0.06 pp |
+| `depth_adaptive` | 44.99% | +0.06 pp |
+| `strided` | 44.96% | +0.02 pp |
+| `none` | 44.93% | - |
+| `stride` | 44.93% | -0.01 pp |
+| `adaptive` | 44.89% | **-0.04 pp** |
+
+**The decisive number is the contrast between two spreads.** All eleven
+non-deep modes fall within **0.55 points** of each other, and the trained
+classifier is the *worst* of them, below doing nothing. `deep` sits **4.42
+points above the best of them** -- eight times the entire spread of policy
+choice.
+
+That is the D13 thesis at collection scale, and it retires the question this
+project spent most of its effort on. Choosing *which* prefetching heuristic
+to apply is worth at most half a point. Choosing how *deep* to prefetch is
+worth five. Every earlier conclusion here -- including the "a perfect router
+has only +0.4 points of headroom" result that motivated the whole inversion
+of the target -- was measured correctly but against a degenerate baseline
+that prefetched 2 blocks.
+
+Per-trace winners: `deep` 29, `none` 2, `adaptive` 1.
+
+### Where the feedback gate actually helps
+
+`guard` beats `sequential` on **3 of 31** traces:
+
+| trace | `guard` | `sequential` | `none` | gate vs seq |
+| --- | ---: | ---: | ---: | ---: |
+| web_3 | 44.69% | 25.70% | 50.61% | **+18.99** |
+| proj_3 | 67.27% | 66.63% | 67.37% | +0.63 |
+| hm_1 | 34.57% | 34.34% | 34.69% | +0.23 |
+
+On the other 28 it loses. What it consistently buys is far less wasted I/O:
+11.1% to 11.4% of `sequential`'s waste on the five largest offenders
+(prn_1 9,219 vs 83,170; src2_2 6,352 vs 56,914; src1_1 12,684 vs 112,671).
+A consistent ~89% reduction in speculative I/O for a small hit-ratio cost.
+
+`correlate` is the better gate on web_3: **48.18%** against `guard`'s 44.69%,
+on 272 wasted prefetches against 802. Requiring a confirmed stride *and* a
+positive margin makes it the most conservative variant, and on the one trace
+where conservatism is what pays, it is the one that pays most. It still does
+not reach `none` (50.61%).
+
+### What this does not say
+
+`deep` buys its +4.94 points with 11.2 million prefetches of which **5.86
+million are never read** -- 52% waste, and 4x the volume `sequential`
+issues. At the default cost model the modelled us/read is 4952 against
+`none`'s 4105, so this is a losing trade in the only currency the traces can
+actually be measured in. The hit-ratio win is real; the claim that it is
+worth having is not supported, and the two must be reported together.
+
 ### On the strength of the regression tests
 
 The audit reintroduced each of the seven original bugs one at a time and

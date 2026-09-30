@@ -75,6 +75,34 @@ time only. Use `--prefetch-multiple` to explore it. See `docs/DECISIONS.md` D11.
 **Read hit ratio, precision and wasted I/O; treat modelled cost as degenerate
 unless the break-even is printed.**
 
+### What wins across the whole collection
+
+Full MSRC sweep, 32 traces x 250,000 requests, 12 modes, 384 rows. Unweighted
+mean hit ratio per trace, so one huge trace cannot dominate:
+
+| mode | mean hit | vs `none` |
+| --- | ---: | ---: |
+| `deep` (fixed depth-8 read-ahead) | 49.87% | **+4.94 pp** |
+| `sequential` (depth-2 read-ahead) | 45.45% | +0.52 pp |
+| ... eight other modes | 44.96-45.13% | +0.02 to +0.20 pp |
+| `none` | 44.93% | - |
+| `adaptive` (trained classifier) | 44.89% | **-0.04 pp** |
+
+**All eleven non-deep modes fall within 0.55 points of each other, and the
+trained classifier is the worst of them.** `deep` sits 4.42 points above the
+best of them -- eight times the entire spread of policy choice. Per-trace
+winners: `deep` 29, `none` 2, `adaptive` 1.
+
+Choosing *which* prefetching heuristic to apply is worth at most half a
+point. Choosing how *deep* to prefetch is worth five. Every earlier
+conclusion in this project was measured correctly but against a degenerate
+baseline that prefetched 2 blocks.
+
+The caveat is that `deep` issues 11.2 million prefetches across the sweep, of
+which 5.86 million are never read, and its modelled us/read is 4952 against
+`none`'s 4105. The hit-ratio win is real; the claim that it is worth having
+is not supported. Report both. See `docs/DECISIONS.md` D17.
+
 ### What actually wins on real traces
 
 Measured over 8 real traces capped at 40k requests (`docs/DECISIONS.md` D14):
