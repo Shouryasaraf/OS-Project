@@ -5,7 +5,7 @@ disjoint train/test seeds. Regenerate anything here before presenting it.
 
 ```
 $env:PYTHONPATH='src'
-python -m unittest discover -s tests            # 60 tests
+python -m unittest discover -s tests            # 131 tests
 python -m adaptive_prefetch evaluate            # classifier x regime table
 python -m adaptive_prefetch eda <trace>         # trace profile
 python -m adaptive_prefetch shift <trace>       # domain shift vs synthetic
@@ -22,15 +22,28 @@ seed `900000+i`), that is not what the data shows on the shipped generator:
 
 | regime | gnb | qda |
 | --- | ---: | ---: |
-| baseline | **100.00 ± 0.00** | **100.00 ± 0.00** |
-| noisy (30% random jumps) | 99.95 ± 0.17 | 99.95 ± 0.17 |
-| overlap (strides 1-3) | 100.00 ± 0.00 | 100.00 ± 0.00 |
-| realistic (1e8-1e11 LBA, 8-block) | 100.00 ± 0.00 | 100.00 ± 0.00 |
-| transition (50% phase blend) | 51.25 ± 4.85 | 50.26 ± 3.36 |
-| transition_heavy (75% blend) | 64.79 ± 5.74 | **86.77 ± 1.89** |
+| baseline | 99.58 +/- 0.59 | **99.90 +/- 0.23** |
+| noisy (30% random jumps) | 99.95 +/- 0.17 | 99.95 +/- 0.17 |
+| overlap (strides 1-3) | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
+| overlap2 | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
+| realistic (1e8-1e11 LBA, 8-block) | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
+| transition (50% phase blend) | **51.25 +/- 4.85** | 50.26 +/- 3.36 |
+| transition_heavy (75% blend) | 64.79 +/- 5.74 | **86.77 +/- 1.89** |
 
-Naive Bayes was already at 100.00% with zero variance. **The 100% headline in
-`docs/STAGE2_RESULTS.md` is a property of the generator, not of the model.**
+Held-out accuracy for the model `main.py` actually ships is **0.9688
+(155/160 windows)**, mean confidence on correct predictions 0.9980. The
+confusion matrix has 2 errors in 160, both `strided` windows predicted
+`sequential`.
+
+That accuracy is high and largely irrelevant, because the decision it feeds
+is worth very little. See section 5.
+
+*Corrected:* an earlier version of this table read 100.00 +/- 0.00 across the
+board. That was a property of the **old degenerate generator**, which had no
+within-class variance at all. The corrected generator produces realistic
+variance, and 0.9688 is the intended outcome, not a regression. The 100%
+headline in `docs/STAGE2_RESULTS.md` is likewise a property of the generator,
+and that document is now marked stale.
 
 ### What was actually broken: two absolute thresholds in the features
 
@@ -73,9 +86,12 @@ train/deploy distribution shift. Standardisation (`--standardize`) was tested
 and made **both** models worse, because the features are already ratios in
 [0, 1] and z-scoring destroys that structure; it is off by default.
 
-Cost, per window at `window_size=32`: 24.7 µs predict / 2.8 ms train for
-Naive Bayes, 22.7 µs / 8.3 ms for QDA. Both are negligible against the
-simulator's own 5 µs hit and 100 µs demand-miss cost model.
+Cost, median over regimes: **17.69 us** predict / 1.86 ms train for Naive
+Bayes, 14.63 us / 5.72 ms for QDA. Both are negligible next to the cost model
+they act in, whose *measured* demand-miss cost is 260-5491 us. A prediction
+costs about 0.3% of the single cache miss it might avoid, and about 5% of the
+read-ahead it competes with.
+
 
 ---
 
@@ -227,3 +243,75 @@ Measured mean service time is 260-5491 us, so the assumed 100 us demand-miss
 cost understated a miss by 3-50x. `LatencyModel.measured()` calibrates from the
 **mean**, not the median: 65-87% of requests complete in under a microsecond,
 so a median-based model collapses to a near-zero cost.
+
+---
+
+## 6. Why the classifier is not the bottleneck (added D13/D17)
+
+Everything above measures the classifier working as designed. The reason that
+work does not show up in the cache numbers is that **the decision it makes is
+worth at most half a point**, while the dimension nobody was tuning is worth
+five.
+
+Full MSRC collection, 32 traces x 250,000 requests, 12 modes, 384 rows, 31
+traces scored. Unweighted mean hit ratio per trace, so one large trace cannot
+dominate the average:
+
+| | mean hit | vs `none` |
+| --- | ---: | ---: |
+| `deep` (fixed depth-8 read-ahead) | 49.87% | **+4.94 pp** |
+| `sequential` (depth-2 read-ahead) | 45.45% | +0.52 pp |
+| `lstm` | 45.13% | +0.20 pp |
+| `adaptive_evidence` | 45.10% | +0.17 pp |
+| `correlate` | 45.10% | +0.16 pp |
+| `markov` | 45.09% | +0.15 pp |
+| `guard` | 44.99% | +0.06 pp |
+| `depth_adaptive` | 44.99% | +0.06 pp |
+| `strided` | 44.96% | +0.02 pp |
+| `none` | 44.93% | - |
+| `stride` | 44.93% | -0.01 pp |
+| `adaptive` (this project's classifier) | 44.89% | **-0.04 pp** |
+
+**All eleven non-deep modes fall within 0.55 points of one another.** The
+trained classifier is the *worst* of the twelve, below doing nothing. `deep`
+sits 4.42 points above the best of them -- eight times the entire spread of
+policy choice. Per-trace winners: `deep` 29, `none` 2, `adaptive` 1.
+
+Isolating depth from policy choice, on 8 real traces capped at 40,000
+requests, 2048-block cache:
+
+| depth | 1 | 2 (every earlier mode) | 4 | 8 (default) | 16 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| mean hit ratio | 33.12% | 33.77% | 35.08% | **37.87%** | 38.43% |
+| gain over depth 2 | -0.65 | - | +1.31 | **+4.10** | +4.66 |
+
+### This retires the "no routing decision can help" result
+
+D9 concluded, from a perfect-window-router oracle experiment, that policy
+selection had only +0.4 points of headroom and the traces were "not
+recoverable from request history". That experiment was correct and the
+conclusion was still wrong, because every candidate policy it routed between
+prefetched exactly 2 blocks. The oracle was choosing between eight ways of
+prefetching the same amount.
+
+The correct statement is narrower: **choosing between prefetching *strategies*
+is worth at most half a point; choosing how *deep* to prefetch is worth five.**
+The "not recoverable from request history" diagnosis still holds for the
+classifier specifically -- a 96.7%-accurate four-class window label is not a
+next-address predictor, and the traces are ~49% backward seeks with reuse
+distances far exceeding the cache.
+
+### What would make the classifier relevant
+
+Not a better classifier. A decision worth making. Concretely, the gap to close
+is between a fixed depth and a *workload-dependent* depth, which is a
+regression on observed reuse distance rather than a 4-way class label. The
+feedback gate in `guard.py` is a first, crude attempt at exactly that -- it
+throttles on measured precision -- and it is the mode that wins on the one
+trace where prefetching actively destroys the cache (`web_3`: 48.18% for
+`correlate`, 44.69% for `guard`, against `sequential`'s 25.70%, with 87-95%
+less wasted I/O). It beats `sequential` on only 3 of 31 traces overall.
+
+So the honest summary of this project: the classifier is competent and
+irrelevant, depth is decisive and unguarded, and the interesting open problem
+is per-window depth selection.

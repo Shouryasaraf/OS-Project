@@ -11,11 +11,14 @@ system or perform physical disk reads.
 | Location | Contents |
 | --- | --- |
 | `src/adaptive_prefetch/` | Trace loading, features, models, policies, replay, benchmark, and CLI |
-| `tests/` | Automated checks |
+| `src/adaptive_prefetch/guard.py` | Feedback-gated policies: observed prefetch precision vs break-even |
+| `tests/` | Automated checks (131) |
 | `data/samples/` | Small demonstration traces and format notes |
-| `docs/` | Pipeline, implementation plan, architecture, Review 2 guide, and results |
+| `data/MSRC-trace-003/final-trace/` | The 32-file, 11.86 GB collection (gitignored) |
+| `docs/` | Pipeline, architecture, decision log, classifier analysis, Review 2 guide, results |
 | `docs/reference/` | Original lab brief |
-| `presentation/` | Review 2 slide deck |
+| `presentation/` | Review 2 slide decks (both currently stale) |
+| `outputs/` | Generated results (gitignored) |
 
 Run commands below from the repository root. Keep new trace datasets under
 `data/` and generated benchmark outputs under `outputs/` (create that ignored
@@ -31,17 +34,31 @@ folder before writing results there).
 - A supervised Gaussian Naive Bayes model with incremental updates, plus an
   optional shrinkage-regularized online QDA (`--classifier qda`) for
   workloads whose classes overlap in correlated feature space.
-- Class-to-policy routing, LRU cache replay, and seven comparison modes:
-  no prefetch, fixed sequential, window-based strided, classic stride,
-  delta Markov, optional offline LSTM, and adaptive classification.
-- Benchmark tables with oracle re-access recall, configurable modelled latency,
-  inference timing, synthetic drift comparison, and optional pseudo-label tests.
+- Class-to-policy routing, LRU cache replay, and **twelve comparison modes**
+  in four families:
+  - *fixed* -- `none`, `sequential`, `deep` (depth-8 read-ahead), `strided`
+  - *online per-request* -- `stride`, `markov`, optional offline `lstm`
+  - *classifier-routed* -- `adaptive`
+  - *evidence-routed* -- `adaptive_evidence` (no trained model)
+  - *feedback-gated* -- `guard`, `depth_adaptive`, `correlate`, which set
+    read-ahead depth from the **realised** precision of their own prefetches.
+    Causal, needs no model and no future knowledge.
+- Configurable decision cadence (`policy_interval`) so the gate can react
+  inside a classifier window, and a configurable read-ahead depth for `deep`.
+- Benchmark tables with oracle re-access recall, configurable modelled latency
+  (calibrated from each trace's own recorded service times), inference timing,
+  synthetic drift comparison, and optional pseudo-label tests.
+- A memory-bounded streaming sweep (`sweep_modes.py`) over the whole MSRC
+  collection, bit-identical to the in-memory replay across chunk boundaries.
 - Exploratory data analysis: trace profiling, locality and reuse ceilings,
   cluster structure, and domain-shift measurement against the synthetic
   training region.
 - Held-out synthetic classification test, confusion matrix, workload-transition
   demonstration, cache hit ratio, prefetch precision, and unused-prefetch count.
-- Standard-library unit tests. No packages need to be downloaded to run from source.
+- Standard-library unit tests. No packages need to be downloaded to run from
+  source. The core is stdlib-only by design; `torch` is installed here, so the
+  LSTM path is live, but `models/lstm_delta.pt` is gitignored and must be
+  trained before that row reports anything other than `skipped`.
 
 ## Run
 
@@ -147,7 +164,7 @@ or install with `pip install -e .`):
 $env:PYTHONPATH='src'
 python -m unittest discover -s tests -v          # unit tests
 python -m adaptive_prefetch demo                 # classifier accuracy + confusion matrix
-python -m adaptive_prefetch benchmark            # seven-policy comparison matrix
+python -m adaptive_prefetch benchmark            # 12-mode comparison matrix
 python -m adaptive_prefetch replay path\to\trace.csv
 python -m adaptive_prefetch replay path\to\trace.csv --format alibaba
 python -m adaptive_prefetch replay data/samples/msr-cambridge1-sample.csv --model-path models/msr_sample_gnb.json

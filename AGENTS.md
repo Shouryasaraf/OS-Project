@@ -118,10 +118,13 @@ only on windows that straddle a phase change (86.6% vs 60.5%) and **loses
 under the covariate shift this project faces** — 91.7% vs 100% when block size
 changes 1→128. Reasoning is in `docs/DECISIONS.md` D1.
 
-Note the pre-D10 figures quoted in `docs/CLASSIFIER_EVAL.md` (100.00% ± 0.00
-held-out accuracy) were a property of the *degenerate* generator. The
-generator now produces realistic within-class variance and held-out accuracy
-is **0.9688**, which is the intended outcome, not a regression.
+`docs/CLASSIFIER_EVAL.md` carries the **corrected** post-D10 figures: the
+regime table reads 99.58 +/- 0.59 (baseline) rather than 100.00 +/- 0.00, and
+the shipped model's held-out accuracy is **0.9688** (155/160), which is the
+intended outcome of the fixed generator, not a regression. It also records
+`MSR_SAMPLE_TRAINING.md`'s 0.969 -> 0.956 adaptation check. The pre-D10
+numbers survive only in the D1/D5 history inside `DECISIONS.md`, which now
+carries an explicit supersession note.
 
 ## Artifacts and feature changes
 
@@ -258,7 +261,9 @@ slide deck, preserve:
   They carry pre-fix numbers including the old LSTM rows (~7% hit ratio) and
   the old "7.3x faster inference" claim (the real gap is ~640x per request).
   They must be regenerated from a fresh `python main.py` before presenting.
-  `docs/CLASSIFIER_EVAL.md` and `docs/DECISIONS.md` are current.
+  `docs/CLASSIFIER_EVAL.md`, `docs/PIPELINE.md`, `docs/REVIEW2.md`,
+  `docs/architecture.md`, `docs/MSR_SAMPLE_TRAINING.md` and
+  `docs/DECISIONS.md` are current.
 - **The drift report demonstrates nothing.** All eight rows are lag 0,
   accuracy 1.000 — frozen and online are identical because the task is
   saturated. The console prints that warning, but a reviewer skimming the

@@ -242,10 +242,33 @@ all real-trace commands accept `--format` and the LSTM-related commands a
 
 `main.py` is the guided full run: it asks for demo/cache/window/dataset
 selection (synthetic, MSR sample, MSRC-trace-003 final traces, custom file),
-optional LSTM inclusion with retrain-or-cached prompt and per-trace request
-limit, latency model, and output saving; then prints the classifier demo, the
-benchmark table, the result interpretation, and the drift report, and saves
-`outputs/results.md` + `outputs/results.csv`.
+optional LSTM inclusion with a retrain-or-cached prompt, latency model, and
+output saving; then prints the cost-model block with its break-even, the
+classifier demo, the benchmark table, the result interpretation, and the drift
+report, and saves `outputs/results.md` + `outputs/results.csv`. With no
+arguments it runs non-interactively. Note that it does **not** apply a
+per-trace request limit when training the LSTM -- it trains on the whole
+selected sample and prints a duration warning.
+
+`--prefetch-multiple` (default 1.0) sets what a speculative read costs
+relative to a demand read. It is a first-class flag on both `main.py` and
+`sweep_modes.py` because the setting decides whether the modelled-cost column
+is meaningful at all; see the cost model note below.
+
+`sweep_modes.py` is the collection-wide runner: it streams every `.revised`
+trace in bounded chunks under every mode in `sweep.RANKING_MODES`, so the
+32-file, 11.86 GB collection is swept without materialising it.
+
+## Mode map
+
+| Family | Modes | What decides the policy |
+| --- | --- | --- |
+| Fixed | `none`, `sequential`, `deep`, `strided` | Nothing. `deep` varies only depth (`DEFAULT_READ_AHEAD_DEPTH`, 8 blocks). |
+| Online per-request | `stride`, `markov`, `lstm` | Address deltas. Expose `next_candidates(request)`. |
+| Classifier-routed | `adaptive` | A 4-class window label from `OnlineGaussianNB`, one decision per window. |
+| Evidence-routed | `adaptive_evidence` | `route_window()` on the window's own measured features. No model. |
+| Feedback-gated | `guard`, `depth_adaptive`, `correlate` | `GateController` comparing *realised* prefetch precision against break-even. No model, no prediction. |
+
 
 ## Evaluation metrics and their limits
 
@@ -258,7 +281,17 @@ benchmark table, the result interpretation, and the drift report, and saves
   still-resident at stream end): a proxy for cache pollution.
 - **Modelled latency/speedup** - under configured hit/miss/prefetch costs;
   queueing, bandwidth, asynchronous completion, and device scheduling are not
-  modelled.
+  modelled. **This metric is degenerate at the default
+  `prefetch_multiple=1.0`**: break-even precision is 1.0101, so no prefetcher
+  can pay for itself and "no prefetch" wins the column by arithmetic. Read
+  `LatencyModel.break_even_precision()` before interpreting any cost ranking.
+  The **hit** cost remains an approximation (1% of mean service) because the
+  traces record device time only, never cache time.
+- **Observed precision / margin / stride** (`observed_precision`,
+  `precision_margin`, `observed_stride`) - what the feedback gate actually
+  measured, as opposed to predicted. `observed_precision` is `None` when the
+  gate never issued a prefetch, so "never measured" stays distinguishable from
+  "measured as zero". These are written to `outputs/msrc_sweep.csv` per row.
 
 ## Non-goals
 
@@ -267,3 +300,8 @@ benchmark table, the result interpretation, and the drift report, and saves
   default on real traces)
 - Redistribution of MSR Cambridge or SNIA IOTTA traces (licensing)
 - Performance claims beyond the modelled cache simulation
+- Adapting read-ahead *depth*. Depth is the dimension that decides the
+  hit-ratio outcome (D13, D17: +4.10 points from depth alone versus a 0.55
+  point spread across every other mode), and nothing in this codebase varies
+  it per window. That is the main open problem, and it is a regression on
+  observed reuse distance rather than a 4-class label.

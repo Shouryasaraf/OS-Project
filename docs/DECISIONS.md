@@ -74,6 +74,10 @@ that structure. Off by default.
 
 **What this means for the original request:** Naive Bayes was never the
 accuracy bottleneck. It was at 100.00% ± 0.00 on the shipped generator
+*Superseded: D10 later fixed the generator. The corrected figures are
+99.58 +/- 0.59 on baseline with 0.9688 held-out -- see
+`CLASSIFIER_EVAL.md` section 1. The decision recorded here is unaffected;
+the numbers quoted were not real.*
 before any of this work. See D2.
 
 ---
