@@ -1,166 +1,41 @@
-# ML-Based Adaptive Disk I/O Prefetching
+# Adaptive product-page prefetching on real clickstreams
 
-A user-space, simulation-first prototype for **Machine Learning-Based Adaptive
-Disk I/O Prefetching Using Workload Pattern Classification**. The central path
-is: trace requests → window features → online-capable classifier → pattern-based
-prefetch policy → LRU cache simulation. It does **not** modify the operating
-system or perform physical disk reads.
+This branch replaces the earlier disk-I/O prototype with a reproducible web-prefetch experiment. It uses [RetailRocket's public Kaggle e-commerce events](https://www.kaggle.com/datasets/retailrocket/ecommerce-dataset), version 2, under its stated CC BY-NC-SA 4.0 license. Training, validation, replay, and the demonstration use recorded visitor events—not generated traffic. Small constructed examples in `tests/` test code behavior only.
 
-## Repository layout
+## What the system does
 
-| Location | Contents |
-| --- | --- |
-| `src/adaptive_prefetch/` | Trace loading, features, models, policies, replay, benchmark, and CLI |
-| `tests/` | Automated checks |
-| `data/samples/` | Small demonstration traces and format notes |
-| `docs/` | Pipeline, implementation plan, Review 2 guide, and results |
-| `docs/reference/` | Original lab brief |
-| `presentation/` | Review 2 slide deck |
+After a visitor views a product page, the system retrieves plausible next products from older clickstream transitions. A logistic model scores those candidates using only known history. The controller chooses how many, if any, to prefetch into that visitor session's browser cache. A replay compares this adaptive controller with no prefetch, fixed depths, and a confidence gate. A hit is a later product view already in that session's cache; issued but unused prefetches are counted as waste.
 
-Run commands below from the repository root. Keep new trace datasets under
-`data/` and generated benchmark outputs under `outputs/` (create that ignored
-folder before writing results there).
+There is no measured network latency, page size, or response cacheability in this dataset. Results are object-cache simulation outcomes, **not page-load speedups**. Prefetch costs in the report are sensitivity assumptions, not measured bytes or energy.
 
-## What is implemented
+## Run the complete pipeline
 
-- Reproducible synthetic sequential, strided, random, and mixed I/O traces.
-- Validated CSV trace import and export.
-- Window-level, size-aware sequentiality and stride features.
-- A supervised Gaussian Naive Bayes model with incremental updates.
-- Class-to-policy routing, LRU cache replay, and seven comparison modes:
-  no prefetch, fixed sequential, window-based strided, classic stride,
-  delta Markov, optional offline LSTM, and adaptive classification.
-- Benchmark tables with oracle re-access recall, configurable modelled latency,
-  inference timing, synthetic drift comparison, and optional pseudo-label tests.
-- Held-out synthetic classification test, confusion matrix, workload-transition
-  demonstration, cache hit ratio, prefetch precision, and unused-prefetch count.
-- Standard-library unit tests. No packages need to be downloaded to run from source.
-
-## Run
-
-From the repository root. The quick, **guided full run** — asks for inputs,
-then runs the classifier demo, the seven-policy benchmark, and the drift
-report, saving `outputs/results.md` + `outputs/results.csv`:
+Python 3.10+ is required. In PowerShell, from the repository root:
 
 ```powershell
-python main.py
+python -m pip install -e .
+webprefetch run
+webprefetch demo
+python -m unittest discover -s tests -v
 ```
 
-For specific tasks, call the modules directly (set `PYTHONPATH=src` first,
-or install with `pip install -e .`):
+`run` downloads and verifies the pinned `events.csv` if absent, preprocesses it, writes EDA, trains and tunes the ranker, selects controllers on validation data, and evaluates frozen selections on the held-out test period. It takes several minutes and may need around 1 GB of working memory. The 94 MB raw CSV and derived data are ignored by Git. A previously downloaded matching CSV is reused after SHA-256 verification.
 
-```powershell
-$env:PYTHONPATH='src'
-python -m unittest discover -s tests -v          # unit tests
-python -m adaptive_prefetch demo                 # classifier accuracy + confusion matrix
-python -m adaptive_prefetch benchmark            # seven-policy comparison matrix
-python -m adaptive_prefetch replay path\to\trace.csv
-python -m adaptive_prefetch replay path\to\trace.csv --format alibaba
-python -m adaptive_prefetch replay data/samples/msr-cambridge1-sample.csv --model-path models/msr_sample_gnb.json
-python -m adaptive_prefetch train-msr-sample     # weakly adapt classifier on the MSR sample
-python -m adaptive_prefetch normalize --input trace.csv --format alibaba --output normalized.csv
-python -m adaptive_prefetch export-demo demo.csv # export a synthetic transition trace
-```
+Stage-by-stage commands are `webprefetch download`, `prepare`, `eda`, `train`, `benchmark`, and `demo`. The default benchmark replays the first 50,000 validation views and first 100,000 test views, both in time order. To change the replay limits, pass `--validation-views N --test-views N` to `benchmark` or `run`; these must not exceed their split sizes. All split sizes and cutoffs are recorded in `data/processed/profile.json`.
 
-On macOS/Linux, prefix the same way
-(`PYTHONPATH=src python -m adaptive_prefetch demo` or `python main.py`).
+## Pipeline and outputs
 
-## Trace data format
+1. Download the pinned Kaggle file and check the exact CSV SHA-256 and row count.
+2. Sort by visitor/time, remove exact duplicates, make 30-minute sessions, and derive page-view sequences.
+3. Write EDA and four chronological partitions: transition history 40%, ranker training 20%, validation 20%, test 20%.
+4. Learn top source-to-next-page candidates plus popular fallback from history only; create causal context features.
+5. Tune logistic regularization on validation candidate log loss and freeze the ranker.
+6. Tune fixed, gated, and adaptive prefetch choices on validation cache replay for four stated cost scenarios.
+7. Replay the frozen policies on a later test period with independent per-session caches of 4, 8, and 16 objects; estimate paired session-bootstrap intervals.
+8. Inspect the report and `demo.json`, which walks through the first held-out session with at least five views (selected without looking for a success).
 
-The normalized CSV format has one request per row:
+The main deliverables are `outputs/eda.md`, `outputs/report.md`, `outputs/validation_metrics.csv`, `outputs/test_metrics.csv`, `outputs/comparisons.csv`, and `outputs/demo.json`. Trained artifacts are in `models/`. [The project guide](docs/PROJECT_GUIDE.md) explains the architecture, reproduction steps, results, and limitations; [the implementation plan](docs/IMPLEMENTATION_PLAN.md) records stage gates.
 
-```csv
-timestamp_ms,lba,size_blocks,operation,stream_id
-0.25,1000,2,R,process_A
-0.91,1002,1,R,process_A
-1.20,2000,1,W,process_B
-```
+## Evidence and caveats
 
-`timestamp_ms` is a non-negative millisecond timestamp in ascending order.
-`lba` is a **block index**, not a byte offset. `size_blocks` is the positive
-number of contiguous blocks in that request. `operation` is `R` or `W`.
-`stream_id` is optional and retained for future per-process/per-volume analysis;
-the current model classifies the **aggregate** request stream. A real dataset
-must be converted to these units before replay. The repository includes a
-1,000-request MSR-format sample; it does not bundle complete MSR Cambridge or
-SNIA IOTTA trace collections. The sample's provenance has not been
-independently verified here.
-
-The included `data/samples/msr-cambridge1-sample.csv` uses the original MSR headers
-`Timestamp,Hostname,DiskNumber,Type,Offset,Size,ResponseTime`. The loader
-converts its byte offsets and sizes to 512-byte blocks, timestamps to elapsed
-milliseconds, and `Read`/`Write` to `R`/`W` automatically.
-
-`train-msr-sample` creates a small, reproducible JSON classifier artifact at
-`models/msr_sample_gnb.json`. The four-class model is first trained on the
-labelled synthetic generator. From the unlabelled MSR sample, it then learns
-only from read-heavy windows with a conservative **random-like proxy label**.
-This is weakly supervised adaptation, not four-class training from real ground
-truth. The model can be loaded with `--model-path` for replay; replaying the
-same sample is an in-sample demonstration, not an unbiased performance
-evaluation.
-See [the training record](docs/MSR_SAMPLE_TRAINING.md) for exact counts and
-limitations.
-
-`normalize` also supports two explicit IOTTA-related profiles: `alibaba`
-(`device_id,opcode,offset,length,timestamp`; byte offsets/lengths and
-microsecond timestamps) and `iotta8`
-(`device,sector,size,op,offset,timestamp,lifetime,count`; sector indices/counts
-and microsecond timestamps). The latter is the format proposed in the Stage 2
-plan, **not** a universal SNIA IOTTA format. Check the particular trace's
-metadata and units before selecting either profile. Headerless `iotta8` needs
-`--format iotta8`. No full public IOTTA trace is bundled or benchmarked.
-
-For the optional offline LSTM baseline, install the extra with
-`python -m pip install -e ".[lstm]"` in a suitable Python environment, then
-run `python -m adaptive_prefetch train-lstm --save models/lstm_delta.pt` and
-`python -m adaptive_prefetch benchmark --lstm-model models/lstm_delta.pt`.
-The core project and all other modes work without PyTorch; an unavailable
-LSTM is shown as *skipped*, not silently replaced by another predictor.
-
-## How the demonstration avoids a timing mistake
-
-A window is classified only after all its requests have occurred. Its policy
-can affect the **next** requests, never earlier ones. The first window uses no
-prefetch. The model is trained on generated examples from one random seed and
-tested on independently generated examples from another seed. Those results
-describe the synthetic generator, not accuracy on production workloads.
-
-Incremental updates require a trustworthy label. The demonstration provides
-labels because it generated the workload. On real unlabelled CSV traces,
-classifier updates are disabled; successful prefetches are not treated as
-proof that a workload label was correct.
-
-## Interpretation and limits
-
-Hit ratio is read-block cache hits divided by requested read blocks. Prefetch
-precision is prefetched blocks subsequently read divided by prefetches issued.
-Oracle re-access recall divides useful prefetches by useful prefetches plus
-read misses that are accessed again later; future-read information is used
-only after replay for measurement, never for candidate generation. It is a
-specialized diagnostic, not workload-classification recall.
-`unused` counts all prefetches not used during the replay, including those still
-resident at the end. Writes use a simplified write-allocate cache model but
-never trigger prefetch. Every policy receives the same request stream, cache
-capacity, first-window observation period, and LRU rules. The latency column
-is a *configured cost model* (defaults: 5 µs hit, 100 µs demand miss, 50 µs
-prefetch), including prefetch cost; its speedup is relative to no prefetch
-under those assumptions. The simulation still omits queueing, prefetch
-completion time, and bandwidth, and reports no measured device speedup.
-
-`--online-real` adds an opt-in confidence-gated self-training row. Its model
-updates from its own predictions, not verified labels, so it cannot establish
-real-trace classification accuracy. The default real-trace adaptive model is
-frozen. Synthetic drift results separately compare frozen with genuinely
-labelled incremental updates; they do not automatically prove faster
-adaptation. The LSTM predicts address deltas, not workload classes, so its
-cache outcomes and compute cost can be compared, but classification accuracy
-cannot be compared directly.
-
-See [Review 2 guide](docs/REVIEW2.md) for architecture, module completion,
-demonstration steps, and discussion questions. See the
-[Stage 2 verification snapshot](docs/STAGE2_RESULTS.md) for actual results
-and explicit gaps; rerun the benchmark before presenting any numbers. The
-[pipeline guide](docs/PIPELINE.md) and [Stage 2 plan](docs/implementation-stage2.md)
-are kept under `docs/`; sample traces and their format notes are under
-`data/samples/`.
+The ranker cannot predict an item missing from its candidate set. This makes candidate coverage an important ceiling, reported separately from cache hits. The benchmark compares identical request streams, retrieval candidates, cache rules, and capacities across policies. Controllers use current and prior information only; next-item labels are used for training or scoring after the event. Model and controller selection never use test data. We do not assume an adaptive win: the report shows both positive and negative deltas against the validation-selected fixed baseline, under each cost assumption.

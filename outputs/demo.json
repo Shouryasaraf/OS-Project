@@ -1,0 +1,253 @@
+{
+  "selection_rule": "first test-prefix session with at least five views",
+  "session_id": 23095,
+  "policy": "adaptive_0.01",
+  "capacity": 8,
+  "steps": [
+    {
+      "timestamp": 1439869774529,
+      "viewed_item": 359526,
+      "cache_hit": false,
+      "selected_depth": 4,
+      "issued_now": 4,
+      "prefetched_candidates": [
+        338630,
+        435047,
+        336393,
+        43573
+      ],
+      "top_scored_candidates": [
+        [
+          338630,
+          0.0912
+        ],
+        [
+          435047,
+          0.0178
+        ],
+        [
+          336393,
+          0.0137
+        ],
+        [
+          43573,
+          0.0102
+        ],
+        [
+          219260,
+          0.0095
+        ]
+      ],
+      "actual_next_item_after_decision": 48606
+    },
+    {
+      "timestamp": 1439869806157,
+      "viewed_item": 48606,
+      "cache_hit": false,
+      "selected_depth": 1,
+      "issued_now": 1,
+      "prefetched_candidates": [
+        100782
+      ],
+      "top_scored_candidates": [
+        [
+          100782,
+          0.0139
+        ],
+        [
+          174752,
+          0.0093
+        ],
+        [
+          302310,
+          0.0078
+        ],
+        [
+          21886,
+          0.0072
+        ],
+        [
+          230257,
+          0.0065
+        ]
+      ],
+      "actual_next_item_after_decision": 295841
+    },
+    {
+      "timestamp": 1439869919399,
+      "viewed_item": 295841,
+      "cache_hit": false,
+      "selected_depth": 0,
+      "issued_now": 0,
+      "prefetched_candidates": [],
+      "top_scored_candidates": [
+        [
+          366525,
+          0.0082
+        ],
+        [
+          111572,
+          0.0079
+        ],
+        [
+          302310,
+          0.0078
+        ],
+        [
+          240495,
+          0.0077
+        ],
+        [
+          21886,
+          0.0073
+        ]
+      ],
+      "actual_next_item_after_decision": 336393
+    },
+    {
+      "timestamp": 1439870120679,
+      "viewed_item": 336393,
+      "cache_hit": true,
+      "selected_depth": 8,
+      "issued_now": 7,
+      "prefetched_candidates": [
+        338630,
+        260452,
+        237873,
+        456056,
+        302310,
+        326173,
+        114643,
+        185179
+      ],
+      "top_scored_candidates": [
+        [
+          338630,
+          0.0375
+        ],
+        [
+          260452,
+          0.0217
+        ],
+        [
+          237873,
+          0.0161
+        ],
+        [
+          456056,
+          0.0141
+        ],
+        [
+          302310,
+          0.0126
+        ]
+      ],
+      "actual_next_item_after_decision": 388137
+    },
+    {
+      "timestamp": 1439870848756,
+      "viewed_item": 388137,
+      "cache_hit": false,
+      "selected_depth": 4,
+      "issued_now": 4,
+      "prefetched_candidates": [
+        461350,
+        114204,
+        345977,
+        26515
+      ],
+      "top_scored_candidates": [
+        [
+          461350,
+          0.0174
+        ],
+        [
+          114204,
+          0.0154
+        ],
+        [
+          345977,
+          0.013
+        ],
+        [
+          26515,
+          0.0116
+        ],
+        [
+          5411,
+          0.0012
+        ]
+      ],
+      "actual_next_item_after_decision": 176492
+    },
+    {
+      "timestamp": 1439870887968,
+      "viewed_item": 176492,
+      "cache_hit": false,
+      "selected_depth": 4,
+      "issued_now": 4,
+      "prefetched_candidates": [
+        69223,
+        48078,
+        179467,
+        217203
+      ],
+      "top_scored_candidates": [
+        [
+          69223,
+          0.0139
+        ],
+        [
+          48078,
+          0.0128
+        ],
+        [
+          179467,
+          0.0121
+        ],
+        [
+          217203,
+          0.0093
+        ],
+        [
+          316376,
+          0.0088
+        ]
+      ],
+      "actual_next_item_after_decision": 227485
+    },
+    {
+      "timestamp": 1439871031188,
+      "viewed_item": 227485,
+      "cache_hit": false,
+      "selected_depth": 0,
+      "issued_now": 0,
+      "prefetched_candidates": [],
+      "top_scored_candidates": [
+        [
+          5411,
+          0.0014
+        ],
+        [
+          309778,
+          0.0014
+        ],
+        [
+          370653,
+          0.0013
+        ],
+        [
+          298009,
+          0.0012
+        ],
+        [
+          369447,
+          0.0011
+        ]
+      ],
+      "actual_next_item_after_decision": null
+    }
+  ],
+  "observed_hits": 1,
+  "prefetches_issued": 20
+}
