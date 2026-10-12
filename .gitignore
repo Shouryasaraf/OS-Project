@@ -8,6 +8,16 @@ outputs/*
 !outputs/comparisons.csv
 !outputs/benchmark.json
 !outputs/demo.json
+!outputs/subset_vs_full.csv
+!outputs/break_even.csv
+!outputs/break_even_curve.csv
+!outputs/calibration.csv
+!outputs/reliability.svg
+!outputs/transition_baseline.csv
+!outputs/cohorts.csv
+!outputs/model_diagnostics.csv
+!outputs/session_gap_sensitivity.csv
+!outputs/session_parity.json
 models/
 *.egg-info/
 __pycache__/

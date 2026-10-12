@@ -28,11 +28,16 @@ class Policy:
         if self.kind == "gate":
             return 2 if ranked[0][1] >= self.parameter else 0
         if self.kind == "adaptive":
-            prefix = np.cumsum([prob for _, prob in ranked[:8]])
-            values = [0.0] + [float(min(1.0, prefix[min(k, len(prefix)) - 1])
-                                     - self.parameter * k) if prefix.size else -self.parameter * k
+            probabilities = [prob for _, prob in ranked[:8]]
+            prefix = []
+            running = 0.0
+            for probability in probabilities:
+                running += probability
+                prefix.append(running)
+            values = [0.0] + [min(1.0, prefix[min(k, len(prefix)) - 1])
+                              - self.parameter * min(k, len(prefix))
                               for k in DEPTHS[1:]]
-            return DEPTHS[int(np.argmax(values))]
+            return DEPTHS[max(range(len(values)), key=values.__getitem__)]
         raise ValueError(f"unknown policy kind {self.kind}")
 
 
@@ -106,17 +111,38 @@ class Cache:
         self.counters.issued += 1
 
 
+def complete_views(views: pd.DataFrame, max_views: int) -> pd.DataFrame:
+    """Return complete sessions within an approximate chronological view budget."""
+    if max_views <= 0 or max_views >= len(views):
+        return views
+    positions = pd.DataFrame({"session_id": views.session_id.to_numpy(),
+                              "position": np.arange(len(views))})
+    last = positions.groupby("session_id", sort=False).position.max()
+    complete = last.index[last.lt(max_views)]
+    selected = views.iloc[:max_views]
+    return selected.loc[selected.session_id.isin(complete)]
+
+
+class TransitionScorer:
+    """History-only source transition order; no trained ranker."""
+    def score(self, row, index: CandidateIndex) -> list[tuple[int, float]]:
+        candidates = index.candidates(int(row.itemid))
+        support = index.source_total.get(int(row.itemid), 0)
+        return [(item, count / support if support else 0.0) for item, count in candidates]
+
+
 def replay(views: pd.DataFrame, index: CandidateIndex, model,
            policies: list[Policy], capacity: int, max_views: int = 50000,
-           with_sessions: bool = False) -> tuple[list[dict], dict, list[dict]]:
+           with_sessions: bool = False, scorer=None) -> tuple[list[dict], dict, list[dict]]:
     if len({policy.name for policy in policies}) != len(policies):
         raise ValueError("policy names must be unique")
     if max_views < 0:
         raise ValueError("max_views must be non-negative")
-    selected = views if max_views == 0 else views.iloc[:max_views]
-    scorer = FastScorer(model)
+    selected = complete_views(views, max_views)
+    scorer = scorer if scorer is not None else FastScorer(model)
     totals = {p.name: Counters() for p in policies}
-    sessions = defaultdict(lambda: defaultdict(lambda: [0, 0, 0])) if with_sessions else None
+    sessions = defaultdict(lambda: defaultdict(lambda: [0, 0, 0, 0])) if with_sessions else None
+    calibration = [[0, 0.0, 0] for _ in range(10)]
     oracle_covered = 0
     oracle_eligible = 0
     oracle_top1 = 0
@@ -128,6 +154,11 @@ def replay(views: pd.DataFrame, index: CandidateIndex, model,
         states = {p.name: (Cache(capacity, totals[p.name]), p) for p in policies}
         for row in session_views.itertuples(index=False):
             ranked = scorer.score(row, index)
+            for item, probability in ranked:
+                bucket = min(9, int(probability * 10))
+                calibration[bucket][0] += 1
+                calibration[bucket][1] += probability
+                calibration[bucket][2] += int(bool(row.eligible) and item == row.next_item)
             if bool(row.eligible):
                 oracle_eligible += 1
                 actual_rank = next((n for n, (item, _) in enumerate(ranked[:8], 1)
@@ -143,6 +174,7 @@ def replay(views: pd.DataFrame, index: CandidateIndex, model,
             for name, (cache, policy) in states.items():
                 prior_hits = cache.counters.hits
                 prior_issued = cache.counters.issued
+                prior_useful = cache.counters.useful
                 cache.demand(int(row.itemid))
                 depth = policy.depth(ranked)
                 cache.counters.depth_counts[depth] += 1
@@ -153,13 +185,94 @@ def replay(views: pd.DataFrame, index: CandidateIndex, model,
                     record[0] += cache.counters.hits - prior_hits
                     record[1] += cache.counters.issued - prior_issued
                     record[2] += 1
+                    record[3] += cache.counters.useful - prior_useful
     rows = [totals[p.name].row(p.name, capacity) for p in policies]
     extra = {"oracle_candidate_coverage_at_8": oracle_covered / oracle_eligible
              if oracle_eligible else 0.0, "oracle_eligible_pairs": oracle_eligible,
              "ranking_hit_at_1": oracle_top1 / oracle_eligible if oracle_eligible else 0.0,
              "ranking_mrr_at_8": oracle_reciprocal_rank / oracle_eligible if oracle_eligible else 0.0,
-             "sessions": sessions}
+             "sessions": sessions, "replayed_views": len(selected), "calibration_bins": calibration}
     return rows, extra, demo
+
+
+def replay_capacities(views: pd.DataFrame, index: CandidateIndex, model,
+                      policies: list[Policy], capacities: tuple[int, ...],
+                      max_views: int = 0) -> dict[int, tuple[list[dict], dict]]:
+    """Score each request once, applying identical decisions to several caches."""
+    selected = complete_views(views, max_views)
+    scorer = FastScorer(model)
+    totals = {cap: {p.name: Counters() for p in policies} for cap in capacities}
+    sessions = {cap: defaultdict(lambda: defaultdict(lambda: [0, 0, 0, 0])) for cap in capacities}
+    covered = eligible = top1 = 0
+    reciprocal = 0.0
+    calibration = [[0, 0.0, 0] for _ in range(10)]
+    for session_id, session_views in selected.groupby("session_id", sort=False):
+        states = {cap: {p.name: Cache(cap, totals[cap][p.name]) for p in policies}
+                  for cap in capacities}
+        for row in session_views.itertuples(index=False):
+            ranked = scorer.score(row, index)
+            for item, probability in ranked:
+                bucket = min(9, int(probability * 10))
+                calibration[bucket][0] += 1
+                calibration[bucket][1] += probability
+                calibration[bucket][2] += int(bool(row.eligible) and item == row.next_item)
+            if bool(row.eligible):
+                eligible += 1
+                actual_rank = next((n for n, (item, _) in enumerate(ranked[:8], 1)
+                                    if item == row.next_item), None)
+                if actual_rank is not None:
+                    covered += 1
+                    top1 += int(actual_rank == 1)
+                    reciprocal += 1 / actual_rank
+            depths = {p.name: p.depth(ranked) for p in policies}
+            for cap in capacities:
+                for p in policies:
+                    cache = states[cap][p.name]
+                    before = (cache.counters.hits, cache.counters.issued, cache.counters.useful)
+                    cache.demand(int(row.itemid))
+                    depth = depths[p.name]
+                    cache.counters.depth_counts[depth] += 1
+                    for item, _ in ranked[:depth]:
+                        cache.prefetch(item)
+                    record = sessions[cap][p.name][int(session_id)]
+                    record[0] += cache.counters.hits - before[0]
+                    record[1] += cache.counters.issued - before[1]
+                    record[2] += 1
+                    record[3] += cache.counters.useful - before[2]
+    extra = {"oracle_candidate_coverage_at_8": covered / eligible if eligible else 0.0,
+             "oracle_eligible_pairs": eligible, "ranking_hit_at_1": top1 / eligible if eligible else 0.0,
+             "ranking_mrr_at_8": reciprocal / eligible if eligible else 0.0,
+             "replayed_views": len(selected), "calibration_bins": calibration}
+    return {cap: ([totals[cap][p.name].row(p.name, cap) for p in policies],
+                  {**extra, "sessions": sessions[cap]}) for cap in capacities}
+
+
+def expected_calibration_error(bins: list[list[float]]) -> float:
+    total = sum(row[0] for row in bins)
+    return (sum(abs(row[1] - row[2]) for row in bins) / total) if total else 0.0
+
+
+def break_even_waste(sessions: dict, adaptive: str, baseline: str,
+                     repetitions: int = 500, seed: int = 42) -> dict:
+    left, right = sessions[adaptive], sessions[baseline]
+    keys = sorted(set(left) | set(right))
+    hits = np.asarray([left[k][0] - right[k][0] for k in keys], dtype=float)
+    waste = np.asarray([(left[k][1] - left[k][3]) - (right[k][1] - right[k][3])
+                        for k in keys], dtype=float)
+    delta_h, delta_w = hits.sum(), waste.sum()
+    threshold = float(delta_h / delta_w) if delta_w else None
+    rng = np.random.default_rng(seed)
+    draws = []
+    for _ in range(repetitions):
+        ix = rng.integers(0, len(keys), len(keys))
+        denominator = waste[ix].sum()
+        if denominator:
+            draws.append(float(hits[ix].sum() / denominator))
+    interval = [float(x) for x in np.quantile(draws, [0.025, 0.975])] if draws else [None, None]
+    return {"delta_hits": int(delta_h), "delta_waste": int(delta_w),
+            "threshold": threshold, "paired_95pct_low": interval[0],
+            "paired_95pct_high": interval[1],
+            "direction": "wins_below" if delta_w > 0 else "wins_above" if delta_w < 0 else "constant"}
 
 
 def paired_bootstrap(sessions: dict, adaptive: str, baseline: str,

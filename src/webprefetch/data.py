@@ -51,7 +51,26 @@ def acquire(raw: str | Path) -> Path:
     return raw
 
 
-def prepare(raw: str | Path, output_dir: str | Path) -> dict:
+def partition_sessions(views: pd.DataFrame, cuts) -> pd.DataFrame:
+    """Cut complete replay units at period boundaries, then rebuild causal context."""
+    views = views.copy()
+    views["split"] = np.searchsorted(cuts, views.timestamp.to_numpy(), side="right").astype("int8")
+    # Original session IDs are globally unique; multiplying by four keeps each
+    # partition segment distinct without depending on row traversal order.
+    views["session_id"] = (views.session_id.astype("int64") * 4 + views.split).astype("int32")
+    ordered = views.sort_values(["session_id", "timestamp", "source_row"], kind="mergesort")
+    group = ordered.groupby("session_id", sort=False)
+    ordered["position"] = group.cumcount().astype("int16")
+    ordered["prev_item"] = group.itemid.shift(1).fillna(-1).astype("int32")
+    ordered["prev2_item"] = group.itemid.shift(2).fillna(-1).astype("int32")
+    ordered["next_item"] = group.itemid.shift(-1).fillna(-1).astype("int32")
+    ordered["next_timestamp"] = group.timestamp.shift(-1).fillna(-1).astype("int64")
+    ordered["gap_ms"] = group.timestamp.diff().fillna(0).clip(lower=0).astype("int64")
+    ordered["eligible"] = ordered.next_item.ge(0)
+    return ordered.sort_values(["timestamp", "source_row"], kind="mergesort")
+
+
+def prepare(raw: str | Path, output_dir: str | Path, session_gap_minutes: int = 30) -> dict:
     """Prepare all real view events; never synthesize missing rows or labels."""
     raw = Path(raw)
     output_dir = Path(output_dir)
@@ -88,27 +107,20 @@ def prepare(raw: str | Path, output_dir: str | Path) -> dict:
     event_counts = {str(k): int(v) for k, v in frame.event.value_counts().items()}
     frame.sort_values(["visitorid", "timestamp", "source_row"], kind="mergesort", inplace=True)
     gap = frame.groupby("visitorid", sort=False).timestamp.diff()
-    new_session = gap.isna() | gap.gt(SESSION_GAP_MS)
+    if session_gap_minutes <= 0:
+        raise ValueError("session gap must be positive")
+    new_session = gap.isna() | gap.gt(session_gap_minutes * 60 * 1000)
     frame["session_id"] = new_session.cumsum().astype("int32")
     frame["cart_count"] = frame.event.eq("addtocart").astype("int16")
     frame["cart_count"] = frame.groupby("session_id", sort=False).cart_count.cumsum().astype("int16")
 
     views = frame.loc[frame.event.eq("view"),
                       ["timestamp", "visitorid", "itemid", "session_id", "source_row", "cart_count"]].copy()
-    group = views.groupby("session_id", sort=False)
-    views["position"] = group.cumcount().astype("int16")
-    views["prev_item"] = group.itemid.shift(1).fillna(-1).astype("int32")
-    views["prev2_item"] = group.itemid.shift(2).fillna(-1).astype("int32")
-    views["next_item"] = group.itemid.shift(-1).fillna(-1).astype("int32")
-    views["next_timestamp"] = group.timestamp.shift(-1).fillna(-1).astype("int64")
-    views["gap_ms"] = group.timestamp.diff().fillna(0).clip(lower=0).astype("int64")
     views.sort_values(["timestamp", "source_row"], kind="mergesort", inplace=True)
     cuts = np.quantile(views.timestamp.to_numpy(), [0.4, 0.6, 0.8]).astype("int64")
     if len(set(cuts)) != 3:
         raise ValueError("time split boundaries are not distinct")
-    views["split"] = np.searchsorted(cuts, views.timestamp.to_numpy(), side="right").astype("int8")
-    next_split = np.searchsorted(cuts, views.next_timestamp.to_numpy(), side="right")
-    views["eligible"] = views.next_item.ge(0) & (views.split.to_numpy() == next_split)
+    views = partition_sessions(views, cuts)
 
     path = output_dir / "views.csv.gz"
     views.to_csv(path, index=False, compression="gzip")
@@ -116,6 +128,7 @@ def prepare(raw: str | Path, output_dir: str | Path) -> dict:
     profile = {
         "source": "https://www.kaggle.com/datasets/retailrocket/ecommerce-dataset",
         "dataset_version": 2,
+        "session_gap_minutes": session_gap_minutes,
         "raw_sha256": raw_digest,
         "raw_rows": raw_rows,
         "duplicate_rows_removed": duplicates,

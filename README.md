@@ -1,41 +1,73 @@
-# Adaptive product-page prefetching on real clickstreams
+# Adaptive product-page prefetching on RetailRocket clickstreams
 
-This branch replaces the earlier disk-I/O prototype with a reproducible web-prefetch experiment. It uses [RetailRocket's public Kaggle e-commerce events](https://www.kaggle.com/datasets/retailrocket/ecommerce-dataset), version 2, under its stated CC BY-NC-SA 4.0 license. Training, validation, replay, and the demonstration use recorded visitor events—not generated traffic. Small constructed examples in `tests/` test code behavior only.
+This project replays real RetailRocket product-view sessions and simulates a per-session object cache. It learns candidates from the oldest time partition, trains a logistic ranker on the next partition, selects controllers on validation, and evaluates frozen choices on the newest test period. Its outcomes are simulated cache hits and speculative requests. **No page-load speedup, byte cost, or network latency is measured.**
 
-## What the system does
+The source is RetailRocket's [e-commerce events dataset](https://www.kaggle.com/datasets/retailrocket/ecommerce-dataset), version 2, labeled CC BY-NC-SA 4.0. The pipeline verifies the exact `events.csv` SHA-256. [NOTICE.md](NOTICE.md) describes attribution and handling of derived artifacts.
 
-After a visitor views a product page, the system retrieves plausible next products from older clickstream transitions. A logistic model scores those candidates using only known history. The controller chooses how many, if any, to prefetch into that visitor session's browser cache. A replay compares this adaptive controller with no prefetch, fixed depths, and a confidence gate. A hit is a later product view already in that session's cache; issued but unused prefetches are counted as waste.
+## Run
 
-There is no measured network latency, page size, or response cacheability in this dataset. Results are object-cache simulation outcomes, **not page-load speedups**. Prefetch costs in the report are sensitivity assumptions, not measured bytes or energy.
+Python 3.10+ is required. From the repository root:
 
-## Run the complete pipeline
+| Action | Bash | PowerShell |
+|---|---|---|
+| Install | `python -m pip install -e .` | `python -m pip install -e .` |
+| Full pipeline, including gap sensitivity | `webprefetch run` | `webprefetch run` |
+| Tests | `python -m unittest discover -s tests -v` | `python -m unittest discover -s tests -v` |
+| Serve interactive demo | `webprefetch serve` | `webprefetch serve` |
+| Export bounded static demo | `webprefetch export-demo` | `webprefetch export-demo` |
+| Print recorded walkthrough | `webprefetch demo` | `webprefetch demo` |
 
-Python 3.10+ is required. In PowerShell, from the repository root:
+`webprefetch serve --host 127.0.0.1 --port 8765` opens the interactive local demo at
+`http://127.0.0.1:8765/`. The server loads the generated model and prepared test views,
+then provides `GET /api/sessions` (with `offset`, `limit`, or random `seed`),
+`GET /api/session/{id}`, `POST /api/step`, and `GET /api/summary`. Session IDs are
+held-out test segments; visitor IDs are displayed only as short one-way tokens. A step
+response includes scored candidates, the chosen depth, cache state, the next observed
+item, and cumulative hit and request accounting. Changing the cost replays the adaptive
+decision rule with that hypothetical penalty; the benchmark table keeps its frozen
+validation-selected policies.
 
-```powershell
-python -m pip install -e .
-webprefetch run
-webprefetch demo
-python -m unittest discover -s tests -v
+`webprefetch export-demo` writes a bounded 20-session `demo/export.json`. To view it
+without the Python API, run `python -m http.server 8000` from the repository root and
+open `http://127.0.0.1:8000/demo/`. The static export contains three precomputed policies
+at capacity 8 and cost 0.01; other capacities, costs, confidence gate, and custom paths
+require `webprefetch serve`. The “try a sequence” mode uses real historical product IDs
+and the saved ranker but is explicitly hypothetical; there is no observed next-view label
+for a user-authored path. The demo ships with the source and generated artifacts, and
+uses no external frontend dependencies.
+
+Individual stages use the same syntax in Bash and PowerShell:
+
+```text
+webprefetch download
+webprefetch prepare
+webprefetch eda
+webprefetch train
+webprefetch benchmark
+webprefetch sensitivity
 ```
 
-`run` downloads and verifies the pinned `events.csv` if absent, preprocesses it, writes EDA, trains and tunes the ranker, selects controllers on validation data, and evaluates frozen selections on the held-out test period. It takes several minutes and may need around 1 GB of working memory. The 94 MB raw CSV and derived data are ignored by Git. A previously downloaded matching CSV is reused after SHA-256 verification.
+`run` regenerates `data/processed/`, trained `models/`, and `outputs/`. It uses the complete validation and test splits by default, with complete visitor-session segments. For a **smoke run only**, either shell can use `webprefetch benchmark --validation-views 1000 --test-views 2000`; it overwrites the benchmark outputs, so run the full command again before citing results. Zero for either limit means the full split. `prepare --session-gap-minutes 15` changes the primary segmentation and requires retraining and rebenchmarking; `sensitivity` instead varies segmentation with the frozen 30-minute model for a controlled, bounded diagnostic.
 
-Stage-by-stage commands are `webprefetch download`, `prepare`, `eda`, `train`, `benchmark`, and `demo`. The default benchmark replays the first 50,000 validation views and first 100,000 test views, both in time order. To change the replay limits, pass `--validation-views N --test-views N` to `benchmark` or `run`; these must not exceed their split sizes. All split sizes and cutoffs are recorded in `data/processed/profile.json`.
+If download is unavailable, obtain the same version-2 `events.csv` from the linked Kaggle dataset and put it in `data/raw/events.csv`. Its checksum is still enforced. Never substitute generated request streams for the research data. The source CSV and processed views are intentionally excluded from Git; the uploaded ZIP may include them for reproduction.
 
-## Pipeline and outputs
+The pre-fix default pipeline in this container completed in **602.698 s** with peak child RSS **1,004,056 KiB** (`audit/phase1_measurement.txt`; Python 3.12, Linux). This measured the old 50,000/100,000-view default. The full-split pipeline measured **2,979.459 s** and **4,186,944 KiB peak child RSS** with `OPENBLAS_NUM_THREADS=1`; see `audit/phase2_measurement.txt`.
+A separate fresh source checkout installed the CLI and completed the same full workflow
+in **1,015.574 s**, peaking at **4,231,668 KiB**. Its comparison results matched to
+floating point precision; see `audit/clean_checkout_measurement.txt`.
 
-1. Download the pinned Kaggle file and check the exact CSV SHA-256 and row count.
-2. Sort by visitor/time, remove exact duplicates, make 30-minute sessions, and derive page-view sequences.
-3. Write EDA and four chronological partitions: transition history 40%, ranker training 20%, validation 20%, test 20%.
-4. Learn top source-to-next-page candidates plus popular fallback from history only; create causal context features.
-5. Tune logistic regularization on validation candidate log loss and freeze the ranker.
-6. Tune fixed, gated, and adaptive prefetch choices on validation cache replay for four stated cost scenarios.
-7. Replay the frozen policies on a later test period with independent per-session caches of 4, 8, and 16 objects; estimate paired session-bootstrap intervals.
-8. Inspect the report and `demo.json`, which walks through the first held-out session with at least five views (selected without looking for a success).
+## Study design
 
-The main deliverables are `outputs/eda.md`, `outputs/report.md`, `outputs/validation_metrics.csv`, `outputs/test_metrics.csv`, `outputs/comparisons.csv`, and `outputs/demo.json`. Trained artifacts are in `models/`. [The project guide](docs/PROJECT_GUIDE.md) explains the architecture, reproduction steps, results, and limitations; [the implementation plan](docs/IMPLEMENTATION_PLAN.md) records stage gates.
+Sessions break after 30 minutes of inactivity and also at chronological partition boundaries. Historical transitions and popularity come only from split 0; logistic examples come from split 1; regularization and controller settings are chosen in split 2. The split 3 test period cannot choose settings. Source-popularity ties are ordered by item ID, and bootstrap resamples whole sessions with paired policy outcomes and seed 42.
 
-## Evidence and caveats
+Each policy shares the same candidate list and cache rules. No prefetch, fixed depths, confidence gate, and adaptive depth are compared under assumed issued-request costs. The top-1 transition table is a ranker-free baseline. Context ablation and histogram gradient boosting are diagnostics, not replacement selections. Candidate coverage is a ceiling for immediate next-item retrieval among eligible pairs; ordinary cache revisits can still hit without candidate retrieval. Logistic probabilities are candidate-level outputs, not a normalized distribution over next items.
 
-The ranker cannot predict an item missing from its candidate set. This makes candidate coverage an important ceiling, reported separately from cache hits. The benchmark compares identical request streams, retrieval candidates, cache rules, and capacities across policies. Controllers use current and prior information only; next-item labels are used for training or scoring after the event. Model and controller selection never use test data. We do not assume an adaptive win: the report shows both positive and negative deltas against the validation-selected fixed baseline, under each cost assumption.
+Read `outputs/report.md` with `comparisons.csv`, `subset_vs_full.csv`, `break_even.csv`, `calibration.csv`, `cohorts.csv`, `session_gap_sensitivity.csv`, and `models/training_summary.json`. The comparison table includes the coverage ceiling, paired intervals, positive, negative and inconclusive results. See [project guide](docs/PROJECT_GUIDE.md), [implementation plan](docs/IMPLEMENTATION_PLAN.md), and [audit](audit/GRILL.md) for assumptions and fixes.
+
+`outputs/session_parity.json` is a batch replay reference for one held-out session.
+`tests/test_demo_parity.py` checks that the interactive engine gives the same complete
+session counts and policy depths; the HTTP routes were also exercised on loopback.
+
+## Limits
+
+RetailRocket contains anonymized events, without response size, cache directives, download completion, or real page-load latency. The simulated cache treats objects as equal size and prefetches as instantaneous. A single retailer's clickstream does not establish results for other websites. Break-even costs are hit-equivalent assumptions per unused prefetch, not observed financial or bandwidth costs. A live-browser experiment and another dataset are required to test generalisation and speedup claims.

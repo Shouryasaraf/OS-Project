@@ -10,6 +10,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import log_loss
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
@@ -52,10 +53,11 @@ def fit_index(views: pd.DataFrame) -> CandidateIndex:
     for row in top.itertuples(index=False):
         transitions.setdefault(int(row.itemid), []).append((int(row.next_item), int(row.count)))
     source_total = {int(k): int(v) for k, v in pairs.groupby("itemid").size().items()}
-    popularity = history.itemid.value_counts()
-    global_count = {int(k): int(v) for k, v in popularity.items()}
+    popularity = history.itemid.value_counts().rename("count").rename_axis("itemid").reset_index()
+    popularity.sort_values(["count", "itemid"], ascending=[False, True], inplace=True)
+    global_count = {int(row.itemid): int(row.count) for row in popularity.itertuples(index=False)}
     return CandidateIndex({k: tuple(v) for k, v in transitions.items()}, source_total,
-                          global_count, tuple(int(x) for x in popularity.index[:POPULAR_FALLBACK]))
+                          global_count, tuple(int(x) for x in popularity.itemid.iloc[:POPULAR_FALLBACK]))
 
 
 def features(row, candidate: int, pair_count: int, retrieval_rank: int,
@@ -71,7 +73,8 @@ def features(row, candidate: int, pair_count: int, retrieval_rank: int,
 
 
 def train_ranker(views: pd.DataFrame, index: CandidateIndex,
-                 max_decisions: int = 30000, validation_decisions: int = 10000):
+                 max_decisions: int = 30000, validation_decisions: int = 10000,
+                 diagnostic_dir: str | Path | None = None):
     decisions = views.loc[views.split.eq(1)]
     if len(decisions) > max_decisions:
         positions = np.linspace(0, len(decisions) - 1, max_decisions, dtype=np.int64)
@@ -96,8 +99,11 @@ def train_ranker(views: pd.DataFrame, index: CandidateIndex,
         validation = validation.iloc[positions]
     vx: list[list[float]] = []
     vy: list[int] = []
+    validation_sizes = []
     for row in validation.itertuples(index=False):
-        for rank, (item, count) in enumerate(index.candidates(int(row.itemid))):
+        candidates = index.candidates(int(row.itemid))
+        validation_sizes.append(len(candidates))
+        for rank, (item, count) in enumerate(candidates):
             vx.append(features(row, item, count, rank, index))
             vy.append(int(bool(row.eligible) and item == row.next_item))
     if not vx or not any(vy):
@@ -145,6 +151,37 @@ def train_ranker(views: pd.DataFrame, index: CandidateIndex,
                "validation_hit_at_1": top1 / validation_eligible,
                "validation_mrr_at_8": reciprocal_rank / validation_eligible,
                "selected_C": tuning[winner]["C"], "feature_names": list(FEATURE_NAMES)}
+    if diagnostic_dir is not None:
+        diagnostic_dir = Path(diagnostic_dir)
+        diagnostic_dir.mkdir(parents=True, exist_ok=True)
+        # Context columns are zeroed in train and validation, so the index and
+        # candidate rows stay exactly the same as for the full logistic model.
+        context_off_train, context_off_val = train_x.copy(), val_x.copy()
+        context_off_train[:, 4:8] = 0
+        context_off_val[:, 4:8] = 0
+        ablation = make_pipeline(StandardScaler(), LogisticRegression(
+            C=tuning[winner]["C"], max_iter=200, solver="lbfgs"))
+        ablation.fit(context_off_train, train_y)
+        boosting = HistGradientBoostingClassifier(max_iter=80, max_leaf_nodes=15,
+            random_state=42).fit(train_x, train_y)
+        diagnostics = []
+        for name, classifier, val_features in (
+            ("logistic_full", model, val_x),
+            ("logistic_no_context", ablation, context_off_val),
+            ("hist_gradient_boosting_diagnostic", boosting, val_x)):
+            probabilities = classifier.predict_proba(val_features)[:,1]
+            offset = hits = 0
+            for size in validation_sizes:
+                if size:
+                    selected = offset + int(np.argmax(probabilities[offset:offset+size]))
+                    hits += int(val_y[selected])
+                offset += size
+            diagnostics.append({"model":name,"validation_log_loss":float(log_loss(val_y, probabilities)),
+                "validation_top1_per_eligible":hits/validation_eligible,
+                "validation_candidate_coverage":covered_at_8/validation_eligible})
+        joblib.dump(ablation, diagnostic_dir / "ranker_no_context.joblib", compress=3)
+        joblib.dump(boosting, diagnostic_dir / "hist_gradient_boosting.joblib", compress=3)
+        summary["model_diagnostics"] = diagnostics
     return model, summary
 
 

@@ -1,0 +1,18 @@
+{
+  "session_id": 51147,
+  "policy": "adaptive",
+  "capacity": 8,
+  "cost": 0.01,
+  "views": 15,
+  "hits": 10,
+  "prefetch_hits": 0,
+  "issued": 4,
+  "useful": 0,
+  "unused": 4,
+  "evicted_unused": 1,
+  "depth_counts": {
+    "0": 8,
+    "2": 6,
+    "4": 1
+  }
+}
