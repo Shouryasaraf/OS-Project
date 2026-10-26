@@ -151,6 +151,17 @@ def interactive_datasets(window_size: int,
 # LSTM
 # --------------------------------------------------------------------------
 
+#: How ``resolve_lstm`` trains: passed to ``train_lstm`` explicitly and stored
+#: in the training record, so a cached artifact trained another way is not
+#: reused. ``train_lstm`` once trained on every example and kept the last
+#: epoch; it now holds out the chronological last 20% of each trace and
+#: keeps the best validation epoch (WP9), under the same ARTIFACT_VERSION. The
+#: device (``auto``) is left out: it changes floating-point detail, not the
+#: protocol, and is not known before training.
+LSTM_TRAIN_KW = {"seed": 42, "val_fraction": 0.2, "batch_size": 128, "patience": None}
+LSTM_SELECTION = "best validation epoch on the held-out tail"
+
+
 def _training_record() -> dict | None:
     try:
         return json.loads(LSTM_TRAINING_RECORD.read_text(encoding="utf-8"))
@@ -184,8 +195,11 @@ def resolve_lstm(datasets: list[tuple[str, list]], interactive: bool,
     """
     if quick:
         return None, "skipped (--quick)"
+    from adaptive_prefetch.lstm import ARTIFACT_VERSION
     training, record = lstm_training_set(datasets, window_size)
     record["epochs"] = epochs
+    record["training"] = {**LSTM_TRAIN_KW, "selection": LSTM_SELECTION,
+                          "artifact_version": ARTIFACT_VERSION}
     seeds = record["seeds"]
     provenance = (f"{len(training)} generated trace(s), seeds {seeds[0]}-{seeds[-1]}, "
                   "disjoint from the benchmark")
@@ -217,7 +231,7 @@ def resolve_lstm(datasets: list[tuple[str, list]], interactive: bool,
     try:
         LSTM_ARTIFACT.parent.mkdir(parents=True, exist_ok=True)
         result = train_lstm(LSTM_ARTIFACT, traces=[r for _, r in training],
-                            epochs=epochs)
+                            epochs=epochs, **LSTM_TRAIN_KW)
     except (RuntimeError, ValueError) as exc:
         return None, f"unavailable: {exc}"
     record["artifact_sha256"] = _artifact_digest()

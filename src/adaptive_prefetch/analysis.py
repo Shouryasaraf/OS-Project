@@ -443,7 +443,16 @@ def _identity(groups: dict, latency: str, left: str, right: str) -> dict:
 
 
 def checks(rows: list[dict]) -> dict:
-    """Consistency checks over the raw sweep rows (recorded in provenance)."""
+    """Consistency checks over the raw sweep rows (recorded in provenance).
+
+    ``pass`` is the overall verdict (the validity gates of
+    ``results/disk/PREREGISTERED.md`` section 2): ``False`` iff a gate that
+    had something to compare failed, and ``failures`` names those gates. A
+    gate with nothing to compare (no hm_0 cross-check cell, no guard/
+    depth_adaptive pair at break-even, no deep@0 cell) is listed in
+    ``not_checked`` instead: it is neither a pass nor a failure, so a caller
+    that needs every gate checked tests ``pass and not not_checked``.
+    """
     keys = [row_key(r) for r in rows]
     statuses: dict[str, int] = {}
     for row in rows:
@@ -463,7 +472,7 @@ def checks(rows: list[dict]) -> dict:
                         "total_prefetches": row["total_prefetches"],
                         "pass": (round(row["hit_ratio"], 6) == HM0_CHECK["hit_ratio"]
                                  and row["total_prefetches"] == HM0_CHECK["total_prefetches"])})
-    return {
+    report = {
         "rows": len(rows), "duplicate_keys": len(keys) - len(set(keys)),
         "status_counts": dict(sorted(statuses.items())),
         "guard_eq_depth_adaptive_at_break_even": _identity(
@@ -472,6 +481,21 @@ def checks(rows: list[dict]) -> dict:
         "hm0_deep8_250k": hm0,
         "wilcoxon": None if stats.HAVE_SCIPY else stats.WILCOXON_UNAVAILABLE,
     }
+    failures, not_checked = [], []
+    if report["duplicate_keys"]:
+        failures.append("duplicate_keys")
+    for name in ("guard_eq_depth_adaptive_at_break_even", "deep0_eq_none"):
+        gate = report[name]
+        if not gate["pairs"]:
+            not_checked.append(name)
+        elif gate["identical"] != gate["pairs"]:
+            failures.append(name)
+    if not hm0:
+        not_checked.append("hm0_deep8_250k")
+    elif not all(cell["pass"] for cell in hm0):
+        failures.append("hm0_deep8_250k")
+    report.update({"pass": not failures, "failures": failures, "not_checked": not_checked})
+    return report
 
 
 # -------------------------------------------------------- prototype cross-check
