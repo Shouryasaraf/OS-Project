@@ -277,9 +277,15 @@ class PairedSessions:
     def _draw(self) -> None:
         n = len(self.keys)
         rng = np.random.default_rng(self.seed)
-        draws = [np.bincount(rng.integers(0, n, n), minlength=n) for _ in range(self.reps)]
-        dtype = np.uint8 if max(int(d.max()) for d in draws) < 256 else np.uint16
-        self.counts = np.asarray(draws, dtype=dtype)
+        # Filled one rep at a time: a list of int64 bincounts would hold
+        # reps x n x 8 bytes (1.5 GB on the full test split) at once.
+        counts = np.empty((self.reps, n), dtype=np.uint16)
+        for rep in range(self.reps):
+            drawn = np.bincount(rng.integers(0, n, n), minlength=n)
+            if drawn.max() > np.iinfo(np.uint16).max:
+                raise ValueError("a session was drawn more than 65535 times in one rep")
+            counts[rep] = drawn
+        self.counts = counts.astype(np.uint8) if int(counts.max()) < 256 else counts
         self.view_sums = self._resample(self.views[:, None])[:, 0]
 
     def _resample(self, matrix: np.ndarray) -> np.ndarray:
@@ -368,15 +374,21 @@ def needed_policies(selection: dict, transfer: dict) -> dict[int, list[str]]:
 
 def verdict(family: str, vs_best: CI, vs_none: CI) -> str:
     """The report label (P11): never call a controller a winner when it
-    loses to not prefetching at all."""
+    loses to not prefetching at all.
+
+    A controller can beat a validated fixed depth that itself loses to
+    ``fixed0`` on test (the transferred cap-8 choice at cap 2 does). Such a
+    row is labelled only "loses to no prefetch", whatever the comparison
+    with the best fixed depth says; that comparison stays in its columns.
+    """
+    if vs_none.high < 0:
+        return f"{family} loses to no prefetch"
     if vs_best.low > 0:
         text = f"{family} wins"
     elif vs_best.high < 0:
         text = f"{family} loses"
     else:
         text = f"{family} within noise"
-    if vs_none.high < 0:
-        text += "; loses to no prefetch"
     return text
 
 

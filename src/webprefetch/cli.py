@@ -136,11 +136,27 @@ def _report(summary: dict, processed: Path, models: Path, outputs: Path) -> None
     (outputs / "report.md").write_text("\n".join(lines), encoding="utf-8")
 
 
+#: Commands that build on the benchmark.json already in OUTPUTS.
+FOLLOW_ON = ("parity", "decompose")
+
+
+def _partial_benchmark(args) -> bool:
+    """True when a follow-on command would read a bounded run's benchmark.json."""
+    if args.command not in FOLLOW_ON:
+        return False
+    try:
+        summary = json.loads((args.outputs / "benchmark.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return bool(summary.get("partial_run"))
+
+
 def _results_dir(args) -> Path:
     if args.results_dir is not None:
         return args.results_dir
-    # A bounded run must never overwrite the full run's tracked tables.
-    if args.validation_views or args.test_views:
+    # A bounded run, or a parity/decompose built on one, must never
+    # overwrite the full run's tracked tables.
+    if args.validation_views or args.test_views or _partial_benchmark(args):
         return args.outputs / "results"
     return RESULTS
 

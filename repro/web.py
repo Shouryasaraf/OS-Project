@@ -3,8 +3,9 @@
 Full run, in order (each step shells out to ``python -m webprefetch``):
 
 1. ``prepare`` and ``train --novel-ranker`` (about 1 min),
-2. ``benchmark`` over the logistic and the three transition scorers, with
-   per-capacity validation selection (about 10 min at 96 workers),
+2. ``benchmark`` over the logistic, relabelled-logistic and three
+   transition scorers, with per-capacity validation selection (about
+   10 min at 96 workers),
 3. ``freshness``, ``decompose`` and ``parity``, then ``learning-curve``
    (about 10 min; it retrains the ranker at 100k and 300k decisions),
 4. ``results/web/provenance.json``, written last so it hashes every output.
@@ -39,7 +40,9 @@ MODELS = Path("models/web")
 OUTPUTS = Path("outputs/web")
 RESULTS = Path("results/web")
 QUICK = OUTPUTS / "quick"
-DEFAULT_SCORERS = "logistic,trans_s0,trans_prior,trans_online"
+#: Every scorer except ``seq``, which E5 adds (plan E4). ``logistic_novel`` is
+#: the relabelled ranker that ``train --novel-ranker`` fits just before.
+DEFAULT_SCORERS = "logistic,logistic_novel,trans_s0,trans_prior,trans_online"
 WEB_MODULES = ("numpy", "pandas", "sklearn", "joblib")
 
 

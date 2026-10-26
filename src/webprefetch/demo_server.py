@@ -104,9 +104,13 @@ class DemoData:
             raise ValueError("validated penalties exist only for costs 0, 0.01, 0.05 and 0.25; "
                              "use adaptive_cost (penalty = cost) for other costs")
         per_capacity = benchmark.get("validation_selection_per_capacity")
-        scorer = benchmark.get("primary_scorer", "logistic")
-        if per_capacity and scorer in per_capacity:
-            chosen, source = per_capacity[scorer][str(capacity)], f"validation, capacity {capacity}"
+        if per_capacity is not None:
+            # The demo scores with the logistic ranker, so only the logistic
+            # selection applies; another scorer's penalty would be mislabelled.
+            if "logistic" not in per_capacity:
+                raise ValueError("benchmark.json has no logistic selection; the demo scores with "
+                                 "the logistic ranker, so use adaptive_cost")
+            chosen, source = per_capacity["logistic"][str(capacity)], f"validation, capacity {capacity}"
         else:
             # A pivot-layout benchmark selected at capacity 8 only.
             chosen, source = benchmark["validation_selection"], "validation, capacity 8 (transferred)"

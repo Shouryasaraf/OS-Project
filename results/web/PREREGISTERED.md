@@ -43,7 +43,11 @@ is reported as `capacity_transfer` and is never a headline row.
   records its session count, reps and seed.
 - Verdict for a difference A - B: **A better** if the interval's lower end
   is above 0, **A worse** if its upper end is below 0, otherwise **no
-  detectable difference**. No other wording is used for a result.
+  detectable difference**. No other wording is used for a result. The
+  `label` column of `comparisons.csv` writes the same three outcomes as
+  `<family> wins`, `<family> loses` and `<family> within noise`, except
+  that a row whose interval against `fixed0` lies below 0 reads only
+  `<family> loses to no prefetch` (decision rule 1).
 - No multiple-comparison correction is applied. Only the comparisons marked
   headline below may be stated as findings; every other row is exploratory
   and is labelled as such where it is quoted.

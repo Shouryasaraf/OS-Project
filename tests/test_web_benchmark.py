@@ -155,8 +155,11 @@ class SelectionTests(unittest.TestCase):
     def test_labels_never_call_a_loser_to_no_prefetch_a_win(self):
         ci = stats.CI
         self.assertEqual(verdict("adaptive", ci(1, .5, 2, 9), ci(1, .5, 2, 9)), "adaptive wins")
+        # Beating a best fixed depth that itself loses to fixed0 is no win.
         self.assertEqual(verdict("adaptive", ci(1, .5, 2, 9), ci(-1, -2, -.5, 9)),
-                         "adaptive wins; loses to no prefetch")
+                         "adaptive loses to no prefetch")
+        self.assertEqual(verdict("gate", ci(-1, -2, -.5, 9), ci(-1, -2, -.5, 9)),
+                         "gate loses to no prefetch")
         self.assertEqual(verdict("gate", ci(-1, -2, -.5, 9), ci(0, -1, 1, 9)), "gate loses")
         self.assertEqual(verdict("feedback", ci(0, -1, 1, 9), ci(0, -1, 1, 9)),
                          "feedback within noise")
@@ -283,6 +286,15 @@ class FixtureBenchmarkTests(unittest.TestCase):
         for name in ("calibration.csv", "dataset_profile.json", "think_time.json"):
             self.assertTrue((self.results / name).exists(), name)
 
+    def test_freshness_file_validates(self):
+        rows = benchmark.run_freshness(self.processed / "views.csv.gz", self.results)
+        written = schemas.read_rows("web/freshness.csv", self.results / "freshness.csv")
+        self.assertEqual(len(written), len(rows))
+        self.assertEqual({(r["split"], r["index"]) for r in written},
+                         {(split, index) for split, prior in (("validation", "split01"),
+                                                              ("test", "split012"))
+                          for index in ("split0", prior, "online")})
+
     def test_unavailable_scorer_is_recorded_not_substituted(self):
         self.assertTrue(self.summary["scorers"]["seq"]["status"].startswith("skipped: "))
         rows = schemas.read_rows("web/policy_metrics.csv", self.results / "policy_metrics.csv")
@@ -302,6 +314,10 @@ class FixtureBenchmarkTests(unittest.TestCase):
                                    places=12)
             self.assertAlmostEqual(r["vs_transition_top1"],
                                    r["adaptive_utility"] - r["transition_top1_utility"], places=12)
+        for r in rows:
+            if r["vs_fixed0_hi"] < 0:
+                self.assertTrue(r["label"].endswith("loses to no prefetch"), r["label"])
+                self.assertNotIn("wins", r["label"])
         # The transfer setting reuses the cap-8 choice, so at cap 8 it is identical.
         key = ("scorer", "capacity", "cost", "adaptive_policy", "best_fixed_policy",
                "vs_best_fixed_same_cap", "vs_fixed0")
@@ -415,6 +431,20 @@ class FixtureBenchmarkTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             data.step({"session_id": session, "cost": 0.03, "policy": "adaptive"})
 
+    def test_demo_adaptive_reads_the_logistic_selection_whatever_the_primary(self):
+        # The demo scores with the logistic ranker, so another scorer's
+        # validated penalty must never be shown as its "adaptive".
+        data = DemoData(ROOT, models=self.models, processed=self.processed, outputs=self.outputs)
+        selection = self.summary["validation_selection_per_capacity"]["logistic"]
+        benchmark_json = dict(data.summary["benchmark"], primary_scorer="trans_online")
+        data.summary["benchmark"] = benchmark_json
+        self.assertEqual(data.selected_adaptive(8, 0.01)[0], selection["8"][cost_key(0.01)]["adaptive"])
+        per_capacity = dict(benchmark_json["validation_selection_per_capacity"])
+        del per_capacity["logistic"]
+        data.summary["benchmark"] = dict(benchmark_json, validation_selection_per_capacity=per_capacity)
+        with self.assertRaises(ValueError):
+            data.selected_adaptive(8, 0.01)
+
     def test_decomposition_uses_the_validated_choices(self):
         with contextlib.redirect_stdout(io.StringIO()):
             rows = benchmark.run_decomposition(self.processed / "views.csv.gz", self.models,
@@ -489,6 +519,20 @@ class CliTests(unittest.TestCase):
         self.assertEqual(cli._results_dir(partial), Path("x") / "results")
         explicit = parser.parse_args(["benchmark", "--test-views", "10", "--results-dir", "r"])
         self.assertEqual(cli._results_dir(explicit), Path("r"))
+
+    def test_parity_and_decompose_after_a_bounded_benchmark_stay_out_of_results(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outputs = Path(tmp)
+            parser = cli.build_parser()
+            for partial, expected in ((True, outputs / "results"), (False, cli.RESULTS)):
+                (outputs / "benchmark.json").write_text(json.dumps({"partial_run": partial}))
+                for command in ("parity", "decompose"):
+                    args = parser.parse_args([command, "--outputs", str(outputs)])
+                    self.assertEqual(cli._results_dir(args), expected, (command, partial))
+            # freshness never reads benchmark.json, so it is not redirected.
+            (outputs / "benchmark.json").write_text(json.dumps({"partial_run": True}))
+            args = parser.parse_args(["freshness", "--outputs", str(outputs)])
+            self.assertEqual(cli._results_dir(args), cli.RESULTS)
 
     def test_every_subcommand_parses(self):
         for command in ("parity", "freshness", "decompose", "learning-curve", "benchmark"):
