@@ -29,7 +29,7 @@ table{border-collapse:collapse;width:100%;font-size:.88rem}th,td{text-align:righ
       <p id="source" class="muted"></p><div id="sequence" class="timeline"></div>
       <label>Cache objects<select id="capacity"><option>2</option><option>4</option><option selected>8</option><option>16</option><option>32</option></select></label>
       <label>Issued-request cost <input id="cost" type="number" min="0" max="1" step="0.01" value="0.01"></label>
-      <label>Policy<select id="policy"><option value="adaptive">Adaptive (cost penalty)</option><option value="fixed0">No prefetch</option><option value="fixed1">Fixed 1</option><option value="fixed2">Fixed 2</option><option value="fixed4">Fixed 4</option><option value="fixed8">Fixed 8</option><option value="gate">Confidence gate</option></select></label>
+      <label>Policy<select id="policy"><option value="adaptive">Adaptive (validation-selected penalty)</option><option value="adaptive_cost">Adaptive (penalty = cost)</option><option value="fixed0">No prefetch</option><option value="fixed1">Fixed 1</option><option value="fixed2">Fixed 2</option><option value="fixed4">Fixed 4</option><option value="fixed8">Fixed 8</option><option value="gate">Confidence gate</option></select></label>
       <label>Gate threshold<input id="threshold" type="number" min="0" max="1" step="0.01" value="0.01"></label>
       <p class="muted">Change a control to replay the same prefix. Cache state is reset at the start of every session.</p>
     </section>
@@ -49,9 +49,9 @@ table{border-collapse:collapse;width:100%;font-size:.88rem}th,td{text-align:righ
       <p id="customStatus" class="warn"></p>
     </section>
   </div>
-  <section class="card"><h2>5 · Full-test results</h2><p class="muted">Policies were selected on validation and frozen for the full test period. Utility = hits/view − assumed cost × issued/view. Intervals resample paired sessions.</p>
+  <section class="card"><h2>5 · Full-test results</h2><p class="muted">Policies were selected on validation separately for each cache size and frozen for the full test period. Utility = hits/view − assumed cost × issued/view. Intervals resample paired sessions.</p>
     <label>Benchmark cache<select id="resultCapacity"><option>2</option><option>4</option><option selected>8</option><option>16</option><option>32</option></select></label>
-    <div class="scroll"><table><thead><tr><th>Cost</th><th>Fixed</th><th>Adaptive</th><th>Δ utility/view</th><th>Paired 95% interval</th><th>Coverage@8</th></tr></thead><tbody id="results"></tbody></table></div>
+    <div class="scroll"><table><thead><tr><th>Cost</th><th>Fixed</th><th>Adaptive</th><th>Δ utility/view</th><th>Paired 95% interval</th><th>Coverage@8</th><th>Verdict</th></tr></thead><tbody id="results"></tbody></table></div>
     <h3>Cost sensitivity at cache 8</h3><svg id="curve" class="chart" role="img" aria-label="Adaptive minus fixed utility by assumed cost"></svg>
     <p id="context" class="muted"></p>
   </section>
@@ -71,17 +71,17 @@ async function render(){if(!current)return;const serial=++token;let views=custom
   $('sequence').innerHTML=views.map((v,i)=>`<button class="${i===selectedStep?'active':''}" data-step="${i}" title="Product ${v.item}">${i+1}</button>`).join('');
   document.querySelectorAll('#sequence button').forEach(b=>b.onclick=()=>{selectedStep=+b.dataset.step;render()});
   try{let res=await run($('policy').value,selectedStep);if(serial!==token)return;let s=res.steps.at(-1),t=res.totals;
-    $('decision').textContent=`Step ${selectedStep+1}: requested product ${s.item}. ${s.demand_hit?'Cache hit':'Cache miss'}. Depth ${s.selected_depth}; ${s.issued_now} new prefetch${s.issued_now===1?'':'es'}.`;
+    $('decision').textContent=`Step ${selectedStep+1}: requested product ${s.item}. ${s.demand_hit?'Cache hit':'Cache miss'}. Depth ${s.selected_depth}; ${s.issued_now} new prefetch${s.issued_now===1?'':'es'}. Policy ${res.resolved_policy} (${res.selection}).`;
     $('metrics').innerHTML=[['Hits',s.running_hits],['Issued',s.running_issued],['Unused',s.running_unused],['Utility/view',s.running_utility.toFixed(4)]].map(([n,v])=>`<div class="metric">${n}<strong>${v}</strong></div>`).join('');
     $('cache').innerHTML=`<span class="muted">${s.cache_before.join(', ')||'empty'}</span><span>→</span>`+s.cache_after.map(item=>`<span class="pill ${s.issued_items.includes(item)?'issued':''}">${item}</span>`).join('');
     $('outcome').textContent=s.actual_next_item===null?'End of session':`Actual next product ${s.actual_next_item}: ${s.next_item_in_cache?'resident after decision':'not resident after decision'}. ${s.unused_evicted_now} unused speculative object(s) evicted now.`;
     $('candidates').innerHTML=s.candidates.map(([item,p])=>`<div class="candidate"><span>${item}</span><div class="track"><div class="fill" style="width:${Math.min(100,p*1500)}%"></div></div><span>${(p*100).toFixed(2)}%</span></div>`).join('')||'<p>No candidates</p>';
     await compare(serial,views.length-1);
   }catch(e){if(serial===token){$('decision').textContent=e.message;$('metrics').innerHTML='';$('policyRows').innerHTML=''}}}
-async function compare(serial,last){let names=staticData?['adaptive','fixed0','fixed1']:['adaptive','fixed0','fixed1','fixed2','fixed4','fixed8','gate'];let rows=await Promise.allSettled(names.map(n=>run(n,last)));if(serial!==token)return;
+async function compare(serial,last){let names=staticData?['adaptive','fixed0','fixed1']:['adaptive','adaptive_cost','fixed0','fixed1','fixed2','fixed4','fixed8','gate'];let rows=await Promise.allSettled(names.map(n=>run(n,last)));if(serial!==token)return;
   $('policyRows').innerHTML=rows.map((r,i)=>{if(r.status!=='fulfilled')return '';let v=r.value,t=v.totals,n=names[i],utility=(t.hits-(+$('cost').value)*t.issued)/t.views;return `<tr class="${n===$('policy').value?'selected':''}"><td>${esc(n)}</td><td>${t.hits}</td><td>${t.issued}</td><td>${t.unused}</td><td>${utility.toFixed(4)}</td></tr>`}).join('')}
 function renderResults(){let cap=$('resultCapacity').value,rows=summary.comparisons.filter(r=>r.capacity===cap);
-  $('results').innerHTML=rows.map(r=>`<tr><td>${r.cost_per_prefetch}</td><td>${esc(r.fixed_policy)}</td><td>${esc(r.adaptive_policy)}</td><td>${(+r.adaptive_minus_fixed_utility).toFixed(5)}</td><td>[${(+r.paired_95pct_low).toFixed(5)}, ${(+r.paired_95pct_high).toFixed(5)}]</td><td>${(100*r.candidate_coverage_at_8).toFixed(2)}%</td></tr>`).join('');
+  $('results').innerHTML=rows.map(r=>`<tr><td>${r.cost_per_prefetch}</td><td>${esc(r.fixed_policy)}</td><td>${esc(r.adaptive_policy)}</td><td>${(+r.adaptive_minus_fixed_utility).toFixed(5)}</td><td>[${(+r.paired_95pct_low).toFixed(5)}, ${(+r.paired_95pct_high).toFixed(5)}]</td><td>${(100*r.candidate_coverage_at_8).toFixed(2)}%</td><td>${esc(r.label||'')}</td></tr>`).join('');
   let c=summary.comparisons.filter(r=>r.capacity==='8'),max=Math.max(...c.map(r=>+r.cost_per_prefetch)),values=c.map(r=>+r.adaptive_minus_fixed_utility);let lo=Math.min(0,...values),hi=Math.max(0,...values),y=v=>140-110*(v-lo)/(hi-lo||1),x=v=>45+430*v/(max||1);
   $('curve').setAttribute('viewBox','0 0 500 170');$('curve').innerHTML=`<line x1="45" y1="${y(0)}" x2="475" y2="${y(0)}" stroke="#b8c7c4"/><polyline fill="none" stroke="#136a66" stroke-width="3" points="${c.map(r=>`${x(+r.cost_per_prefetch)},${y(+r.adaptive_minus_fixed_utility)}`).join(' ')}"/>`+c.map(r=>`<circle cx="${x(+r.cost_per_prefetch)}" cy="${y(+r.adaptive_minus_fixed_utility)}" r="4" fill="#136a66"/>`).join('')+`<text x="45" y="160" font-size="12">0</text><text x="430" y="160" font-size="12">cost ${max}</text>`;
   $('context').textContent=`Full test: ${Number(summary.benchmark.test_views).toLocaleString()} views. Cache 8 coverage@8: ${(100*c[0].candidate_coverage_at_8).toFixed(2)}% of eligible next-view pairs. Break-even values and cohort diagnostics are in the exported CSVs.`}
