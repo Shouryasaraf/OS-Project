@@ -52,6 +52,9 @@ writes a placeholder stamped "MISSING: <file>", so the paper always builds.
    `IEEEtran.cls` and `IEEEtran.bst` ship with Overleaf's TeX Live, so they do
    not need to be uploaded. BibTeX runs automatically.
 
+   The skeleton also compiles before step 1 has ever run: `main.tex` reads
+   `numbers.tex` only if it exists, and no table or figure is included yet.
+
 Every path the paper references must lie inside `paper/`, since Overleaf only
 receives this directory. `check.py` rejects any path that leaves it.
 

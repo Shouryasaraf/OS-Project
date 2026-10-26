@@ -21,8 +21,12 @@
 \usepackage{url}
 \usepackage{xcolor}
 
-% Generated: one \newcommand per quoted number (WP13 writes it).
-\input{numbers}
+% Generated: one \newcommand per quoted number (WP13 writes it). The guard
+% lets the skeleton compile on Overleaf before numbers.tex exists; once the
+% prose uses a macro, a missing numbers.tex is an undefined-command error,
+% and `check.py --strict` already fails on it.
+\IfFileExists{numbers.tex}{\input{numbers}}{%
+  \typeout{numbers.tex has not been generated; run python reproduce.py paper}}
 
 % Skeleton marker for unwritten text. `check.py --final` fails while any
 % \todo remains, so none can reach the submitted paper.

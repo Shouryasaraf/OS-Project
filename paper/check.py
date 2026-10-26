@@ -67,9 +67,10 @@ _KEY_ARGUMENT = re.compile(
 # before the number patterns run. Extend this only under review (WP14): a
 # pattern broad enough to admit a measured figure defeats the lint.
 ALLOW_PATTERNS: tuple[re.Pattern[str], ...] = (
-    # Lengths: 0.9\columnwidth, 3.5in, 2pt.
+    # Lengths: 0.9\columnwidth, 3.5in, 2pt. A unit written as letters must
+    # touch the number, or "a gain of 4.10 in mean hit ratio" would pass.
     re.compile(
-        r"\d*\.?\d+\s*(?:\\(?:columnwidth|linewidth|textwidth|textheight"
+        r"\d*\.?\d+(?:\s*\\(?:columnwidth|linewidth|textwidth|textheight"
         r"|paperwidth|hsize|baselineskip)|(?:pt|em|ex|in|cm|mm|bp|sp)\b)"
     ),
     # Software, kernel and interface versions: Linux 6.14, Python 3.10.
@@ -91,16 +92,16 @@ ALLOW_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 
 _SEP = r"(?:\s|~|\\[,;: ])*"
-_NUMBER = r"[-+]?\d+(?:\.\d+)?"
-# The figures a hand-typed result takes: 41.3, 41\%, +4.1 pp, 640x, 52/56,
-# 2,756,101. A bare integer ("four corpora", "56 traces") is not flagged;
-# the WP14 review covers those.
+_NUMBER = r"[-+]?(?:\d+(?:\.\d+)?|\.\d+)"
+# The figures a hand-typed result takes: 41.3, .89, 41\%, +4.1 pp, 640x,
+# 52/56, 2,756,101 or 2\,756\,101. A bare integer ("four corpora", "56
+# traces") is not flagged; the WP14 review covers those.
 _HAND_NUMBER_LATEX = re.compile(
     r"(?<![\w.\\])" + _NUMBER + _SEP + r"(?:\\%|pp\b)"
     r"|(?<![\w.\\])" + _NUMBER + _SEP + r"(?:x|\\times|\u00d7)(?![A-Za-z])"
     r"|(?<![\w./\\])\d+\s*/\s*\d+(?![\w./])"
-    r"|(?<![\w.\\])\d{1,3}(?:(?:,|\{,\})\d{3})+(?!\d)"
-    r"|(?<![\w.\\])[-+]?\d+\.\d+"
+    r"|(?<![\w.\\])\d{1,3}(?:(?:,|\{,\}|\\,)\d{3})+(?!\d)"
+    r"|(?<![\w.\\])[-+]?(?:\d+)?\.\d+"
 )
 # The same for Markdown or plain text, where % is a literal (for WP15's docs).
 _HAND_NUMBER_TEXT = re.compile(
@@ -108,7 +109,7 @@ _HAND_NUMBER_TEXT = re.compile(
     r"|(?<![\w.])" + _NUMBER + r"\s*(?:x|\u00d7)(?![A-Za-z])"
     r"|(?<![\w./])\d+\s*/\s*\d+(?![\w./])"
     r"|(?<![\w.])\d{1,3}(?:,\d{3})+(?!\d)"
-    r"|(?<![\w.])[-+]?\d+\.\d+"
+    r"|(?<![\w.])[-+]?(?:\d+)?\.\d+"
 )
 
 _INPUT = re.compile(r"\\(input|include)\s*\{([^{}]+)\}")

@@ -87,8 +87,9 @@ class CommittedPaperTests(unittest.TestCase):
         self.assertEqual(problems, [])
         keys = {entry.key: entry for entry in entries}
         self.assertEqual(len(keys), len(entries), "duplicate keys")
-        # 47 from the literature review plus the 8 WP7 additions.
-        self.assertEqual(len(entries), 55)
+        # 47 from the literature review plus the 8 WP7 additions; later
+        # packages may add verified entries (docs/REFERENCES.md procedure).
+        self.assertGreaterEqual(len(entries), 55)
         for key in (
             "wu2007readahead", "linux_mmapi_readahead", "gill2005sarc", "gill2007amp",
             "patterson1995informed", "cao1995integrated", "chakraborttii2020learning",
@@ -121,6 +122,12 @@ class CommittedPaperTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(check.main(["--paper-dir", str(PAPER), "--quiet"]), 0)
 
+    def test_skeleton_compiles_before_numbers_tex_exists(self):
+        # Overleaf aborts on \input of a missing file, and the students
+        # compile the skeleton before WP13's generators have run.
+        main = (PAPER / "main.tex").read_text(encoding="utf-8")
+        self.assertIn("\\IfFileExists{numbers.tex}{\\input{numbers}}", main)
+
 
 class HandNumberLintTests(unittest.TestCase):
     def assertFlagged(self, text, figure):
@@ -138,6 +145,10 @@ class HandNumberLintTests(unittest.TestCase):
         self.assertFlagged("worse on 52/56 traces", "52/56")
         self.assertFlagged("2,756,101 events", "2,756,101")
         self.assertFlagged("$0.25$ of requests", "0.25")
+        self.assertFlagged("a hit ratio of .89", ".89")
+        self.assertFlagged("2\\,756\\,101 events", "2\\,756\\,101")
+        # An English "in" after a figure is not a LaTeX length unit.
+        self.assertFlagged("deep gains 4.10 in mean hit ratio", "4.10")
 
     def test_line_numbers_are_reported(self):
         self.assertEqual(check.hand_numbers("first line\nsecond 0.5 here\n"), [(2, "0.5")])
