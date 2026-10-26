@@ -1,0 +1,585 @@
+% refs.bib -- verified reference list for the combined OS-class IEEE paper
+% (block-level disk I/O prefetching + web object prefetching).
+% Every entry was checked on 2026-10-26 against Crossref (api.crossref.org),
+% the publisher/USENIX page, PMLR, arXiv, or the official dataset page.
+% Fields that could not be confirmed (e.g. some USENIX page ranges) are
+% deliberately OMITTED rather than guessed. Sections A-F (47 entries) are
+% the literature review's verified list, copied unchanged; section G was
+% added and verified by WP7. docs/REFERENCES.md records how each group was
+% checked and the corrections made to the Review 1 deck's citations.
+
+% ---------------------------------------------------------------------------
+% A. References cited in the Review 1 deck (docs/reference/
+%    "Operating Systems Lab Submission 2.pdf"), corrected where needed
+% ---------------------------------------------------------------------------
+
+@inproceedings{chakraborttii2020learning,
+  author    = {Chandranil Chakraborttii and Heiner Litz},
+  title     = {Learning {I/O} Access Patterns to Improve Prefetching in {SSDs}},
+  booktitle = {Machine Learning and Knowledge Discovery in Databases: Applied Data Science Track (ECML PKDD 2020), Part IV},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {12460},
+  pages     = {427--443},
+  publisher = {Springer},
+  year      = {2021},
+  doi       = {10.1007/978-3-030-67667-4_26}
+}
+
+@article{savva2026adaptive,
+  author    = {George Savva and Herodotos Herodotou},
+  title     = {Adaptive Data Prefetching for File Storage Systems Using Online Machine Learning},
+  journal   = {Big Data and Cognitive Computing},
+  volume    = {10},
+  number    = {1},
+  pages     = {28},
+  year      = {2026},
+  publisher = {MDPI},
+  doi       = {10.3390/bdcc10010028}
+}
+
+@inproceedings{wong2024baleen,
+  author    = {Daniel Lin-Kit Wong and Hao Wu and Carson Molder and Sathya Gunasekar and Jimmy Lu and Snehal Khandkar and Abhinav Sharma and Daniel S. Berger and Nathan Beckmann and Gregory R. Ganger},
+  title     = {Baleen: {ML} Admission \& Prefetching for Flash Caches},
+  booktitle = {22nd USENIX Conference on File and Storage Technologies (FAST 24)},
+  pages     = {347--371},
+  address   = {Santa Clara, CA},
+  publisher = {USENIX Association},
+  year      = {2024},
+  url       = {https://www.usenix.org/conference/fast24/presentation/wong}
+}
+
+@article{ramadhan2026capsule,
+  author    = {Agung Rahmat Ramadhan and Seehwan Yoo and Jongmoo Choi},
+  title     = {{CAPSULE}: A Storage Prefetcher Harnessing Spatio-Temporal Locality for Cloud-Scale Workloads},
+  journal   = {ACM SIGMETRICS Performance Evaluation Review},
+  volume    = {54},
+  number    = {1},
+  pages     = {76--78},
+  year      = {2026},
+  doi       = {10.1145/3820171.3806897}
+}
+
+@inproceedings{soundararajan2008context,
+  author    = {Gokul Soundararajan and Madalin Mihailescu and Cristiana Amza},
+  title     = {Context-Aware Prefetching at the Storage Server},
+  booktitle = {2008 USENIX Annual Technical Conference (USENIX ATC 08)},
+  address   = {Boston, MA},
+  publisher = {USENIX Association},
+  year      = {2008},
+  url       = {https://www.usenix.org/conference/2008-usenix-annual-technical-conference/context-aware-prefetching-storage-server}
+}
+
+@inproceedings{akgun2021kml,
+  author    = {Ibrahim Umit Akgun and Ali Selman Aydin and Aadil Shaikh and Lukas Velikov and Erez Zadok},
+  title     = {A Machine Learning Framework to Improve Storage System Performance},
+  booktitle = {Proceedings of the 13th ACM Workshop on Hot Topics in Storage and File Systems (HotStorage '21)},
+  pages     = {94--102},
+  publisher = {ACM},
+  year      = {2021},
+  doi       = {10.1145/3465332.3470875}
+}
+
+@inproceedings{chakraborttii2022deep,
+  author    = {Chandranil Chakraborttii and Heiner Litz},
+  title     = {Deep Learning-based Prefetching for Flash},
+  booktitle = {Non-Volatile Memories Workshop (NVMW)},
+  year      = {2022},
+  note      = {Workshop abstract; NSF PAR record 10332957},
+  url       = {https://par.nsf.gov/biblio/10332957}
+}
+
+@inproceedings{lucasfilho2023streaming,
+  author    = {Edson Ramiro {Lucas Filho} and Lun Yang and Kebo Fu and Herodotos Herodotou},
+  title     = {Streaming Machine Learning for Supporting Data Prefetching in Modern Data Storage Systems},
+  booktitle = {Proceedings of the First Workshop on AI for Systems (AI4Sys '23)},
+  pages     = {7--12},
+  publisher = {ACM},
+  year      = {2023},
+  doi       = {10.1145/3588982.3603608}
+}
+
+@inproceedings{garg2024crossprefetch,
+  author    = {Shaleen Garg and Jian Zhang and Rekha Pitchumani and Manish Parashar and Bing Xie and Sudarsun Kannan},
+  title     = {{CrossPrefetch}: Accelerating {I/O} Prefetching for Modern Storage},
+  booktitle = {Proceedings of the 29th ACM International Conference on Architectural Support for Programming Languages and Operating Systems, Volume 1 (ASPLOS '24)},
+  pages     = {102--116},
+  publisher = {ACM},
+  year      = {2024},
+  doi       = {10.1145/3617232.3624872}
+}
+
+% ---------------------------------------------------------------------------
+% B. Linux readahead and OS-level / disk-level prefetching
+% ---------------------------------------------------------------------------
+
+@inproceedings{wu2007readahead,
+  author    = {Fengguang Wu and Hongsheng Xi and Jun Li and Nanhai Zou},
+  title     = {Linux Readahead: Less Tricks for More},
+  booktitle = {Proceedings of the Linux Symposium (OLS 2007)},
+  volume    = {2},
+  pages     = {273--284},
+  address   = {Ottawa, Canada},
+  year      = {2007},
+  url       = {https://www.kernel.org/doc/ols/2007/ols2007v2-pages-273-284.pdf}
+}
+
+@article{wu2010concurrent,
+  author    = {Feng-Guang Wu and Hong-Sheng Xi and Chen-Feng Xu},
+  title     = {File Prefetching Algorithm for Concurrent Streams},
+  journal   = {Journal of Software},
+  volume    = {21},
+  number    = {8},
+  pages     = {1820--1833},
+  year      = {2010},
+  doi       = {10.3724/SP.J.1001.2010.03605}
+}
+
+@misc{linux_mmapi_readahead,
+  author       = {{The Linux Kernel Documentation}},
+  title        = {Memory Management {APIs}: Readahead},
+  howpublished = {\url{https://www.kernel.org/doc/html/latest/core-api/mm-api.html}},
+  note         = {Kernel-doc generated from mm/readahead.c. Accessed 2026-10-26},
+  year         = {2026}
+}
+
+@inproceedings{patterson1995informed,
+  author    = {R. Hugo Patterson and Garth A. Gibson and Eka Ginting and Daniel Stodolsky and Jim Zelenka},
+  title     = {Informed Prefetching and Caching},
+  booktitle = {Proceedings of the Fifteenth ACM Symposium on Operating Systems Principles (SOSP '95)},
+  pages     = {79--95},
+  publisher = {ACM},
+  year      = {1995},
+  doi       = {10.1145/224056.224064}
+}
+
+@inproceedings{griffioen1994reducing,
+  author    = {Jim Griffioen and Randy Appleton},
+  title     = {Reducing File System Latency using a Predictive Approach},
+  booktitle = {Proceedings of the USENIX Summer 1994 Technical Conference},
+  address   = {Boston, MA},
+  publisher = {USENIX Association},
+  year      = {1994},
+  url       = {https://www.usenix.org/conference/usenix-summer-1994-technical-conference/reducing-file-system-latency-using-predictive}
+}
+
+@inproceedings{kroeger2001design,
+  author    = {Thomas M. Kroeger and Darrell D. E. Long},
+  title     = {Design and Implementation of a Predictive File Prefetching Algorithm},
+  booktitle = {Proceedings of the 2001 USENIX Annual Technical Conference},
+  pages     = {105--118},
+  address   = {Boston, MA},
+  publisher = {USENIX Association},
+  year      = {2001},
+  url       = {https://www.usenix.org/conference/2001-usenix-annual-technical-conference/design-and-implementation-predictive-file}
+}
+
+@inproceedings{cao1995integrated,
+  author    = {Pei Cao and Edward W. Felten and Anna R. Karlin and Kai Li},
+  title     = {A Study of Integrated Prefetching and Caching Strategies},
+  booktitle = {Proceedings of the 1995 ACM SIGMETRICS Joint International Conference on Measurement and Modeling of Computer Systems},
+  pages     = {188--197},
+  publisher = {ACM},
+  year      = {1995},
+  doi       = {10.1145/223587.223608}
+}
+
+@inproceedings{gill2005sarc,
+  author    = {Binny S. Gill and Dharmendra S. Modha},
+  title     = {{SARC}: Sequential Prefetching in Adaptive Replacement Cache},
+  booktitle = {Proceedings of the 2005 USENIX Annual Technical Conference, General Track},
+  pages     = {293--308},
+  publisher = {USENIX Association},
+  year      = {2005}
+}
+
+@inproceedings{gill2007amp,
+  author    = {Binny S. Gill and Luis Angel D. Bathen},
+  title     = {{AMP}: Adaptive Multi-stream Prefetching in a Shared Cache},
+  booktitle = {5th USENIX Conference on File and Storage Technologies (FAST 07)},
+  pages     = {185--198},
+  address   = {San Jose, CA},
+  publisher = {USENIX Association},
+  year      = {2007},
+  url       = {https://www.usenix.org/conference/fast-07/amp-adaptive-multi-stream-prefetching-shared-cache}
+}
+
+@inproceedings{ding2007diskseen,
+  author    = {Xiaoning Ding and Song Jiang and Feng Chen and Kei Davis and Xiaodong Zhang},
+  title     = {{DiskSeen}: Exploiting Disk Layout and Access History to Enhance {I/O} Prefetch},
+  booktitle = {Proceedings of the 2007 USENIX Annual Technical Conference},
+  pages     = {261--274},
+  address   = {Santa Clara, CA},
+  publisher = {USENIX Association},
+  year      = {2007},
+  url       = {https://www.usenix.org/events/usenix07/tech/ding.html}
+}
+
+@inproceedings{li2004cminer,
+  author    = {Zhenmin Li and Zhifeng Chen and Sudarshan M. Srinivasan and Yuanyuan Zhou},
+  title     = {{C-Miner}: Mining Block Correlations in Storage Systems},
+  booktitle = {3rd USENIX Conference on File and Storage Technologies (FAST 04)},
+  address   = {San Francisco, CA},
+  publisher = {USENIX Association},
+  year      = {2004},
+  url       = {https://www.usenix.org/conference/fast-04/c-miner-mining-block-correlations-storage-systems}
+}
+
+@inproceedings{joseph1997markov,
+  author    = {Doug Joseph and Dirk Grunwald},
+  title     = {Prefetching using {Markov} Predictors},
+  booktitle = {Proceedings of the 24th Annual International Symposium on Computer Architecture (ISCA '97)},
+  pages     = {252--263},
+  publisher = {ACM},
+  year      = {1997},
+  doi       = {10.1145/264107.264207}
+}
+
+% ---------------------------------------------------------------------------
+% C. Learned prefetching / learned caching
+% ---------------------------------------------------------------------------
+
+@inproceedings{hashemi2018learning,
+  author    = {Milad Hashemi and Kevin Swersky and Jamie Smith and Grant Ayers and Heiner Litz and Jichuan Chang and Christos Kozyrakis and Parthasarathy Ranganathan},
+  title     = {Learning Memory Access Patterns},
+  booktitle = {Proceedings of the 35th International Conference on Machine Learning (ICML)},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {80},
+  pages     = {1919--1928},
+  publisher = {PMLR},
+  year      = {2018},
+  url       = {https://proceedings.mlr.press/v80/hashemi18a.html}
+}
+
+@inproceedings{maruf2020leap,
+  author    = {Hasan {Al Maruf} and Mosharaf Chowdhury},
+  title     = {Effectively Prefetching Remote Memory with {Leap}},
+  booktitle = {2020 USENIX Annual Technical Conference (USENIX ATC 20)},
+  pages     = {843--857},
+  publisher = {USENIX Association},
+  year      = {2020},
+  url       = {https://www.usenix.org/conference/atc20/presentation/al-maruf}
+}
+
+@inproceedings{doudali2019kleio,
+  author    = {Thaleia Dimitra Doudali and Sergey Blagodurov and Abhinav Vishnu and Sudhanva Gurumurthi and Ada Gavrilovska},
+  title     = {Kleio: A Hybrid Memory Page Scheduler with Machine Intelligence},
+  booktitle = {Proceedings of the 28th International Symposium on High-Performance Parallel and Distributed Computing (HPDC '19)},
+  pages     = {37--48},
+  publisher = {ACM},
+  year      = {2019},
+  doi       = {10.1145/3307681.3325398}
+}
+
+@inproceedings{shi2019glider,
+  author    = {Zhan Shi and Xiangru Huang and Akanksha Jain and Calvin Lin},
+  title     = {Applying Deep Learning to the Cache Replacement Problem},
+  booktitle = {Proceedings of the 52nd Annual IEEE/ACM International Symposium on Microarchitecture (MICRO-52)},
+  pages     = {413--425},
+  publisher = {ACM},
+  year      = {2019},
+  doi       = {10.1145/3352460.3358319}
+}
+
+@inproceedings{yang2023glcache,
+  author    = {Juncheng Yang and Ziming Mao and Yao Yue and K. V. Rashmi},
+  title     = {{GL-Cache}: Group-level Learning for Efficient and High-performance Caching},
+  booktitle = {21st USENIX Conference on File and Storage Technologies (FAST 23)},
+  pages     = {115--134},
+  address   = {Santa Clara, CA},
+  publisher = {USENIX Association},
+  year      = {2023},
+  url       = {https://www.usenix.org/conference/fast23/presentation/yang-juncheng}
+}
+
+@article{hochreiter1997lstm,
+  author    = {Sepp Hochreiter and J{\"u}rgen Schmidhuber},
+  title     = {Long Short-Term Memory},
+  journal   = {Neural Computation},
+  volume    = {9},
+  number    = {8},
+  pages     = {1735--1780},
+  year      = {1997},
+  doi       = {10.1162/neco.1997.9.8.1735}
+}
+
+% ---------------------------------------------------------------------------
+% D. Cache replacement / modelling background
+% ---------------------------------------------------------------------------
+
+@article{belady1966study,
+  author    = {L. A. Belady},
+  title     = {A Study of Replacement Algorithms for a Virtual-Storage Computer},
+  journal   = {IBM Systems Journal},
+  volume    = {5},
+  number    = {2},
+  pages     = {78--101},
+  year      = {1966},
+  doi       = {10.1147/sj.52.0078}
+}
+
+@article{mattson1970evaluation,
+  author    = {R. L. Mattson and J. Gecsei and D. R. Slutz and I. L. Traiger},
+  title     = {Evaluation Techniques for Storage Hierarchies},
+  journal   = {IBM Systems Journal},
+  volume    = {9},
+  number    = {2},
+  pages     = {78--117},
+  year      = {1970},
+  doi       = {10.1147/sj.92.0078}
+}
+
+@inproceedings{megiddo2003arc,
+  author    = {Nimrod Megiddo and Dharmendra S. Modha},
+  title     = {{ARC}: A Self-Tuning, Low Overhead Replacement Cache},
+  booktitle = {2nd USENIX Conference on File and Storage Technologies (FAST 03)},
+  pages     = {115--130},
+  address   = {San Francisco, CA},
+  publisher = {USENIX Association},
+  year      = {2003},
+  url       = {https://www.usenix.org/conference/fast-03/arc-self-tuning-low-overhead-replacement-cache}
+}
+
+@inproceedings{yang2023fifo,
+  author    = {Juncheng Yang and Yazhuo Zhang and Ziyue Qiu and Yao Yue and Rashmi Vinayak},
+  title     = {{FIFO} Queues are All You Need for Cache Eviction},
+  booktitle = {Proceedings of the 29th Symposium on Operating Systems Principles (SOSP '23)},
+  pages     = {130--149},
+  publisher = {ACM},
+  year      = {2023},
+  doi       = {10.1145/3600006.3613147}
+}
+
+@inproceedings{zhang2024sieve,
+  author    = {Yazhuo Zhang and Juncheng Yang and Yao Yue and Ymir Vigfusson and K. V. Rashmi},
+  title     = {{SIEVE} is Simpler than {LRU}: an Efficient Turn-Key Eviction Algorithm for Web Caches},
+  booktitle = {21st USENIX Symposium on Networked Systems Design and Implementation (NSDI 24)},
+  publisher = {USENIX Association},
+  year      = {2024},
+  url       = {https://www.usenix.org/conference/nsdi24/presentation/zhang-yazhuo}
+}
+
+% ---------------------------------------------------------------------------
+% E. Trace / dataset sources and tools
+% ---------------------------------------------------------------------------
+
+@inproceedings{narayanan2008write,
+  author    = {Dushyanth Narayanan and Austin Donnelly and Antony Rowstron},
+  title     = {Write Off-Loading: Practical Power Management for Enterprise Storage},
+  booktitle = {6th USENIX Conference on File and Storage Technologies (FAST 08)},
+  pages     = {253--267},
+  address   = {San Jose, CA},
+  publisher = {USENIX Association},
+  year      = {2008},
+  url       = {https://www.usenix.org/conference/fast-08/write-loading-practical-power-management-enterprise-storage}
+}
+
+@inproceedings{koller2010iodedup,
+  author    = {Ricardo Koller and Raju Rangaswami},
+  title     = {{I/O} Deduplication: Utilizing Content Similarity to Improve {I/O} Performance},
+  booktitle = {8th USENIX Conference on File and Storage Technologies (FAST 10)},
+  address   = {San Jose, CA},
+  publisher = {USENIX Association},
+  year      = {2010},
+  url       = {https://www.usenix.org/conference/fast-10/io-deduplication-utilizing-content-similarity-improve-io-performance}
+}
+
+@inproceedings{li2020alibaba,
+  author    = {Jinhong Li and Qiuping Wang and Patrick P. C. Lee and Chao Shi},
+  title     = {An In-Depth Analysis of Cloud Block Storage Workloads in Large-Scale Production},
+  booktitle = {2020 IEEE International Symposium on Workload Characterization (IISWC)},
+  pages     = {37--47},
+  publisher = {IEEE},
+  year      = {2020},
+  doi       = {10.1109/IISWC50251.2020.00013}
+}
+
+@inproceedings{zhang2020osca,
+  author    = {Yu Zhang and Ping Huang and Ke Zhou and Hua Wang and Jianying Hu and Yongguang Ji and Bin Cheng},
+  title     = {{OSCA}: An Online-Model Based Cache Allocation Scheme in Cloud Block Storage Systems},
+  booktitle = {2020 USENIX Annual Technical Conference (USENIX ATC 20)},
+  pages     = {785--798},
+  publisher = {USENIX Association},
+  year      = {2020},
+  url       = {https://www.usenix.org/conference/atc20/presentation/zhang-yu}
+}
+
+@misc{snia_tencent_cbs,
+  author       = {{SNIA IOTTA Repository}},
+  title        = {Tencent Block Storage (trace set 27917)},
+  howpublished = {\url{https://iotta.snia.org/traces/27917}},
+  note         = {Released with Zhang et al., USENIX ATC 2020. Accessed 2026-10-26},
+  year         = {2020}
+}
+
+@inproceedings{yang2020twemcache,
+  author    = {Juncheng Yang and Yao Yue and K. V. Rashmi},
+  title     = {A Large Scale Analysis of Hundreds of In-memory Cache Clusters at {Twitter}},
+  booktitle = {14th USENIX Symposium on Operating Systems Design and Implementation (OSDI 20)},
+  pages     = {191--208},
+  publisher = {USENIX Association},
+  year      = {2020},
+  url       = {https://www.usenix.org/conference/osdi20/presentation/yang}
+}
+
+@misc{libcachesim,
+  author       = {Juncheng Yang and others},
+  title        = {{libCacheSim}: A High-Performance Library for Building and Running Cache Simulations},
+  howpublished = {\url{https://github.com/1a1a11a/libCacheSim}},
+  note         = {Apache License 2.0. Accessed 2026-10-26},
+  year         = {2026}
+}
+
+@misc{cmupdl_cachedatasets,
+  author       = {{CMU Parallel Data Lab}},
+  title        = {Cache Datasets in {oracleGeneral} Format (alibabaBlock, fiu, msr, tencentBlock, \ldots)},
+  howpublished = {\url{https://ftp.pdl.cmu.edu/pub/datasets/twemcacheWorkload/cacheDatasets/}},
+  note         = {zstd-compressed records of (uint32 timestamp, uint64 obj\_id, uint32 obj\_size, int64 next\_access\_vtime). Accessed 2026-10-26},
+  year         = {2023}
+}
+
+% ---------------------------------------------------------------------------
+% F. Web prefetching and session-based next-item prediction
+% ---------------------------------------------------------------------------
+
+@article{padmanabhan1996using,
+  author    = {Venkata N. Padmanabhan and Jeffrey C. Mogul},
+  title     = {Using Predictive Prefetching to Improve {World Wide Web} Latency},
+  journal   = {ACM SIGCOMM Computer Communication Review},
+  volume    = {26},
+  number    = {3},
+  pages     = {22--36},
+  year      = {1996},
+  doi       = {10.1145/235160.235164}
+}
+
+@inproceedings{kroeger1997exploring,
+  author    = {Thomas M. Kroeger and Darrell D. E. Long and Jeffrey C. Mogul},
+  title     = {Exploring the Bounds of Web Latency Reduction from Caching and Prefetching},
+  booktitle = {USENIX Symposium on Internet Technologies and Systems (USITS 97)},
+  pages     = {13--22},
+  publisher = {USENIX Association},
+  year      = {1997},
+  url       = {https://www.usenix.org/conference/usits-97/exploring-bounds-web-latency-reduction-caching-and-prefetching}
+}
+
+@inproceedings{fan1999web,
+  author    = {Li Fan and Pei Cao and Wei Lin and Quinn Jacobson},
+  title     = {Web Prefetching between Low-Bandwidth Clients and Proxies: Potential and Performance},
+  booktitle = {Proceedings of the 1999 ACM SIGMETRICS International Conference on Measurement and Modeling of Computer Systems},
+  pages     = {178--187},
+  publisher = {ACM},
+  year      = {1999},
+  doi       = {10.1145/301453.301557}
+}
+
+@inproceedings{hidasi2016session,
+  author    = {Bal{\'a}zs Hidasi and Alexandros Karatzoglou and Linas Baltrunas and Domonkos Tikk},
+  title     = {Session-based Recommendations with Recurrent Neural Networks},
+  booktitle = {4th International Conference on Learning Representations (ICLR 2016)},
+  year      = {2016},
+  eprint    = {1511.06939},
+  archivePrefix = {arXiv},
+  url       = {https://arxiv.org/abs/1511.06939}
+}
+
+@inproceedings{kang2018sasrec,
+  author    = {Wang-Cheng Kang and Julian McAuley},
+  title     = {Self-Attentive Sequential Recommendation},
+  booktitle = {2018 IEEE International Conference on Data Mining (ICDM)},
+  pages     = {197--206},
+  publisher = {IEEE},
+  year      = {2018},
+  doi       = {10.1109/ICDM.2018.00035}
+}
+
+@misc{retailrocket2017,
+  author       = {{Retailrocket}},
+  title        = {Retailrocket Recommender System Dataset (events.csv, version 2)},
+  howpublished = {Kaggle, \url{https://www.kaggle.com/datasets/retailrocket/ecommerce-dataset}},
+  note         = {Licensed CC BY-NC-SA 4.0 per the Kaggle listing. Accessed 2026-10-26}
+}
+
+@article{pedregosa2011sklearn,
+  author    = {Fabian Pedregosa and Ga{\"e}l Varoquaux and Alexandre Gramfort and Vincent Michel and Bertrand Thirion and Olivier Grisel and Mathieu Blondel and Peter Prettenhofer and Ron Weiss and Vincent Dubourg and Jake Vanderplas and Alexandre Passos and David Cournapeau and Matthieu Brucher and Matthieu Perrot and {\'E}douard Duchesnay},
+  title     = {Scikit-learn: Machine Learning in {Python}},
+  journal   = {Journal of Machine Learning Research},
+  volume    = {12},
+  pages     = {2825--2830},
+  year      = {2011},
+  url       = {https://jmlr.org/papers/v12/pedregosa11a.html}
+}
+
+% ---------------------------------------------------------------------------
+% G. Software and Linux interfaces used by the testbed (added by WP7)
+%    Each was checked on 2026-10-26 against the page named in the entry:
+%    the NeurIPS proceedings BibTeX for PyTorch (it lists no page range, so
+%    none is given) and the man7.org rendering of the Linux man-pages 6.19
+%    release, or docs.kernel.org, for the interfaces. A man page's year is
+%    the date in that page's footer.
+% ---------------------------------------------------------------------------
+
+@inproceedings{paszke2019pytorch,
+  author    = {Adam Paszke and Sam Gross and Francisco Massa and Adam Lerer and James Bradbury and Gregory Chanan and Trevor Killeen and Zeming Lin and Natalia Gimelshein and Luca Antiga and Alban Desmaison and Andreas Kopf and Edward Yang and Zachary DeVito and Martin Raison and Alykhan Tejani and Sasank Chilamkurthy and Benoit Steiner and Lu Fang and Junjie Bai and Soumith Chintala},
+  title     = {{PyTorch}: An Imperative Style, High-Performance Deep Learning Library},
+  booktitle = {Advances in Neural Information Processing Systems 32 (NeurIPS 2019)},
+  editor    = {H. Wallach and H. Larochelle and A. Beygelzimer and F. d'Alch{\'e}-Buc and E. Fox and R. Garnett},
+  publisher = {Curran Associates, Inc.},
+  year      = {2019},
+  url       = {https://proceedings.neurips.cc/paper_files/paper/2019/hash/bdbca288fee7f92f2bfa9f7012727740-Abstract.html}
+}
+
+@misc{man_posix_fadvise,
+  author       = {{Linux man-pages project}},
+  title        = {posix\_fadvise(2): Predeclare an Access Pattern for File Data},
+  howpublished = {\url{https://man7.org/linux/man-pages/man2/posix_fadvise.2.html}},
+  note         = {Linux man-pages 6.19, page dated 2026-02-08. Covers POSIX\_FADV\_WILLNEED and POSIX\_FADV\_DONTNEED. Accessed 2026-10-26},
+  year         = {2026}
+}
+
+@misc{man_readahead,
+  author       = {{Linux man-pages project}},
+  title        = {readahead(2): Initiate File Readahead into Page Cache},
+  howpublished = {\url{https://man7.org/linux/man-pages/man2/readahead.2.html}},
+  note         = {Linux man-pages 6.19, page dated 2026-02-08. Linux-specific; added in Linux 2.4.13. Accessed 2026-10-26},
+  year         = {2026}
+}
+
+@misc{man_cachestat,
+  author       = {{Linux man-pages project}},
+  title        = {cachestat(2): Query the Page Cache Statistics of a File},
+  howpublished = {\url{https://man7.org/linux/man-pages/man2/cachestat.2.html}},
+  note         = {Linux man-pages 6.19, page dated 2025-06-28. Added in Linux 6.5. Accessed 2026-10-26},
+  year         = {2025}
+}
+
+@misc{man_readv,
+  author       = {{Linux man-pages project}},
+  title        = {readv(2): Read or Write Data into Multiple Buffers (preadv2 and {RWF\_NOWAIT})},
+  howpublished = {\url{https://man7.org/linux/man-pages/man2/preadv2.2.html}},
+  note         = {Linux man-pages 6.19, page dated 2026-02-22. RWF\_NOWAIT for preadv2 since Linux 4.14. Accessed 2026-10-26},
+  year         = {2026}
+}
+
+@misc{man_open,
+  author       = {{Linux man-pages project}},
+  title        = {open(2): Open and Possibly Create a File ({O\_DIRECT})},
+  howpublished = {\url{https://man7.org/linux/man-pages/man2/open.2.html}},
+  note         = {Linux man-pages 6.19, page dated 2026-02-08. O\_DIRECT since Linux 2.4.10. Accessed 2026-10-26},
+  year         = {2026}
+}
+
+@misc{linux_cgroup_v2,
+  author       = {{The Linux Kernel Documentation}},
+  title        = {Control Group v2},
+  howpublished = {\url{https://docs.kernel.org/admin-guide/cgroup-v2.html}},
+  note         = {Memory controller: memory.max, and page-cache charging to the instantiating cgroup. Accessed 2026-10-26},
+  year         = {2026}
+}
+
+@misc{linux_mglru,
+  author       = {{The Linux Kernel Documentation}},
+  title        = {Multi-Gen {LRU}},
+  howpublished = {\url{https://docs.kernel.org/admin-guide/mm/multigen_lru.html}},
+  note         = {Alternative LRU implementation for page reclaim; state in /sys/kernel/mm/lru\_gen/enabled. Accessed 2026-10-26},
+  year         = {2026}
+}

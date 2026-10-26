@@ -1,0 +1,28 @@
+% IV. Systems. Describes code, not results. Kernel facts quoted here are
+% cited to the man pages and kernel documentation in refs.bib section G.
+% Feeds from: src/adaptive_prefetch (WP3), src/adaptive_prefetch/realio
+% (WP8), src/webprefetch (WP5), src/webprefetch/live (WP12).
+
+\section{Systems}\label{sec:systems}
+
+\subsection{Disk simulator and policies}\label{sec:systems-disk}
+\todo{The causal replay loop shared by every mode, the first-window
+prefetch gate, the twelve modes plus linux\_ra and learned\_depth, and
+the device-I/O accounting (WP3).}
+
+\subsection{Real Linux testbed}\label{sec:systems-realio}
+\todo{Backend A: buffered reads through the page cache with
+POSIX\_FADV\_WILLNEED hints~\cite{man_posix_fadvise} inside a memory
+cgroup~\cite{linux_cgroup_v2}. Backend B: O\_DIRECT~\cite{man_open} reads
+with asynchronous prefetch threads. The online driver. Kernel facts: the
+per-call WILLNEED truncation, the cgroup charging rule, and residency
+checks with cachestat versus RWF\_NOWAIT~\cite{man_cachestat,man_readv};
+the host kernel uses the multi-gen LRU~\cite{linux_mglru} (WP8).}
+
+\subsection{Web replay}\label{sec:systems-web}
+\todo{Per-session LRU cache, the ranker and its scorers, the fixed and
+adaptive controllers, the online index, and the feedback gate (WP5).}
+
+\subsection{Live HTTP replay}\label{sec:systems-live}
+\todo{The asyncio origin, the precise timer, the priority link and the
+validity gate (WP12).}

@@ -1,0 +1,17 @@
+% XI. Threats to validity. The full list from MASTER_PLAN section 5; if
+% space is short the long form moves to the appendix.
+
+\section{Threats to Validity}\label{sec:threats}
+
+\todo{Trace format: oracleGeneral records carry no read/write flag and no
+service time, and timestamps are whole seconds; the FIU page-merge rule is
+ambiguous; the request caps (checked by C3); twin traces.}
+
+\todo{Model assumptions: instant prefetch in both simulators (bounded by
+the real-device and live HTTP runs); the multi-gen LRU in the kernel versus
+LRU in the simulators; assumed web object sizes, RTT and bandwidth; the
+per-session cache scope; heuristic thirty-minute sessions; a single
+retailer; ranking metrics versus cache utility.}
+
+\todo{Measurement environment: a shared host and a shared GPU, with the
+load and contention recorded in each provenance.json.}

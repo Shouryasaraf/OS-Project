@@ -1,0 +1,28 @@
+% V. Methodology. Every count, cap and hardware figure comes from the
+% results files below through numbers.tex or a generated table.
+% Feeds from: results/disk/corpus_profile.csv, results/web/dataset_profile.json,
+% results/realio/device_*.json, results/gpu/gpu_env.json, and the
+% provenance.json in each results directory.
+% Table T1 (datasets) comes from paper/tables/make_tables.py.
+
+\section{Methodology}\label{sec:method}
+
+\todo{Table T1 (datasets): the oracleGeneral block traces in four corpora
+with their reconstruction rules (MSR, Alibaba and Tencent records as
+requests; FIU pages merged into requests with a sector cap), twin traces
+and request caps, from results/disk/corpus\_profile.csv; and the
+RetailRocket splits from results/web/dataset\_profile.json. Cite the trace
+and dataset sources~\cite{narayanan2008write,koller2010iodedup,
+li2020alibaba,zhang2020osca,snia_tencent_cbs,cmupdl_cachedatasets,
+yang2020twemcache,libcachesim,retailrocket2017}.}
+
+\todo{Protocols: chronological validation and test splits; paired and
+cluster bootstrap CIs (method, resamples and seed from the PREREGISTERED.md
+files); repeats per configuration; the training range of every trained
+artifact, which is never scored on its own training segment.}
+
+\todo{Hardware table: CPU, the HDD and SSD models, kernel, page-cache
+reclaim policy, and the GPU with its contention record, from
+results/realio/device\_*.json and results/gpu/gpu\_env.json. Software:
+PyTorch~\cite{paszke2019pytorch} and
+scikit-learn~\cite{pedregosa2011sklearn}.}
