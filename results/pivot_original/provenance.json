@@ -1,0 +1,27 @@
+{
+  "study": "web",
+  "source": "branch pivot/retailrocket-adaptive-prefetch, directory outputs/",
+  "git_sha": "8569cdf476ab49442ed9077c9617ab0574b48fd5",
+  "command": "webprefetch run (full validation and test splits, pivot layout)",
+  "copied_verbatim": true,
+  "note": "The pivot branch's committed outputs, kept unmodified for the reproduction claim. They were produced before any master-branch change to webprefetch; session_parity.json was written by hand on pivot (no script generates it).",
+  "sha256": {
+    "benchmark.json": "a6f40638a55fd8c8f77edcfdf8f8ebcf2759cbb77b32675089accfeab2cb2cd5",
+    "break_even.csv": "161589dcc9a78b60121e25cf61406948fa46f44969345850ce0aa14422bd6e23",
+    "break_even_curve.csv": "d1ccfa99ed05c534a8624c902bb0e4b07886c9cc091ffd62cd8409e19b297184",
+    "calibration.csv": "b05a11158fa6cf20f60586405a606305cffb576fa3c24918060b42b0679f17b4",
+    "cohorts.csv": "a7f99dc6e1ed3035a880af3c78c4164ac14862186b459cdc4797b89d4492b2ff",
+    "comparisons.csv": "99ebbdd5068a24638b0cd35c703a60467aa4f83efa5f6eb4ad71a9f19c5e768c",
+    "demo.json": "5ca63808e7ca4c992bfd374da5165bf2be169ea0fd5d9b488ea4c0cea97d6bfb",
+    "eda.md": "f1042683d829e38de4abcdb05ac164c9cc0fdf05085c1ff0a6ddee14c93506e5",
+    "model_diagnostics.csv": "e6fcff3282001dfa97e1517b4e78347a8272ef56d6cc7a0d65fb7fa5b6b7e1ea",
+    "reliability.svg": "5c2f0002f627b2ce9dbd49d0d3b985813672425be336ea8cabd631dbe1af9138",
+    "report.md": "8fcda588d194d6d2b2fcc2c120cefd571d77b6822c8593fc14d3bcf8d2335816",
+    "session_gap_sensitivity.csv": "7495871cab319e472745980dbf22793a5726e3981ec5910c63fc5badfb9cc2cf",
+    "session_parity.json": "a3c74480481c9a8d12cc49b46ebf02445c81561a79c516ed22bba0bfa50a7a36",
+    "subset_vs_full.csv": "0c15609e417295c0f35eddab3e7455baeb6e6cf31f99f800faa6ff1dbb96d35f",
+    "test_metrics.csv": "410a1519fe9688523310e22a53e1baea398ac1b01a1321126f760ac8df198b90",
+    "transition_baseline.csv": "370ee1933baa89224482034c464728dd609ce6e18de9f0133ff885bbe4bbf277",
+    "validation_metrics.csv": "c18b3734fc3655fb5ef71b31e56f50db1fa20f2328e46a2e3829a2e197af7b9f"
+  }
+}

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prefetch Lab · RetailRocket</title>
+<style>
+:root{font:16px/1.5 system-ui,sans-serif;color:#18303d;background:#f3f6f4}*{box-sizing:border-box}
+body{margin:0}header{background:#102d38;color:white;padding:24px max(24px,calc((100vw - 1150px)/2))}
+h1{font-size:2rem;margin:0}h2{font-size:1.25rem;margin:0 0 12px}p{margin:8px 0}.sub{color:#c3d9df}
+main{max-width:1150px;margin:22px auto;padding:0 20px 50px;display:grid;gap:18px}
+.banner{background:#e4f1e9;border-left:5px solid #228069;padding:13px 18px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.card{background:white;border:1px solid #d6e2df;border-radius:12px;padding:20px;box-shadow:0 3px 14px #173e4510}
+label{display:inline-flex;flex-direction:column;font-weight:650;gap:4px;margin:4px 10px 8px 0}select,input,textarea,button{font:inherit;border-radius:7px;border:1px solid #a5bab7;padding:8px;background:white;color:#18303d}
+button{background:#136a66;color:white;border:0;cursor:pointer;font-weight:650}button:hover{background:#0d514e}button:disabled{opacity:.5;cursor:not-allowed}
+.muted{color:#576d70;font-size:.9rem}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}.metric{background:#eef5f3;padding:10px;border-radius:7px}.metric strong{display:block;font-size:1.3rem}
+.timeline{display:flex;flex-wrap:wrap;gap:5px;margin:15px 0}.timeline button{min-width:38px;background:#e2efec;color:#134a48}.timeline button.active{background:#136a66;color:white}.timeline button.hit{border:2px solid #31a677}
+.cache{display:flex;gap:6px;flex-wrap:wrap;min-height:40px}.pill{padding:5px 9px;border-radius:5px;background:#dbe8ef;font-variant-numeric:tabular-nums}.pill.issued{background:#abdec8}
+.candidates{display:grid;gap:4px}.candidate{display:grid;grid-template-columns:84px 1fr 60px;gap:8px;align-items:center;font-size:.87rem}.track{height:8px;background:#e9eeee;border-radius:5px}.fill{height:100%;background:#368b85;border-radius:5px}
+table{border-collapse:collapse;width:100%;font-size:.88rem}th,td{text-align:right;padding:7px 5px;border-bottom:1px solid #e0e8e5}th:first-child,td:first-child{text-align:left}tr.selected{background:#e4f4eb}
+.scroll{overflow:auto}.chart{width:100%;height:170px}textarea{width:100%;min-height:66px}small{display:block}.warn{color:#a15f1e}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}}
+</style>
+<header><h1>Prefetch Lab</h1><p class="sub">Follow real held-out product views through a trained ranker and a simulated browser cache.</p></header>
+<main>
+  <div class="banner"><strong>What this measures:</strong> simulated object-cache hits and issued prefetch requests on RetailRocket events. Product IDs have no catalog names or imagery. Scores are candidate-level probabilities, not a normalized next-page distribution. Page-load time, bytes, and live browser behavior were not recorded.</div>
+  <div class="grid">
+    <section class="card"><h2>1 · Choose a session</h2>
+      <label>Held-out session<select id="session"></select></label><button id="random">Random real session</button>
+      <p id="source" class="muted"></p><div id="sequence" class="timeline"></div>
+      <label>Cache objects<select id="capacity"><option>2</option><option>4</option><option selected>8</option><option>16</option><option>32</option></select></label>
+      <label>Issued-request cost <input id="cost" type="number" min="0" max="1" step="0.01" value="0.01"></label>
+      <label>Policy<select id="policy"><option value="adaptive">Adaptive (cost penalty)</option><option value="fixed0">No prefetch</option><option value="fixed1">Fixed 1</option><option value="fixed2">Fixed 2</option><option value="fixed4">Fixed 4</option><option value="fixed8">Fixed 8</option><option value="gate">Confidence gate</option></select></label>
+      <label>Gate threshold<input id="threshold" type="number" min="0" max="1" step="0.01" value="0.01"></label>
+      <p class="muted">Change a control to replay the same prefix. Cache state is reset at the start of every session.</p>
+    </section>
+    <section class="card"><h2>2 · Inspect the decision</h2><p id="decision">Loading…</p>
+      <div class="metrics" id="metrics"></div><strong>Cache before → after</strong><div id="cache" class="cache"></div>
+      <p id="outcome"></p><strong>Ranked real candidates</strong><div id="candidates" class="candidates"></div>
+    </section>
+  </div>
+  <div class="grid">
+    <section class="card"><h2>3 · Compare policies on this session</h2>
+      <p class="muted">These session totals use the selected capacity and cost. They are a small illustration, not the benchmark estimate.</p>
+      <div class="scroll"><table><thead><tr><th>Policy</th><th>Hits</th><th>Issued</th><th>Unused</th><th>Utility/view</th></tr></thead><tbody id="policyRows"></tbody></table></div>
+    </section>
+    <section class="card"><h2>4 · Try a sequence</h2>
+      <p class="muted">Enter 1–30 real product IDs separated by commas. This is a hypothetical path; timestamps, carts, and gaps are set to zero.</p>
+      <textarea id="items" placeholder="e.g. 359526, 48606, 295841"></textarea><button id="try">Replay sequence</button><button id="back">Back to held-out data</button>
+      <p id="customStatus" class="warn"></p>
+    </section>
+  </div>
+  <section class="card"><h2>5 · Full-test results</h2><p class="muted">Policies were selected on validation and frozen for the full test period. Utility = hits/view − assumed cost × issued/view. Intervals resample paired sessions.</p>
+    <label>Benchmark cache<select id="resultCapacity"><option>2</option><option>4</option><option selected>8</option><option>16</option><option>32</option></select></label>
+    <div class="scroll"><table><thead><tr><th>Cost</th><th>Fixed</th><th>Adaptive</th><th>Δ utility/view</th><th>Paired 95% interval</th><th>Coverage@8</th></tr></thead><tbody id="results"></tbody></table></div>
+    <h3>Cost sensitivity at cache 8</h3><svg id="curve" class="chart" role="img" aria-label="Adaptive minus fixed utility by assumed cost"></svg>
+    <p id="context" class="muted"></p>
+  </section>
+</main>
+<script>
+const $=id=>document.getElementById(id), esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let staticData=null, summary=null, sessions=[], current=null, selectedStep=0, custom=null, token=0;
+async function api(path,body){let r=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});let v=await r.json();if(!r.ok)throw Error(v.error||'Request failed');return v}
+async function init(){try{summary=await api('/api/summary');sessions=(await api('/api/sessions?limit=60')).sessions}catch(e){staticData=await (await fetch('export.json')).json();summary=staticData.summary;sessions=staticData.sessions;$('try').disabled=true;$('customStatus').textContent='Static export: custom sequences require the Python server; the included sessions and policies are precomputed.'}
+  $('session').innerHTML=sessions.map(s=>`<option value="${s.id}">Session ${s.id} · ${s.views} views · visitor ${s.visitor_token}</option>`).join('');
+  $('resultCapacity').onchange=renderResults;renderResults();await choose(sessions[0].id)}
+async function choose(id){custom=null;let detail=staticData?staticData.details[id]:await api('/api/session/'+id);current=detail;$('session').value=id;selectedStep=0;await render()}
+async function run(policy,step){let capacity=+$('capacity').value,cost=+$('cost').value;if(staticData){if(custom)throw Error('Static export cannot run custom sequences');if(capacity!==8||cost!==.01)throw Error('Static export has capacity 8 and cost 0.01; use the Python server for other controls');let result=staticData.steps[current.id]?.[policy];if(!result)throw Error('This policy is unavailable in static export');return {...result,steps:result.steps.slice(0,step+1)}}
+  return api('/api/step',{session_id:current.id,items:custom,step,policy,capacity,cost,threshold:+$('threshold').value})}
+async function render(){if(!current)return;const serial=++token;let views=custom?custom.map(item=>({item,timestamp:0})):current.views;selectedStep=Math.min(selectedStep,views.length-1);
+  $('source').textContent=custom?'Hypothetical path using real historical product IDs':`${current.source} · ${views.length} views`;
+  $('sequence').innerHTML=views.map((v,i)=>`<button class="${i===selectedStep?'active':''}" data-step="${i}" title="Product ${v.item}">${i+1}</button>`).join('');
+  document.querySelectorAll('#sequence button').forEach(b=>b.onclick=()=>{selectedStep=+b.dataset.step;render()});
+  try{let res=await run($('policy').value,selectedStep);if(serial!==token)return;let s=res.steps.at(-1),t=res.totals;
+    $('decision').textContent=`Step ${selectedStep+1}: requested product ${s.item}. ${s.demand_hit?'Cache hit':'Cache miss'}. Depth ${s.selected_depth}; ${s.issued_now} new prefetch${s.issued_now===1?'':'es'}.`;
+    $('metrics').innerHTML=[['Hits',s.running_hits],['Issued',s.running_issued],['Unused',s.running_unused],['Utility/view',s.running_utility.toFixed(4)]].map(([n,v])=>`<div class="metric">${n}<strong>${v}</strong></div>`).join('');
+    $('cache').innerHTML=`<span class="muted">${s.cache_before.join(', ')||'empty'}</span><span>→</span>`+s.cache_after.map(item=>`<span class="pill ${s.issued_items.includes(item)?'issued':''}">${item}</span>`).join('');
+    $('outcome').textContent=s.actual_next_item===null?'End of session':`Actual next product ${s.actual_next_item}: ${s.next_item_in_cache?'resident after decision':'not resident after decision'}. ${s.unused_evicted_now} unused speculative object(s) evicted now.`;
+    $('candidates').innerHTML=s.candidates.map(([item,p])=>`<div class="candidate"><span>${item}</span><div class="track"><div class="fill" style="width:${Math.min(100,p*1500)}%"></div></div><span>${(p*100).toFixed(2)}%</span></div>`).join('')||'<p>No candidates</p>';
+    await compare(serial,views.length-1);
+  }catch(e){if(serial===token){$('decision').textContent=e.message;$('metrics').innerHTML='';$('policyRows').innerHTML=''}}}
+async function compare(serial,last){let names=staticData?['adaptive','fixed0','fixed1']:['adaptive','fixed0','fixed1','fixed2','fixed4','fixed8','gate'];let rows=await Promise.allSettled(names.map(n=>run(n,last)));if(serial!==token)return;
+  $('policyRows').innerHTML=rows.map((r,i)=>{if(r.status!=='fulfilled')return '';let v=r.value,t=v.totals,n=names[i],utility=(t.hits-(+$('cost').value)*t.issued)/t.views;return `<tr class="${n===$('policy').value?'selected':''}"><td>${esc(n)}</td><td>${t.hits}</td><td>${t.issued}</td><td>${t.unused}</td><td>${utility.toFixed(4)}</td></tr>`}).join('')}
+function renderResults(){let cap=$('resultCapacity').value,rows=summary.comparisons.filter(r=>r.capacity===cap);
+  $('results').innerHTML=rows.map(r=>`<tr><td>${r.cost_per_prefetch}</td><td>${esc(r.fixed_policy)}</td><td>${esc(r.adaptive_policy)}</td><td>${(+r.adaptive_minus_fixed_utility).toFixed(5)}</td><td>[${(+r.paired_95pct_low).toFixed(5)}, ${(+r.paired_95pct_high).toFixed(5)}]</td><td>${(100*r.candidate_coverage_at_8).toFixed(2)}%</td></tr>`).join('');
+  let c=summary.comparisons.filter(r=>r.capacity==='8'),max=Math.max(...c.map(r=>+r.cost_per_prefetch)),values=c.map(r=>+r.adaptive_minus_fixed_utility);let lo=Math.min(0,...values),hi=Math.max(0,...values),y=v=>140-110*(v-lo)/(hi-lo||1),x=v=>45+430*v/(max||1);
+  $('curve').setAttribute('viewBox','0 0 500 170');$('curve').innerHTML=`<line x1="45" y1="${y(0)}" x2="475" y2="${y(0)}" stroke="#b8c7c4"/><polyline fill="none" stroke="#136a66" stroke-width="3" points="${c.map(r=>`${x(+r.cost_per_prefetch)},${y(+r.adaptive_minus_fixed_utility)}`).join(' ')}"/>`+c.map(r=>`<circle cx="${x(+r.cost_per_prefetch)}" cy="${y(+r.adaptive_minus_fixed_utility)}" r="4" fill="#136a66"/>`).join('')+`<text x="45" y="160" font-size="12">0</text><text x="430" y="160" font-size="12">cost ${max}</text>`;
+  $('context').textContent=`Full test: ${Number(summary.benchmark.test_views).toLocaleString()} views. Cache 8 coverage@8: ${(100*c[0].candidate_coverage_at_8).toFixed(2)}% of eligible next-view pairs. Break-even values and cohort diagnostics are in the exported CSVs.`}
+$('session').onchange=()=>choose(+$('session').value);
+$('random').onclick=async()=>{if(staticData){await choose(sessions[Math.floor(Math.random()*sessions.length)].id)}else{let seed=Math.floor(Math.random()*2**31),list=(await api('/api/sessions?limit=1&seed='+seed)).sessions;let s=list[0];if(!$('session').querySelector(`option[value="${s.id}"]`))$('session').add(new Option(`Session ${s.id} · ${s.views} views · visitor ${s.visitor_token}`,s.id));await choose(s.id)}};
+for(let id of ['capacity','cost','policy','threshold'])$(id).onchange=render;
+$('try').onclick=async()=>{try{let items=$('items').value.split(/[\s,]+/).filter(Boolean).map(Number);if(!items.length||items.some(n=>!Number.isSafeInteger(n)))throw Error('Enter comma-separated integer IDs');custom=items;selectedStep=0;$('customStatus').textContent='Hypothetical sequence; the trained model and real product ID index still score every step.';await render()}catch(e){$('customStatus').textContent=e.message}};
+$('back').onclick=()=>choose(+$('session').value);
+init().catch(e=>{$('decision').textContent='Could not load data: '+e.message});
+</script>
+</html>
