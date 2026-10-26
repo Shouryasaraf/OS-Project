@@ -1,0 +1,4892 @@
+{
+  "device_requested": "cuda",
+  "torch": "2.11.0+cu128",
+  "cuda_device": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+  "jobs": [
+    {
+      "job": "alibabaBlock_13_s0",
+      "device": "cuda",
+      "train_s": 11.723,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793028099.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028109.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028111.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_13_s1",
+      "device": "cuda",
+      "train_s": 11.696,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 96-98%",
+      "samples": [
+        {
+          "t": 1793028111.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028121.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028123.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "96"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_13_s2",
+      "device": "cuda",
+      "train_s": 4.444,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 2 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 96-99%",
+      "samples": [
+        {
+          "t": 1793028123.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "96"
+            }
+          ]
+        },
+        {
+          "t": 1793028128.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_13_s3",
+      "device": "cuda",
+      "train_s": 11.926,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793028128.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028138.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028140.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_13_s4",
+      "device": "cuda",
+      "train_s": 11.683,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 87-98%",
+      "samples": [
+        {
+          "t": 1793028140.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "87"
+            }
+          ]
+        },
+        {
+          "t": 1793028150.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028152.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_14_s0",
+      "device": "cuda",
+      "train_s": 11.726,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027979.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027989.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027990.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_14_s1",
+      "device": "cuda",
+      "train_s": 11.912,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027991.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028001.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028003.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_14_s2",
+      "device": "cuda",
+      "train_s": 11.915,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 96-99%",
+      "samples": [
+        {
+          "t": 1793028003.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028013.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "96"
+            }
+          ]
+        },
+        {
+          "t": 1793028015.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_14_s3",
+      "device": "cuda",
+      "train_s": 11.732,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 91-99%",
+      "samples": [
+        {
+          "t": 1793028015.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "91"
+            }
+          ]
+        },
+        {
+          "t": 1793028025.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028027.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_14_s4",
+      "device": "cuda",
+      "train_s": 11.728,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 85-99%",
+      "samples": [
+        {
+          "t": 1793028027.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "85"
+            }
+          ]
+        },
+        {
+          "t": 1793028037.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028039.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_17_s0",
+      "device": "cuda",
+      "train_s": 11.74,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 89-99%",
+      "samples": [
+        {
+          "t": 1793028039.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "89"
+            }
+          ]
+        },
+        {
+          "t": 1793028049.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028051.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_17_s1",
+      "device": "cuda",
+      "train_s": 11.715,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 88-98%",
+      "samples": [
+        {
+          "t": 1793028051.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "88"
+            }
+          ]
+        },
+        {
+          "t": 1793028061.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028063.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_17_s2",
+      "device": "cuda",
+      "train_s": 11.939,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 95-98%",
+      "samples": [
+        {
+          "t": 1793028063.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "95"
+            }
+          ]
+        },
+        {
+          "t": 1793028073.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028075.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_17_s3",
+      "device": "cuda",
+      "train_s": 11.781,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793028075.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028085.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028087.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_17_s4",
+      "device": "cuda",
+      "train_s": 11.719,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793028087.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028097.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028099.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_19_s0",
+      "device": "cuda",
+      "train_s": 11.842,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44725-44767 of 97887 MiB, utilisation 97-99%",
+      "samples": [
+        {
+          "t": 1793027919.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        },
+        {
+          "t": 1793027929.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44767",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027930.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44767",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_19_s1",
+      "device": "cuda",
+      "train_s": 11.772,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44767-44767 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027931.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44767",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027941.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44767",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027943.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44767",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_19_s2",
+      "device": "cuda",
+      "train_s": 11.694,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44767-44767 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027943.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44767",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027953.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44767",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027954.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44767",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_19_s3",
+      "device": "cuda",
+      "train_s": 11.736,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-44767 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027955.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44767",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027965.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027966.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_19_s4",
+      "device": "cuda",
+      "train_s": 11.736,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027967.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027977.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027978.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_23_s0",
+      "device": "cuda",
+      "train_s": 11.853,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 45478-45544 of 97887 MiB, utilisation 96-99%",
+      "samples": [
+        {
+          "t": 1793027859.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45478",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027869.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45502",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027871.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45544",
+              "memory.total": "97887",
+              "utilization.gpu": "96"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_23_s1",
+      "device": "cuda",
+      "train_s": 11.686,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 45544-45544 of 97887 MiB, utilisation 91-98%",
+      "samples": [
+        {
+          "t": 1793027871.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45544",
+              "memory.total": "97887",
+              "utilization.gpu": "91"
+            }
+          ]
+        },
+        {
+          "t": 1793027881.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45544",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027883.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45544",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_23_s2",
+      "device": "cuda",
+      "train_s": 11.61,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 45544-45544 of 97887 MiB, utilisation 91-98%",
+      "samples": [
+        {
+          "t": 1793027883.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45544",
+              "memory.total": "97887",
+              "utilization.gpu": "91"
+            }
+          ]
+        },
+        {
+          "t": 1793027893.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45544",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027895.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45544",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_23_s3",
+      "device": "cuda",
+      "train_s": 11.614,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44725-45544 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027895.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45544",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027905.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027906.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_23_s4",
+      "device": "cuda",
+      "train_s": 11.615,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44725-44725 of 97887 MiB, utilisation 97-99%",
+      "samples": [
+        {
+          "t": 1793027907.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027917.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027918.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_3_s0",
+      "device": "cuda",
+      "train_s": 11.737,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793028152.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028162.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028164.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_3_s1",
+      "device": "cuda",
+      "train_s": 11.621,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-98%",
+      "samples": [
+        {
+          "t": 1793028164.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028174.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028176.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_3_s2",
+      "device": "cuda",
+      "train_s": 11.804,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793028176.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028186.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028188.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_3_s3",
+      "device": "cuda",
+      "train_s": 11.681,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793028188.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028198.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028200.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "alibabaBlock_3_s4",
+      "device": "cuda",
+      "train_s": 11.7,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793028200.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028210.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028212.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_casa-110108-112108_s0",
+      "device": "cuda",
+      "train_s": 11.712,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-44723 of 97887 MiB, utilisation 87-98%",
+      "samples": [
+        {
+          "t": 1793027684.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "87"
+            }
+          ]
+        },
+        {
+          "t": 1793027694.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027696.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_casa-110108-112108_s1",
+      "device": "cuda",
+      "train_s": 11.682,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-44723 of 97887 MiB, utilisation 95-98%",
+      "samples": [
+        {
+          "t": 1793027696.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "95"
+            }
+          ]
+        },
+        {
+          "t": 1793027706.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027708.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_casa-110108-112108_s2",
+      "device": "cuda",
+      "train_s": 11.706,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-44723 of 97887 MiB, utilisation 98-98%",
+      "samples": [
+        {
+          "t": 1793027708.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027718.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027720.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_casa-110108-112108_s3",
+      "device": "cuda",
+      "train_s": 11.851,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-44765 of 97887 MiB, utilisation 98-98%",
+      "samples": [
+        {
+          "t": 1793027720.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027730.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44765",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027732.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44765",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_casa-110108-112108_s4",
+      "device": "cuda",
+      "train_s": 11.694,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44765-44765 of 97887 MiB, utilisation 87-98%",
+      "samples": [
+        {
+          "t": 1793027732.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44765",
+              "memory.total": "97887",
+              "utilization.gpu": "87"
+            }
+          ]
+        },
+        {
+          "t": 1793027742.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44765",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027744.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44765",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_homes-110108-112108_s0",
+      "device": "cuda",
+      "train_s": 11.568,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44765-44765 of 97887 MiB, utilisation 95-98%",
+      "samples": [
+        {
+          "t": 1793027744.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44765",
+              "memory.total": "97887",
+              "utilization.gpu": "95"
+            }
+          ]
+        },
+        {
+          "t": 1793027754.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44765",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027756.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44765",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_homes-110108-112108_s1",
+      "device": "cuda",
+      "train_s": 11.609,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43945-44765 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027756.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44765",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027766.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027767.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_homes-110108-112108_s2",
+      "device": "cuda",
+      "train_s": 11.593,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43945-43945 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027768.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027778.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027779.7,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_homes-110108-112108_s3",
+      "device": "cuda",
+      "train_s": 11.709,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43945-43945 of 97887 MiB, utilisation 82-98%",
+      "samples": [
+        {
+          "t": 1793027779.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "82"
+            }
+          ]
+        },
+        {
+          "t": 1793027789.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027791.7,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_homes-110108-112108_s4",
+      "device": "cuda",
+      "train_s": 11.809,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43945-43945 of 97887 MiB, utilisation 93-97%",
+      "samples": [
+        {
+          "t": 1793027791.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "93"
+            }
+          ]
+        },
+        {
+          "t": 1793027801.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        },
+        {
+          "t": 1793027803.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_madmax-110108-112108_s0",
+      "device": "cuda",
+      "train_s": 1.473,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 2 nvidia-smi samples (this job included): memory used 45478-45478 of 97887 MiB, utilisation 98-98%",
+      "samples": [
+        {
+          "t": 1793027851.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45478",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027852.7,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45478",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_madmax-110108-112108_s1",
+      "device": "cuda",
+      "train_s": 1.523,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 2 nvidia-smi samples (this job included): memory used 45478-45478 of 97887 MiB, utilisation 98-98%",
+      "samples": [
+        {
+          "t": 1793027852.7,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45478",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027854.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45478",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_madmax-110108-112108_s2",
+      "device": "cuda",
+      "train_s": 1.514,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 2 nvidia-smi samples (this job included): memory used 45478-45478 of 97887 MiB, utilisation 98-98%",
+      "samples": [
+        {
+          "t": 1793027854.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45478",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027855.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45478",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_madmax-110108-112108_s3",
+      "device": "cuda",
+      "train_s": 1.557,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 2 nvidia-smi samples (this job included): memory used 45478-45478 of 97887 MiB, utilisation 98-98%",
+      "samples": [
+        {
+          "t": 1793027855.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45478",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027857.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45478",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_madmax-110108-112108_s4",
+      "device": "cuda",
+      "train_s": 1.41,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 2 nvidia-smi samples (this job included): memory used 45478-45478 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027857.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45478",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027859.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45478",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_online.cs.fiu.edu-110108-113008_s0",
+      "device": "cuda",
+      "train_s": 9.264,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 2 nvidia-smi samples (this job included): memory used 43983-44701 of 97887 MiB, utilisation 97-98%",
+      "samples": [
+        {
+          "t": 1793027803.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43983",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        },
+        {
+          "t": 1793027813.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44701",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_online.cs.fiu.edu-110108-113008_s1",
+      "device": "cuda",
+      "train_s": 9.247,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 2 nvidia-smi samples (this job included): memory used 44701-44725 of 97887 MiB, utilisation 94-98%",
+      "samples": [
+        {
+          "t": 1793027813.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44701",
+              "memory.total": "97887",
+              "utilization.gpu": "94"
+            }
+          ]
+        },
+        {
+          "t": 1793027822.7,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_online.cs.fiu.edu-110108-113008_s2",
+      "device": "cuda",
+      "train_s": 9.249,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 2 nvidia-smi samples (this job included): memory used 44725-44725 of 97887 MiB, utilisation 93-98%",
+      "samples": [
+        {
+          "t": 1793027822.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "93"
+            }
+          ]
+        },
+        {
+          "t": 1793027832.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_online.cs.fiu.edu-110108-113008_s3",
+      "device": "cuda",
+      "train_s": 9.244,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 2 nvidia-smi samples (this job included): memory used 44725-44725 of 97887 MiB, utilisation 95-98%",
+      "samples": [
+        {
+          "t": 1793027832.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "95"
+            }
+          ]
+        },
+        {
+          "t": 1793027841.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "fiu_online.cs.fiu.edu-110108-113008_s4",
+      "device": "cuda",
+      "train_s": 9.229,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 2 nvidia-smi samples (this job included): memory used 44725-45478 of 97887 MiB, utilisation 96-98%",
+      "samples": [
+        {
+          "t": 1793027841.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "96"
+            }
+          ]
+        },
+        {
+          "t": 1793027851.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45478",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "lstm_fiu_homes-110108-112108",
+      "device": "cuda",
+      "train_s": 5.851,
+      "oom_retries": 0,
+      "batch_size": 4096,
+      "gpu_contention": "shared GPU over 2 nvidia-smi samples (this job included): memory used 46645-46645 of 97887 MiB, utilisation 91-96%",
+      "samples": [
+        {
+          "t": 1793028551.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "46645",
+              "memory.total": "97887",
+              "utilization.gpu": "91"
+            }
+          ]
+        },
+        {
+          "t": 1793028557.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "46645",
+              "memory.total": "97887",
+              "utilization.gpu": "96"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "lstm_fiu_ikki-110108-112108",
+      "device": "cuda",
+      "train_s": 5.769,
+      "oom_retries": 0,
+      "batch_size": 4096,
+      "gpu_contention": "shared GPU over 2 nvidia-smi samples (this job included): memory used 46645-46645 of 97887 MiB, utilisation 86-96%",
+      "samples": [
+        {
+          "t": 1793028569.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "46645",
+              "memory.total": "97887",
+              "utilization.gpu": "86"
+            }
+          ]
+        },
+        {
+          "t": 1793028575.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "46645",
+              "memory.total": "97887",
+              "utilization.gpu": "96"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "lstm_msr_hm_0",
+      "device": "cuda",
+      "train_s": 6.161,
+      "oom_retries": 0,
+      "batch_size": 4096,
+      "gpu_contention": "shared GPU over 2 nvidia-smi samples (this job included): memory used 43947-46621 of 97887 MiB, utilisation 95-97%",
+      "samples": [
+        {
+          "t": 1793028520.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        },
+        {
+          "t": 1793028526.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "46621",
+              "memory.total": "97887",
+              "utilization.gpu": "95"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "lstm_msr_prn_0",
+      "device": "cuda",
+      "train_s": 5.78,
+      "oom_retries": 0,
+      "batch_size": 4096,
+      "gpu_contention": "shared GPU over 2 nvidia-smi samples (this job included): memory used 46621-46621 of 97887 MiB, utilisation 87-97%",
+      "samples": [
+        {
+          "t": 1793028534.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "46621",
+              "memory.total": "97887",
+              "utilization.gpu": "87"
+            }
+          ]
+        },
+        {
+          "t": 1793028540.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "46621",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_hm_0_s0",
+      "device": "cuda",
+      "train_s": 12.589,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 39893-44699 of 97887 MiB, utilisation 94-99%",
+      "samples": [
+        {
+          "t": 1793027319.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "39893",
+              "memory.total": "97887",
+              "utilization.gpu": "94"
+            }
+          ]
+        },
+        {
+          "t": 1793027329.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027333.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44699",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_hm_0_s1",
+      "device": "cuda",
+      "train_s": 11.98,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44699-44699 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027333.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44699",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027343.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44699",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027345.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44699",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_hm_0_s2",
+      "device": "cuda",
+      "train_s": 11.98,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44699-44723 of 97887 MiB, utilisation 96-98%",
+      "samples": [
+        {
+          "t": 1793027345.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44699",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027355.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "96"
+            }
+          ]
+        },
+        {
+          "t": 1793027357.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_hm_0_s3",
+      "device": "cuda",
+      "train_s": 11.994,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-44723 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027358.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027368.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027370.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_hm_0_s4",
+      "device": "cuda",
+      "train_s": 11.919,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-44723 of 97887 MiB, utilisation 96-98%",
+      "samples": [
+        {
+          "t": 1793027370.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "96"
+            }
+          ]
+        },
+        {
+          "t": 1793027380.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027382.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_prn_0_s0",
+      "device": "cuda",
+      "train_s": 11.94,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-45476 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027624.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027634.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45398",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027636.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45476",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_prn_0_s1",
+      "device": "cuda",
+      "train_s": 11.871,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 45476-45518 of 97887 MiB, utilisation 97-98%",
+      "samples": [
+        {
+          "t": 1793027636.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45476",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027646.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45518",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027648.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45518",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_prn_0_s2",
+      "device": "cuda",
+      "train_s": 11.707,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 45518-45542 of 97887 MiB, utilisation 83-98%",
+      "samples": [
+        {
+          "t": 1793027648.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45518",
+              "memory.total": "97887",
+              "utilization.gpu": "83"
+            }
+          ]
+        },
+        {
+          "t": 1793027658.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45542",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027660.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45542",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_prn_0_s3",
+      "device": "cuda",
+      "train_s": 11.759,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-45542 of 97887 MiB, utilisation 92-98%",
+      "samples": [
+        {
+          "t": 1793027660.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "45542",
+              "memory.total": "97887",
+              "utilization.gpu": "92"
+            }
+          ]
+        },
+        {
+          "t": 1793027670.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027672.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_prn_0_s4",
+      "device": "cuda",
+      "train_s": 11.688,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-44723 of 97887 MiB, utilisation 87-98%",
+      "samples": [
+        {
+          "t": 1793027672.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "87"
+            }
+          ]
+        },
+        {
+          "t": 1793027682.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027684.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_prn_1_s0",
+      "device": "cuda",
+      "train_s": 11.722,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-44723 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027382.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027392.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027394.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_prn_1_s1",
+      "device": "cuda",
+      "train_s": 11.588,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-44723 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027394.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027404.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027406.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_prn_1_s2",
+      "device": "cuda",
+      "train_s": 11.606,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-44723 of 97887 MiB, utilisation 97-99%",
+      "samples": [
+        {
+          "t": 1793027406.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        },
+        {
+          "t": 1793027416.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027418.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_prn_1_s3",
+      "device": "cuda",
+      "train_s": 11.732,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-44765 of 97887 MiB, utilisation 83-99%",
+      "samples": [
+        {
+          "t": 1793027418.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "83"
+            }
+          ]
+        },
+        {
+          "t": 1793027428.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44765",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027430.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44765",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_prn_1_s4",
+      "device": "cuda",
+      "train_s": 11.778,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44765-44765 of 97887 MiB, utilisation 96-99%",
+      "samples": [
+        {
+          "t": 1793027430.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44765",
+              "memory.total": "97887",
+              "utilization.gpu": "96"
+            }
+          ]
+        },
+        {
+          "t": 1793027440.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44765",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027442.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44765",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_proj_0_s0",
+      "device": "cuda",
+      "train_s": 11.952,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43945-44765 of 97887 MiB, utilisation 92-98%",
+      "samples": [
+        {
+          "t": 1793027442.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44765",
+              "memory.total": "97887",
+              "utilization.gpu": "92"
+            }
+          ]
+        },
+        {
+          "t": 1793027452.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        },
+        {
+          "t": 1793027454.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_proj_0_s1",
+      "device": "cuda",
+      "train_s": 11.928,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43945-43945 of 97887 MiB, utilisation 97-99%",
+      "samples": [
+        {
+          "t": 1793027454.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027464.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        },
+        {
+          "t": 1793027466.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_proj_0_s2",
+      "device": "cuda",
+      "train_s": 11.793,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43945-43945 of 97887 MiB, utilisation 84-99%",
+      "samples": [
+        {
+          "t": 1793027466.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "84"
+            }
+          ]
+        },
+        {
+          "t": 1793027476.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027478.7,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_proj_0_s3",
+      "device": "cuda",
+      "train_s": 11.813,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43945-43945 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027478.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027488.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027490.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_proj_0_s4",
+      "device": "cuda",
+      "train_s": 11.814,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43945-43945 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027490.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027501.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027502.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_prxy_0_s0",
+      "device": "cuda",
+      "train_s": 11.969,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44699-44723 of 97887 MiB, utilisation 98-98%",
+      "samples": [
+        {
+          "t": 1793027563.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44699",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027573.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44699",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027575.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_prxy_0_s1",
+      "device": "cuda",
+      "train_s": 11.846,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-44723 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027575.7,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027585.7,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027587.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_prxy_0_s2",
+      "device": "cuda",
+      "train_s": 11.757,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-44723 of 97887 MiB, utilisation 76-99%",
+      "samples": [
+        {
+          "t": 1793027587.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "76"
+            }
+          ]
+        },
+        {
+          "t": 1793027597.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027599.7,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_prxy_0_s3",
+      "device": "cuda",
+      "train_s": 11.754,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-44723 of 97887 MiB, utilisation 80-98%",
+      "samples": [
+        {
+          "t": 1793027599.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "80"
+            }
+          ]
+        },
+        {
+          "t": 1793027609.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027611.7,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_prxy_0_s4",
+      "device": "cuda",
+      "train_s": 11.926,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44723-44723 of 97887 MiB, utilisation 90-98%",
+      "samples": [
+        {
+          "t": 1793027611.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "90"
+            }
+          ]
+        },
+        {
+          "t": 1793027621.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "96"
+            }
+          ]
+        },
+        {
+          "t": 1793027623.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44723",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_web_2_s0",
+      "device": "cuda",
+      "train_s": 11.881,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43945-43945 of 97887 MiB, utilisation 98-98%",
+      "samples": [
+        {
+          "t": 1793027503.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027513.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027514.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_web_2_s1",
+      "device": "cuda",
+      "train_s": 11.842,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43945-43945 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027515.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027525.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027527.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_web_2_s2",
+      "device": "cuda",
+      "train_s": 11.897,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43945-43945 of 97887 MiB, utilisation 97-98%",
+      "samples": [
+        {
+          "t": 1793027527.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        },
+        {
+          "t": 1793027537.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027539.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_web_2_s3",
+      "device": "cuda",
+      "train_s": 11.793,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43945-43945 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027539.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027549.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027551.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "msr_web_2_s4",
+      "device": "cuda",
+      "train_s": 11.689,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43945-44699 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793027551.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43945",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793027561.5,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44699",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793027563.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44699",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1162_s0",
+      "device": "cuda",
+      "train_s": 11.604,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-44767 of 97887 MiB, utilisation 96-98%",
+      "samples": [
+        {
+          "t": 1793028393.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44767",
+              "memory.total": "97887",
+              "utilization.gpu": "96"
+            }
+          ]
+        },
+        {
+          "t": 1793028403.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44685",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028404.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1162_s1",
+      "device": "cuda",
+      "train_s": 11.811,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 95-97%",
+      "samples": [
+        {
+          "t": 1793028404.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "95"
+            }
+          ]
+        },
+        {
+          "t": 1793028414.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        },
+        {
+          "t": 1793028416.7,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "96"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1162_s2",
+      "device": "cuda",
+      "train_s": 11.848,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 93-99%",
+      "samples": [
+        {
+          "t": 1793028416.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "93"
+            }
+          ]
+        },
+        {
+          "t": 1793028426.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028428.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1162_s3",
+      "device": "cuda",
+      "train_s": 11.726,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 97-98%",
+      "samples": [
+        {
+          "t": 1793028429.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        },
+        {
+          "t": 1793028439.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        },
+        {
+          "t": 1793028440.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1162_s4",
+      "device": "cuda",
+      "train_s": 7.245,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 2 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-98%",
+      "samples": [
+        {
+          "t": 1793028441.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028448.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1757_s0",
+      "device": "cuda",
+      "train_s": 11.751,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 97-99%",
+      "samples": [
+        {
+          "t": 1793028272.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028282.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028283.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1757_s1",
+      "device": "cuda",
+      "train_s": 11.772,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-44701 of 97887 MiB, utilisation 97-99%",
+      "samples": [
+        {
+          "t": 1793028283.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        },
+        {
+          "t": 1793028294.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44701",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028295.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44701",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1757_s2",
+      "device": "cuda",
+      "train_s": 11.724,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44701-44701 of 97887 MiB, utilisation 97-99%",
+      "samples": [
+        {
+          "t": 1793028296.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44701",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028306.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44701",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028307.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44701",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1757_s3",
+      "device": "cuda",
+      "train_s": 11.929,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44701-44725 of 97887 MiB, utilisation 97-98%",
+      "samples": [
+        {
+          "t": 1793028308.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44701",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        },
+        {
+          "t": 1793028318.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028320.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1757_s4",
+      "device": "cuda",
+      "train_s": 11.891,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44725-44725 of 97887 MiB, utilisation 98-98%",
+      "samples": [
+        {
+          "t": 1793028320.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028330.3,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028332.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1791_s0",
+      "device": "cuda",
+      "train_s": 11.726,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793028212.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028222.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028224.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1791_s1",
+      "device": "cuda",
+      "train_s": 11.709,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793028224.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028234.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028236.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1791_s2",
+      "device": "cuda",
+      "train_s": 11.681,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793028236.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028246.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028247.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1791_s3",
+      "device": "cuda",
+      "train_s": 11.67,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793028248.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028258.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028259.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1791_s4",
+      "device": "cuda",
+      "train_s": 11.715,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793028260.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028270.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028271.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1894_s0",
+      "device": "cuda",
+      "train_s": 11.993,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793028448.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028458.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028460.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1894_s1",
+      "device": "cuda",
+      "train_s": 11.961,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 87-98%",
+      "samples": [
+        {
+          "t": 1793028460.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "87"
+            }
+          ]
+        },
+        {
+          "t": 1793028470.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "96"
+            }
+          ]
+        },
+        {
+          "t": 1793028472.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1894_s2",
+      "device": "cuda",
+      "train_s": 11.894,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793028473.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028483.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028485.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1894_s3",
+      "device": "cuda",
+      "train_s": 11.768,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-98%",
+      "samples": [
+        {
+          "t": 1793028485.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028495.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028497.0,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_1894_s4",
+      "device": "cuda",
+      "train_s": 11.783,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 43947-43947 of 97887 MiB, utilisation 98-98%",
+      "samples": [
+        {
+          "t": 1793028497.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028507.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028509.1,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "43947",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_2145_s0",
+      "device": "cuda",
+      "train_s": 11.765,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44725-44725 of 97887 MiB, utilisation 84-98%",
+      "samples": [
+        {
+          "t": 1793028332.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "84"
+            }
+          ]
+        },
+        {
+          "t": 1793028342.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028344.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_2145_s1",
+      "device": "cuda",
+      "train_s": 11.715,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44725-44725 of 97887 MiB, utilisation 94-98%",
+      "samples": [
+        {
+          "t": 1793028344.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "94"
+            }
+          ]
+        },
+        {
+          "t": 1793028354.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028356.2,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_2145_s2",
+      "device": "cuda",
+      "train_s": 11.947,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44725-44725 of 97887 MiB, utilisation 87-98%",
+      "samples": [
+        {
+          "t": 1793028356.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "87"
+            }
+          ]
+        },
+        {
+          "t": 1793028366.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "97"
+            }
+          ]
+        },
+        {
+          "t": 1793028368.4,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_2145_s3",
+      "device": "cuda",
+      "train_s": 11.998,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44725-44767 of 97887 MiB, utilisation 98-99%",
+      "samples": [
+        {
+          "t": 1793028368.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44725",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028378.6,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44767",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        },
+        {
+          "t": 1793028380.7,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44767",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "job": "tencentBlock_2145_s4",
+      "device": "cuda",
+      "train_s": 11.821,
+      "oom_retries": 0,
+      "batch_size": 8192,
+      "gpu_contention": "shared GPU over 3 nvidia-smi samples (this job included): memory used 44767-44767 of 97887 MiB, utilisation 90-99%",
+      "samples": [
+        {
+          "t": 1793028380.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44767",
+              "memory.total": "97887",
+              "utilization.gpu": "90"
+            }
+          ]
+        },
+        {
+          "t": 1793028390.9,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44767",
+              "memory.total": "97887",
+              "utilization.gpu": "99"
+            }
+          ]
+        },
+        {
+          "t": 1793028392.8,
+          "gpus": [
+            {
+              "index": "0",
+              "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+              "memory.used": "44767",
+              "memory.total": "97887",
+              "utilization.gpu": "98"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "note": "The GPU is shared with other tenants; nvidia-smi samples include this job's own use. Training and inference times are reported with these samples and are not quoted as costs without them.",
+  "missing_traces": [],
+  "config": {
+    "traces": [
+      "msr_hm_0",
+      "msr_prn_1",
+      "msr_proj_0",
+      "msr_web_2",
+      "msr_prxy_0",
+      "msr_prn_0",
+      "fiu_casa-110108-112108",
+      "fiu_homes-110108-112108",
+      "fiu_online.cs.fiu.edu-110108-113008",
+      "fiu_madmax-110108-112108",
+      "alibabaBlock_23",
+      "alibabaBlock_19",
+      "alibabaBlock_14",
+      "alibabaBlock_17",
+      "alibabaBlock_13",
+      "alibabaBlock_3",
+      "tencentBlock_1791",
+      "tencentBlock_1757",
+      "tencentBlock_2145",
+      "tencentBlock_1162",
+      "tencentBlock_1894"
+    ],
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "n": 2000000,
+    "epochs": 8,
+    "batch_size": 8192,
+    "patience": 2,
+    "capacity": 2048,
+    "val_replay": 100000,
+    "test_replay": null,
+    "action_caps": [
+      64,
+      256
+    ],
+    "decide_every": 32,
+    "lstm_traces": [
+      "msr_hm_0",
+      "msr_prn_0",
+      "fiu_homes-110108-112108",
+      "fiu_ikki-110108-112108"
+    ],
+    "lstm_epochs": 8,
+    "lstm_batch_size": 4096,
+    "lstm_seed": 42,
+    "device": "cuda",
+    "workers": 16,
+    "worker_threads": 2,
+    "block_root": "/tmp/claude-1000/-home-antpc-Ashvik-OS-Project-OS-Project/30a4e740-9eeb-4ee7-b80b-95503b869ef2/scratchpad/wt/exp/data/block-traces",
+    "results_dir": "/tmp/claude-1000/-home-antpc-Ashvik-OS-Project-OS-Project/30a4e740-9eeb-4ee7-b80b-95503b869ef2/scratchpad/wt/exp/results/gpu",
+    "work_dir": "/tmp/claude-1000/-home-antpc-Ashvik-OS-Project-OS-Project/30a4e740-9eeb-4ee7-b80b-95503b869ef2/scratchpad/wt/exp/outputs/gpu/work",
+    "models_dir": "/tmp/claude-1000/-home-antpc-Ashvik-OS-Project-OS-Project/30a4e740-9eeb-4ee7-b80b-95503b869ef2/scratchpad/wt/exp/models/depth",
+    "quick": false
+  }
+}

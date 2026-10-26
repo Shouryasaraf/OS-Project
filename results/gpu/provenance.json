@@ -1,0 +1,72 @@
+{
+  "format": "prefetch_common.provenance/1",
+  "study": "gpu",
+  "command": [
+    "reproduce.py",
+    "disk",
+    "--gpu"
+  ],
+  "git_sha": "f44afe72efdb05479603c9270d6ad710f3eadde9",
+  "git_dirty": false,
+  "created_utc": "2026-10-26T16:01:06+00:00",
+  "host": {
+    "hostname": "antpc",
+    "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+    "kernel": "6.14.0-37-generic",
+    "python": "3.12.3",
+    "cpu_count": 128
+  },
+  "load_avg": {
+    "start": [
+      3.96,
+      6.16,
+      11.3
+    ],
+    "end": [
+      10.23,
+      24.43,
+      54.21
+    ]
+  },
+  "wall_s": 4693.678,
+  "gpu": [
+    {
+      "index": "0",
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "memory.used": "54309",
+      "memory.total": "97887",
+      "utilization.gpu": "92"
+    }
+  ],
+  "inputs": {
+    "data/block-traces/alibaba/alibabaBlock_13.oracleGeneral.zst": "66641fea45e083148b4b02a219bdf76954027cc497ef82c2ada673163e6d61fa",
+    "data/block-traces/alibaba/alibabaBlock_14.oracleGeneral.zst": "bc93f49f20b256748bc1a868a085f5f3d0b277d4f618a704a7d01813d9439a6a",
+    "data/block-traces/alibaba/alibabaBlock_17.oracleGeneral.zst": "5b9061c69682f0c5d63f98575a695933212db52d9e2ecb2593740cd4290548e1",
+    "data/block-traces/alibaba/alibabaBlock_19.oracleGeneral.zst": "500884e23bf8491dea51bd43a51d0b12a90adcbb5f8634191c250284e8e1334a",
+    "data/block-traces/alibaba/alibabaBlock_23.oracleGeneral.zst": "484dbd6cda0e87d046eb61698aaeffe4ac3789c109f7a24e4abd09b2d85e8c05",
+    "data/block-traces/alibaba/alibabaBlock_3.oracleGeneral.zst": "f6c9f0ee1101d290223be7b9ac30a72412bd8f47d32db4f4f921e1b6fbcb2d61",
+    "data/block-traces/fiu/fiu_casa-110108-112108.oracleGeneral.zst": "711eff2c7debbf886e8adf948b51503529a7780d0f4ba29998e78bf78f45ed30",
+    "data/block-traces/fiu/fiu_homes-110108-112108.oracleGeneral.zst": "5f3537b9ab909b731755af8b80f9006caced81aef7ebed325ffd21b54b121480",
+    "data/block-traces/fiu/fiu_ikki-110108-112108.oracleGeneral.zst": "954510e6cdb5999a29154c966db550c5de4c83b4cec87e2e28a6258f53fea842",
+    "data/block-traces/fiu/fiu_madmax-110108-112108.oracleGeneral.zst": "9da30ef8179b53ee05ab89ad62764e11dea4fb4a1640b475b2d9cb69f7cde88d",
+    "data/block-traces/fiu/fiu_online.cs.fiu.edu-110108-113008.oracleGeneral.zst": "cfda47b4fba88a90a21d426cf3300d8b08ac983f5695508c6f14ee85cc68553b",
+    "data/block-traces/msr/msr_hm_0.oracleGeneral.zst": "5fc99e798d5e06f61ad97019298ea7226d1afff9ef577e87b447c63a4480de17",
+    "data/block-traces/msr/msr_prn_0.oracleGeneral.zst": "a7131a3f04673cd4d2122377344cab919182f8d28ed2678c2d5270b530f4c1ea",
+    "data/block-traces/msr/msr_prn_1.oracleGeneral.zst": "2da82e93e608f8196874c2fad47040247ba0ce27fdd5bfa7c189c1e86028f58b",
+    "data/block-traces/msr/msr_proj_0.oracleGeneral.zst": "dc408c090ffda06a1d3d5638bd0bc0fb78fc47188620e7d88e57a25145cf6faa",
+    "data/block-traces/msr/msr_prxy_0.oracleGeneral.zst": "8dac49720740de8c27c6c121c3cff94da573d5f63235e8d34e92a6f6badee751",
+    "data/block-traces/msr/msr_web_2.oracleGeneral.zst": "52d20c92af57e54a106f6b44bd2f37c467896daacb1abe02ab7667211e0a5c5b",
+    "data/block-traces/tencent/tencentBlock_1162.oracleGeneral.zst": "225e1b878fb00577495fc4de34499126c53a388164bf7949bd3c9c0ed80442de",
+    "data/block-traces/tencent/tencentBlock_1757.oracleGeneral.zst": "7885fa24e671c11d2c9b0aba0bece90bf9398437b67fffa023a54fba9de85df0",
+    "data/block-traces/tencent/tencentBlock_1791.oracleGeneral.zst": "21e2f3c866b157025fc6e72b7d647870941ec002f37a03b5c49670857798068e",
+    "data/block-traces/tencent/tencentBlock_1894.oracleGeneral.zst": "3789b566dea6f271719f8afb7fd10dc26faf5c5f4c55b9c597d6f6fbf6c1b626",
+    "data/block-traces/tencent/tencentBlock_2145.oracleGeneral.zst": "c19d0634a900842d754e263ef737e78479eb5da6c11b85a146a1a6bf1c9456b4"
+  },
+  "outputs": {
+    "disk_depth_baselines.csv": "f7b3e849d6d14dababdb187b1de7a19ae2103777f64e72e7907cfdaaf49d875c",
+    "disk_learned_depth.csv": "feca611606e0f1619b264e49eda923390b346a3bed43e1789c83b1cdc5f4f3ba",
+    "disk_lstm.csv": "3ccb409276aeb0e3c110c1d0c85a7aa543c926ef6fa47b325ac116cecfa00902",
+    "gpu_env.json": "8aa8edd4f8be93b1ea6a99a005a5237ce6f638d3aa4be15cbe27e6b5846816b3"
+  },
+  "notes": "E2: learned_depth vs VCF per trace/seed/cap, LSTM on 4 traces. Simulated hit ratios on oracleGeneral traces replayed as reads."
+}
