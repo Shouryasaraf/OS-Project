@@ -85,7 +85,14 @@ class PlanTests(unittest.TestCase):
     """The recorded plan is the simulator's decision sequence, for every mode."""
 
     def _kwargs(self, mode):
-        return {"model": make_model(42)} if mode == "adaptive" else {}
+        if mode == "adaptive":
+            return {"model": make_model(42)}
+        if mode == "learned_depth":
+            # Any fresh per-request policy runs through the same loop; the
+            # stdlib RelativeDepth baseline needs no torch or artifact (WP9).
+            from adaptive_prefetch.depth_model import RelativeDepth
+            return {"depth_model": RelativeDepth(1.0)}
+        return {}
 
     def test_recording_lru_plan_identity_for_all_modes(self):
         requests = mixed_trace()
