@@ -7,8 +7,8 @@ device. Read this before changing claims, numbers, or docs.
 ## Master branch: two studies in one repository
 
 `master` carries two studies for one paper. Everything below this section is
-the **disk study** (`src/adaptive_prefetch`), carried over from `main`
-unchanged. The **web study** (`src/webprefetch`, RetailRocket product-page
+the **disk study** (`src/adaptive_prefetch`), carried over from `main`;
+only references to the removed stale files were updated. The **web study** (`src/webprefetch`, RetailRocket product-page
 prefetching) came from `pivot/retailrocket-adaptive-prefetch`; its audit log is
 `audit/GRILL.md`, its docs are under `docs/web/`, and that branch's committed
 outputs are kept verbatim in `results/pivot_original/` (never edit them). The
@@ -36,7 +36,7 @@ the repo root, `python -m adaptive_prefetch ...` fails with
 
 ```powershell
 $env:PYTHONPATH='src'
-python -m unittest discover -s tests -v     # whole suite (131 disk + web), ~15s
+python -m unittest discover -s tests -v     # 157 tests (131 disk, 16 web, 10 repro/fixture), ~15s
 python main.py                              # full research run, no prompts, ~6 min
 python main.py --quick                      # skip LSTM + regime sweep
 python main.py --interactive                # guided dataset/LSTM picker

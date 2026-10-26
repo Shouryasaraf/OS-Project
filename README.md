@@ -32,7 +32,10 @@ reproduce commands (being filled in study by study).
 
 Run commands below from the repository root. Keep new trace datasets under
 `data/` and generated benchmark outputs under `outputs/` (create that ignored
-folder before writing results there).
+folder before writing results there). Only the named large-data folders
+(`data/block-traces`, `data/raw`, `data/processed`, `data/MSRC-trace-003`)
+are gitignored, so a new dataset elsewhere under `data/` needs its own
+`.gitignore` entry.
 
 ## What is implemented
 
