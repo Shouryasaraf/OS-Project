@@ -1,4 +1,12 @@
-"""Read-only local API and bounded static export for the real-model replay."""
+"""Read-only local API and bounded static export for the real-model replay.
+
+The demo's "adaptive" policy is the **validation-selected** controller for
+the chosen capacity and cost (P5), read from ``benchmark.json``. The pivot's
+demo used ``penalty = cost`` instead, which at cost 0 behaves like fixed8;
+that rule is still offered, labelled ``adaptive_cost`` ("adaptive (penalty =
+cost)"). :func:`session_parity` checks the demo's own step loop against the
+batch replay engine, session by session.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +22,15 @@ from urllib.parse import parse_qs, urlparse
 from .data import load_views
 from .model import FastScorer, load_artifacts
 from .paths import MODELS, OUTPUTS, PROCESSED
-from .simulator import Cache, Counters, Policy
+from .simulator import Cache, Counters, Policy, replay
+
+CAPACITIES = (2, 4, 8, 16, 32)
+#: Costs with a validation-selected penalty (benchmark.SCENARIO_COSTS).
+SELECTED_COSTS = (0.0, 0.01, 0.05, 0.25)
+SUMMARY_TABLES = ("comparisons", "capacity_transfer", "break_even", "break_even_curve",
+                  "cohorts", "session_gap_sensitivity", "model_diagnostics")
+PARITY_FIELDS = ("views", "hits", "prefetch_hits", "issued", "useful", "unused", "evicted_unused")
+PARITY_FORMAT = "webprefetch.session_parity/2"
 
 
 def _csv(path: Path) -> list[dict]:
@@ -22,26 +38,45 @@ def _csv(path: Path) -> list[dict]:
         return list(csv.DictReader(handle))
 
 
+def depth_histogram(steps: list[dict]) -> dict[str, int]:
+    """``{depth: decisions}`` over a step list, keyed as the replay's depth_counts."""
+    counts: dict[int, int] = {}
+    for step in steps:
+        counts[step["selected_depth"]] = counts.get(step["selected_depth"], 0) + 1
+    return {str(depth): counts[depth] for depth in sorted(counts)}
+
+
+def _cost_key(cost: float) -> str:
+    return str(float(cost))
+
+
 class DemoData:
+    """Held-out test sessions, the frozen ranker and the run's summary tables.
+
+    Every summary table is optional (a partial run may lack some); without a
+    ``benchmark.json`` only the policies that need no selection work.
+    """
+
     def __init__(self, root: Path, models: Path | None = None,
                  processed: Path | None = None, outputs: Path | None = None):
         self.root = root
         self.index, model = load_artifacts(models or root / MODELS)
         self.scorer = FastScorer(model)
         views = load_views((processed or root / PROCESSED) / "views.csv.gz")
-        test = views.loc[views.split.eq(3)]
+        self.test = views.loc[views.split.eq(3)]
         columns = ("timestamp", "visitorid", "itemid", "position", "prev_item",
                    "gap_ms", "cart_count", "next_item")
         buckets: dict[int, list[dict]] = {}
-        for values in test[["session_id", *columns]].itertuples(index=False, name=None):
+        for values in self.test[["session_id", *columns]].itertuples(index=False, name=None):
             buckets.setdefault(int(values[0]), []).append(dict(zip(columns, values[1:])))
         self.sessions = {key: rows for key, rows in buckets.items() if len(rows) >= 2}
         self.ids = sorted(self.sessions)
-        output = outputs or root / OUTPUTS
-        self.summary = {name: _csv(output / f"{name}.csv") for name in
-                        ("comparisons", "break_even", "break_even_curve", "cohorts",
-                         "session_gap_sensitivity", "model_diagnostics")}
-        self.summary["benchmark"] = json.loads((output / "benchmark.json").read_text())
+        output = Path(outputs or root / OUTPUTS)
+        self.summary = {name: _csv(output / f"{name}.csv") for name in SUMMARY_TABLES
+                        if (output / f"{name}.csv").exists()}
+        path = output / "benchmark.json"
+        self.benchmark_path = path if path.exists() else None
+        self.summary["benchmark"] = json.loads(path.read_text()) if path.exists() else None
 
     def listing(self, offset: int = 0, limit: int = 30, seed: int | None = None) -> dict:
         ids = self.ids if seed is None else random.Random(seed).sample(self.ids, min(limit, len(self.ids)))
@@ -58,22 +93,47 @@ class DemoData:
         return {"id": key, "source": "RetailRocket held-out test", "views": [
             {"item": int(row["itemid"]), "timestamp": int(row["timestamp"])} for row in rows]}
 
+    def selected_adaptive(self, capacity: int, cost: float) -> tuple[str, str]:
+        """(policy name, where it came from) for the validated adaptive controller."""
+        benchmark = self.summary.get("benchmark")
+        if not benchmark:
+            raise ValueError("no benchmark.json: the validated adaptive policy is unavailable; "
+                             "use adaptive_cost")
+        key = _cost_key(cost)
+        if key not in {_cost_key(c) for c in SELECTED_COSTS}:
+            raise ValueError("validated penalties exist only for costs 0, 0.01, 0.05 and 0.25; "
+                             "use adaptive_cost (penalty = cost) for other costs")
+        per_capacity = benchmark.get("validation_selection_per_capacity")
+        scorer = benchmark.get("primary_scorer", "logistic")
+        if per_capacity and scorer in per_capacity:
+            chosen, source = per_capacity[scorer][str(capacity)], f"validation, capacity {capacity}"
+        else:
+            # A pivot-layout benchmark selected at capacity 8 only.
+            chosen, source = benchmark["validation_selection"], "validation, capacity 8 (transferred)"
+        return chosen[key]["adaptive"], source
+
+    def policy(self, name: str, capacity: int, cost: float, threshold: float = .01) -> tuple[Policy, str]:
+        """The policy a UI name means, and a note on how it was chosen."""
+        if name == "adaptive":
+            chosen, source = self.selected_adaptive(capacity, cost)
+            return Policy(chosen, "adaptive", float(chosen.rsplit("_", 1)[1])), source
+        if name == "adaptive_cost":
+            return Policy(name, "adaptive", cost), "penalty = cost (not validated)"
+        if name.startswith("fixed") and name[5:] in ("0", "1", "2", "4", "8"):
+            return Policy(name, "fixed", int(name[5:])), "fixed depth"
+        if name == "gate":
+            return Policy(name, "gate", threshold), "confidence gate (threshold from the UI)"
+        raise ValueError("unknown policy")
+
     def step(self, payload: dict) -> dict:
         capacity = int(payload.get("capacity", 8))
-        if capacity not in (2, 4, 8, 16, 32):
+        if capacity not in CAPACITIES:
             raise ValueError("capacity must be 2, 4, 8, 16, or 32")
         cost = float(payload.get("cost", .01))
         if not 0 <= cost <= 1:
             raise ValueError("cost must be between zero and one")
         name = str(payload.get("policy", "adaptive"))
-        if name == "adaptive":
-            policy = Policy(name, "adaptive", cost)
-        elif name.startswith("fixed") and name[5:] in ("0", "1", "2", "4", "8"):
-            policy = Policy(name, "fixed", int(name[5:]))
-        elif name == "gate":
-            policy = Policy(name, "gate", float(payload.get("threshold", .01)))
-        else:
-            raise ValueError("unknown policy")
+        policy, selection_note = self.policy(name, capacity, cost, float(payload.get("threshold", .01)))
         custom = payload.get("items")
         if custom is not None:
             if not isinstance(custom, list) or not 1 <= len(custom) <= 30:
@@ -123,16 +183,20 @@ class DemoData:
                           "running_hits": counters.hits, "running_issued": counters.issued,
                           "running_unused": counters.issued - counters.useful,
                           "running_utility": round((counters.hits - cost*counters.issued)/(i+1), 8)})
-        return {"source": source, "policy": name, "capacity": capacity, "cost": cost,
+        return {"source": source, "policy": name, "resolved_policy": policy.name,
+                "penalty": policy.parameter if policy.kind == "adaptive" else None,
+                "selection": selection_note, "capacity": capacity, "cost": cost,
                 "total_views": len(rows), "steps": steps,
                 "totals": {"views": counters.views, "hits": counters.hits,
                            "prefetch_hits": counters.prefetch_hits, "issued": counters.issued,
                            "useful": counters.useful, "unused": counters.issued - counters.useful,
-                           "evicted_unused": counters.evicted_unused}}
+                           "evicted_unused": counters.evicted_unused,
+                           "depth_counts": depth_histogram(steps)}}
 
 
-def serve(root: Path, host: str = "127.0.0.1", port: int = 8765) -> None:
-    data = DemoData(root)
+def serve(root: Path, host: str = "127.0.0.1", port: int = 8765, models: Path | None = None,
+          processed: Path | None = None, outputs: Path | None = None) -> None:
+    data = DemoData(root, models=models, processed=processed, outputs=outputs)
     html = (root / "demo/index.html").read_bytes()
 
     class Handler(BaseHTTPRequestHandler):
@@ -183,8 +247,9 @@ def serve(root: Path, host: str = "127.0.0.1", port: int = 8765) -> None:
         server.server_close()
 
 
-def export_demo(root: Path, limit: int = 20) -> Path:
-    data = DemoData(root)
+def export_demo(root: Path, limit: int = 20, models: Path | None = None,
+                processed: Path | None = None, outputs: Path | None = None) -> Path:
+    data = DemoData(root, models=models, processed=processed, outputs=outputs)
     chosen = data.listing(limit=limit, seed=42)["sessions"]
     artifact = {"sessions": chosen, "details": {str(row["id"]): data.session(row["id"])
                                                    for row in chosen},
@@ -197,3 +262,61 @@ def export_demo(root: Path, limit: int = 20) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(artifact), encoding="utf-8")
     return target
+
+
+def session_parity(data: DemoData, session_ids, capacity: int = 8,
+                   costs=SELECTED_COSTS, policy: str = "adaptive") -> list[dict]:
+    """The batch replay's counters for each (session, cost), next to the demo's.
+
+    The reference comes from :func:`webprefetch.simulator.replay` on the
+    session's own rows: caches are session-local and the scorer is frozen,
+    so that is exactly the session's share of a full-split replay. The demo
+    side is :meth:`DemoData.step`, a separate loop. ``match`` is True when
+    every counter and the depth histogram agree.
+    """
+    cases = []
+    for session_id in session_ids:
+        frame = data.test.loc[data.test.session_id.eq(session_id)]
+        if frame.empty:
+            raise ValueError(f"session {session_id} is not in the test split")
+        for cost in costs:
+            resolved, _ = data.policy(policy, capacity, cost)
+            rows, _, _ = replay(frame, data.index, None, [resolved], capacity, max_views=0,
+                                scorer=data.scorer)
+            reference = {key: rows[0][key] for key in PARITY_FIELDS}
+            reference["depth_counts"] = {str(k): v for k, v in sorted(rows[0]["depth_counts"].items())}
+            demo = data.step({"session_id": int(session_id), "step": len(frame) - 1,
+                              "capacity": capacity, "cost": cost, "policy": policy})["totals"]
+            cases.append({"session_id": int(session_id), "policy": policy,
+                          "resolved_policy": resolved.name, "capacity": capacity, "cost": cost,
+                          **reference,
+                          "match": all(demo[key] == reference[key] for key in PARITY_FIELDS)
+                          and demo["depth_counts"] == reference["depth_counts"]})
+    return cases
+
+
+def run_parity(root: Path, target: Path, models: Path | None = None,
+               processed: Path | None = None, outputs: Path | None = None,
+               sessions: int = 20, capacity: int = 8, costs=SELECTED_COSTS) -> dict:
+    """Write ``session_parity.json`` (P15) for the run in ``outputs``.
+
+    The sessions are the static export's (a seed-42 sample of held-out
+    sessions), not picked for agreement. The file names the benchmark.json
+    it used, by SHA-256: a reference is only valid for the run whose
+    validation selection produced it.
+    """
+    data = DemoData(root, models=models, processed=processed, outputs=outputs)
+    if data.benchmark_path is None:
+        raise ValueError("no benchmark.json in the outputs directory; run webprefetch benchmark first")
+    chosen = [row["id"] for row in data.listing(limit=sessions, seed=42)["sessions"]]
+    cases = session_parity(data, chosen, capacity, costs)
+    digest = hashlib.sha256(data.benchmark_path.read_bytes()).hexdigest()
+    record = {"format": PARITY_FORMAT,
+              "selection_rule": f"{len(chosen)} held-out sessions sampled with seed 42 (the static export's)",
+              "benchmark_json_sha256": digest, "capacity": capacity,
+              "costs": [float(c) for c in costs], "policy": "adaptive (validation-selected)",
+              "cases": cases, "mismatches": sum(not case["match"] for case in cases)}
+    target = Path(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    return record
