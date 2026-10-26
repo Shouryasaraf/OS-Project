@@ -256,8 +256,10 @@ def ranking_metrics(top_items: np.ndarray, next_item, novel=None, k: int = 8) ->
     ``next_item`` the true next item per row. ``novel`` (optional, bool per
     row) adds ``novel_hit_at_1`` and ``novel_recall_at_8`` over novel rows.
     """
-    top = np.asarray(top_items, dtype=np.int64).reshape(len(next_item), -1)[:, :k]
     target = np.asarray(next_item, dtype=np.int64)
+    top = np.asarray(top_items, dtype=np.int64)
+    # reshape(0, -1) is ambiguous, so an empty selection keeps an explicit width.
+    top = (top.reshape(len(target), -1) if top.size else np.empty((len(target), 0), np.int64))[:, :k]
     if top.shape[1] < k:
         top = np.pad(top, ((0, 0), (0, k - top.shape[1])), constant_values=-1)
     match = (top == target[:, None]) & (target[:, None] >= 0)
@@ -1035,8 +1037,10 @@ def command_experiment(args) -> int:
                             config = read_config(directory)
                             same = (config.get("epochs"), config.get("mask"), config.get("model"),
                                     config.get("seed"), config.get("protocol"),
-                                    config.get("views_sha256"))
-                            if same == (args.epochs, args.mask, args.model, seed, protocol, views_sha):
+                                    config.get("views_sha256"), config.get("lr"),
+                                    config.get("batch"))
+                            if same == (args.epochs, args.mask, args.model, seed, protocol,
+                                        views_sha, args.lr, args.batch):
                                 scorer, reused = SequenceScorer.load(directory, device), True
                             else:
                                 _log(f"retraining: {directory} was trained with other settings")
@@ -1086,7 +1090,11 @@ def command_experiment(args) -> int:
             out / "seq", command, inputs=[args.views], study="web", start=start, gpu="auto",
             notes=("E5 GPU sequence model. seq_metrics.csv sits in the parent directory; "
                    "its SHA-256 is in extra.outputs_in_parent. GPU timings are on a shared "
-                   "GPU: see extra.gpu_samples and the gpu_contention column."),
+                   "GPU: see extra.gpu_samples and the gpu_contention column. With "
+                   f"mask={args.mask!r}: the 'history' mask never ranks an item already in "
+                   "the K-view window, so a next view that repeats one is never a ranking "
+                   "hit and hit_at_1 / mrr_at_8 are not comparable to an unmasked "
+                   "ranker's; compare novel_hit_at_1 and novel_recall_at_8 instead."),
             extra={"outputs_in_parent": {target.name: _sha256(target)},
                    "gpu_samples": sampler.samples, "runs": runs,
                    "validation_selection": selection,

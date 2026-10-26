@@ -172,6 +172,12 @@ class WindowAndVocabTests(unittest.TestCase):
         self.assertAlmostEqual(metrics["novel_recall_at_8"], extra["novel_coverage_at_8"],
                                places=12)
 
+    def test_ranking_metrics_on_no_rows_is_zero_not_an_error(self):
+        metrics = sm.ranking_metrics(np.zeros((0, 8), dtype=np.int64), [], novel=[])
+        self.assertEqual((metrics["rows"], metrics["hit_at_1"], metrics["novel_rows"]), (0, 0.0, 0))
+        short = sm.ranking_metrics([[5], [6]], [6, 6])
+        self.assertEqual((short["hit_at_1"], short["coverage_at_8"]), (0.5, 0.5))
+
     def test_pivot_sample_is_train_rankers_validation_sample(self):
         views = pd.DataFrame({"split": [2] * 30 + [1] * 5, "x": range(35)})
         sample = sm.pivot_validation_sample(views, n=10)
@@ -402,6 +408,11 @@ class CommandTests(unittest.TestCase):
                 sm.main(args + ["--no-provenance"])
             again = schemas.read_rows("web/seq_metrics.csv", tmp / "results" / "seq_metrics.csv")
             self.assertEqual([r["utility"] for r in rows], [r["utility"] for r in again])
+            # Other training settings are never served from a stale artifact.
+            log = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(log):
+                sm.main(args + ["--no-provenance", "--protocols", "validation", "--lr", "0.002"])
+            self.assertIn("trained with other settings", log.getvalue())
 
 
 class ReproGpuWebTests(unittest.TestCase):
