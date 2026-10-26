@@ -14,7 +14,10 @@ from .trace import (CLASSES, Request, synthetic_dataset, synthetic_window,
 
 MODES = ("none", "sequential", "strided", "stride", "markov", "lstm",
          "adaptive", "adaptive_evidence", "guard", "depth_adaptive",
-         "correlate", "deep", "linux_ra")
+         "correlate", "deep", "linux_ra", "learned_depth")
+#: Modes that need a trained artifact; without one they produce a
+#: ``skipped:`` row with ``None`` metrics, never a substitute.
+OPTIONAL_MODES = ("lstm", "learned_depth")
 COLUMNS = ("dataset", "mode", "status", "hit_ratio", "precision", "recall",
            "unused", "total_prefetches", "useful_prefetches",
            "mean_latency_us", "speedup_vs_none", "inference_us",
@@ -85,7 +88,14 @@ def benchmark_dataset(name: str, requests: list[Request], *, seed: int = 42,
                       latency: LatencyModel | None = None,
                       lstm_model_path: str | None = None,
                       online_real: bool = False,
-                      classifier: str = DEFAULT_CLASSIFIER) -> list[dict[str, object]]:
+                      classifier: str = DEFAULT_CLASSIFIER,
+                      depth_model_path: str | None = None) -> list[dict[str, object]]:
+    """One row per mode in :data:`MODES` (plus ``adaptive_pseudo``).
+
+    ``depth_model_path`` is a ``learned_depth`` artifact. It is the caller's
+    job to pass one only for requests the artifact was neither trained nor
+    selected on (constraint 14); without one the row is skipped.
+    """
     if not requests:
         raise ValueError("benchmark trace is empty")
     baseline, _ = replay(requests, capacity, window_size, "none",
@@ -100,13 +110,16 @@ def benchmark_dataset(name: str, requests: list[Request], *, seed: int = 42,
         try:
             if mode == "lstm" and lstm_model_path is None:
                 raise RuntimeError("no trained LSTM artifact; optional baseline skipped")
+            if mode == "learned_depth" and depth_model_path is None:
+                raise RuntimeError("no trained learned_depth artifact")
             metrics, _ = replay(
                 requests, capacity, window_size, actual_mode, model,
                 latency_model=latency, lstm_model_path=lstm_model_path,
                 pseudo_label_threshold=0.95 if mode == "adaptive_pseudo" else None,
+                depth_model=depth_model_path if mode == "learned_depth" else None,
             )
-        except (RuntimeError, FileNotFoundError) as exc:
-            if mode != "lstm":
+        except (RuntimeError, FileNotFoundError, ValueError) as exc:
+            if mode not in OPTIONAL_MODES:
                 raise
             rows.append({"dataset": name, "mode": mode, "status": f"skipped: {exc}",
                          **{column: None for column in COLUMNS[3:]}})

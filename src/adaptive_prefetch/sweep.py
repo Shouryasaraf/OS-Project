@@ -22,8 +22,12 @@ Limits that are always reported, never silent:
   given an explicit ``latency_model``. Falling back to the assumed 5/100/50
   model silently moved the gated modes' break-even from 1.0101 to 0.526
   (M19), so every row records the ``break_even`` it ran under.
-* **A mode that needs a trained artifact** (``lstm``) and has none produces a
-  ``skipped:`` row with ``None`` metrics instead of aborting the sweep.
+* **A mode that needs a trained artifact** (``lstm``, ``learned_depth``) and
+  has none produces a ``skipped:`` row with ``None`` metrics instead of
+  aborting the sweep. So does a ``learned_depth`` artifact whose training
+  record says it was trained or selected on the requests being replayed
+  (constraint 14): the sweep always starts at request 0, which is inside
+  every E2 artifact's training split for its own trace.
 """
 
 from __future__ import annotations
@@ -49,11 +53,11 @@ DEFAULT_CHUNK = 250_000
 
 RANKING_MODES = ("none", "sequential", "strided", "stride", "markov", "lstm",
                  "adaptive", "adaptive_evidence", "guard", "depth_adaptive",
-                 "correlate", "deep", "linux_ra")
+                 "correlate", "deep", "linux_ra", "learned_depth")
 
 #: Modes that need a trained artifact. Without one they are reported as
 #: ``skipped:`` rows; every other mode must run or raise.
-OPTIONAL_MODES = ("lstm",)
+OPTIONAL_MODES = ("lstm", "learned_depth")
 
 #: File patterns ``discover_traces`` looks for, recursively.
 TRACE_PATTERNS = ("*.revised", "*.oracleGeneral.zst")
@@ -233,7 +237,8 @@ def sweep_trace(path: Path, mode: str, *,
                 max_blocks: int = DEFAULT_LINUX_RA_MAX_BLOCKS,
                 age_table_bound: int | None = DEFAULT_AGE_TABLE_BOUND,
                 format: str | None = None, model=None,
-                profile: dict | None = None) -> dict:
+                profile: dict | None = None,
+                depth_model_path: str | None = None) -> dict:
     """Replay one trace under one mode and return its sweep row.
 
     ``read_ahead_depth`` is the ``deep`` depth and ``max_blocks`` the
@@ -241,6 +246,8 @@ def sweep_trace(path: Path, mode: str, *,
     mode ran, so a row is self-describing. ``model`` is the classifier for
     ``adaptive`` (``make_model(42)`` when omitted). An optional mode with no
     usable artifact yields a ``skipped:`` row instead of raising.
+    ``depth_model_path`` is the ``learned_depth`` artifact; it is refused
+    (``skipped:``) when its training record overlaps the replayed slice.
     """
     path = Path(path)
     fmt = format or trace_format(path)
@@ -257,8 +264,15 @@ def sweep_trace(path: Path, mode: str, *,
         "break_even": latency.break_even_precision(),
         **(profile if profile is not None else trace_profile(path, fmt)),
     }
-    if mode in OPTIONAL_MODES and not lstm_model_path:
+    if mode == "lstm" and not lstm_model_path:
         return _skipped_row(base, "no trained artifact")
+    if mode == "learned_depth":
+        if not depth_model_path:
+            return _skipped_row(base, "no trained learned_depth artifact")
+        conflict = _depth_conflict(depth_model_path, trace_name(path),
+                                   requests_per_trace)
+        if conflict:
+            return _skipped_row(base, conflict)
     if mode == "adaptive" and model is None:
         from .benchmark import make_model
         model = make_model(42)
@@ -271,7 +285,8 @@ def sweep_trace(path: Path, mode: str, *,
             model=model,
             lstm_model_path=lstm_model_path if mode == "lstm" else None,
             latency_model=latency, read_ahead_depth=read_ahead_depth,
-            linux_ra_max_blocks=max_blocks, age_table_bound=age_table_bound)
+            linux_ra_max_blocks=max_blocks, age_table_bound=age_table_bound,
+            depth_model=depth_model_path if mode == "learned_depth" else None)
     except (ValueError, RuntimeError, FileNotFoundError, ImportError) as exc:
         if mode not in OPTIONAL_MODES:
             raise
@@ -309,6 +324,19 @@ def sweep_trace(path: Path, mode: str, *,
     return row
 
 
+def _depth_conflict(artifact: str, trace: str,
+                    requests_per_trace: int | None) -> str | None:
+    """Why ``artifact`` may not be scored on requests ``[0, cap)`` of ``trace``."""
+    from .depth_model import read_training_record, scoring_conflict
+    if not Path(artifact).is_file():
+        return None  # the replay reports the missing file itself
+    record = read_training_record(artifact)
+    if record is None:
+        return ("learned_depth artifact has no matching training record, so "
+                "its training range is unknown")
+    return scoring_conflict(record, trace, 0, requests_per_trace)
+
+
 def sweep_collection(trace_dir: Path | None = None,
                      capacity: int = DEFAULT_CAPACITY,
                      window_size: int = 32,
@@ -322,12 +350,16 @@ def sweep_collection(trace_dir: Path | None = None,
                      age_table_bound: int | None = DEFAULT_AGE_TABLE_BOUND,
                      traces: list[Path] | None = None,
                      patterns=TRACE_PATTERNS,
+                     depth_model_path: str | None = None,
                      ) -> tuple[list[dict], list[dict]]:
     """Replay every trace under every mode. Returns (rows, per-trace meta).
 
     ``rows`` are plain dicts (columns in :data:`ROW_COLUMNS`) so they
     serialise straight to CSV. ``traces`` replaces discovery with an explicit
     list. ``latency_model`` is mandatory when any trace is an oracle trace.
+    ``learned_depth`` runs only with an explicit ``depth_model_path``: unlike
+    the LSTM there is no default artifact to discover, because every E2
+    artifact belongs to one trace's test segment.
     """
     traces = (list(traces) if traces is not None
               else discover_traces(trace_dir, patterns))
@@ -357,7 +389,8 @@ def sweep_collection(trace_dir: Path | None = None,
                 chunk_requests=chunk_requests, latency_model=latency_model,
                 lstm_model_path=lstm_model_path,
                 read_ahead_depth=read_ahead_depth, max_blocks=max_blocks,
-                age_table_bound=age_table_bound, format=fmt, profile=profile))
+                age_table_bound=age_table_bound, format=fmt, profile=profile,
+                depth_model_path=depth_model_path))
         meta = {"trace": trace_name(path), "format": fmt,
                 "size_mb": trace_size_bytes(path) / 1e6,
                 "seconds": time.time() - t0}

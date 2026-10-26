@@ -427,7 +427,8 @@ DEFAULT_CAPACITY = 2048
 #: Every mode ``replay()`` accepts. ``_make_predictor`` must agree.
 MODES_SUPPORTED = frozenset({
     "adaptive", "adaptive_evidence", "none", "sequential", "strided",
-    "stride", "markov", "lstm", "deep", "linux_ra", *GATED_MODES,
+    "stride", "markov", "lstm", "deep", "linux_ra", "learned_depth",
+    *GATED_MODES,
 })
 
 
@@ -546,7 +547,8 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
            read_ahead_depth: int = DEFAULT_READ_AHEAD_DEPTH,
            cache_factory=LRUCache,
            linux_ra_max_blocks: int = DEFAULT_LINUX_RA_MAX_BLOCKS,
-           age_table_bound: int | None = DEFAULT_AGE_TABLE_BOUND):
+           age_table_bound: int | None = DEFAULT_AGE_TABLE_BOUND,
+           depth_model=None):
     """Replay in request order; a completed window only affects later requests.
 
     ``labels`` represent controlled ground truth. Optional pseudo-label updates
@@ -564,7 +566,9 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
     replay) sees exactly the cache operations this loop performs.
     ``linux_ra_max_blocks`` is the ``linux_ra`` window ceiling, and
     ``age_table_bound`` caps the contextual block-age table (``None`` for
-    unbounded).
+    unbounded). ``depth_model`` is the ``learned_depth`` artifact path, or an
+    already-built per-request predictor (one fresh object per replay; see
+    :func:`_make_predictor`).
     """
     interval_size = _validate_replay(mode, window_size, policy_interval,
                                      read_ahead_depth, linux_ra_max_blocks,
@@ -586,7 +590,8 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
     remaining_reads = Counter(block for req in requests if req.operation == "R"
                               for block in range(req.lba, req.lba + req.size_blocks))
     predictor = _make_predictor(mode, lstm_model_path, window_size=window_size,
-                                linux_ra_max_blocks=linux_ra_max_blocks)
+                                linux_ra_max_blocks=linux_ra_max_blocks,
+                                depth_model=depth_model)
     observer = predictor if getattr(predictor, "cache_aware", False) else None
     view = CacheView(cache) if observer is not None else None
 
@@ -724,8 +729,8 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
                   read_ahead_depth: int = DEFAULT_READ_AHEAD_DEPTH,
                   cache_factory=LRUCache,
                   linux_ra_max_blocks: int = DEFAULT_LINUX_RA_MAX_BLOCKS,
-                  age_table_bound: int | None = DEFAULT_AGE_TABLE_BOUND
-                  ) -> Metrics:
+                  age_table_bound: int | None = DEFAULT_AGE_TABLE_BOUND,
+                  depth_model=None) -> Metrics:
     """Replay a request stream delivered in bounded chunks.
 
 
@@ -743,8 +748,8 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
     I/O, device I/Os, modelled cost, policy switches and inference counters
     are all exact, and those are the metrics that rank policies.
 
-    ``cache_factory``, ``linux_ra_max_blocks`` and ``age_table_bound`` mean
-    exactly what they mean for :func:`replay`.
+    ``cache_factory``, ``linux_ra_max_blocks``, ``age_table_bound`` and
+    ``depth_model`` mean exactly what they mean for :func:`replay`.
     """
     interval_size = _validate_replay(mode, window_size, policy_interval,
                                      read_ahead_depth, linux_ra_max_blocks,
@@ -754,7 +759,8 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
     cache = cache_factory(capacity, metrics)
     context = WindowContext(age_table_bound) if contextual else None
     predictor = _make_predictor(mode, lstm_model_path, window_size=window_size,
-                                linux_ra_max_blocks=linux_ra_max_blocks)
+                                linux_ra_max_blocks=linux_ra_max_blocks,
+                                depth_model=depth_model)
     observer = predictor if getattr(predictor, "cache_aware", False) else None
     view = CacheView(cache) if observer is not None else None
     # Same controller as replay(). These two paths used to carry separate
@@ -849,11 +855,19 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
 
 def _make_predictor(mode: str, lstm_model_path: str | None, *,
                     window_size: int = 32,
-                    linux_ra_max_blocks: int = DEFAULT_LINUX_RA_MAX_BLOCKS):
+                    linux_ra_max_blocks: int = DEFAULT_LINUX_RA_MAX_BLOCKS,
+                    depth_model=None):
     """The per-request predictor for ``mode``, or ``None`` for window modes.
 
     Both replay paths build their predictor here, so a mode cannot be wired
     into one path and forgotten in the other.
+
+    ``learned_depth`` takes ``depth_model``: an artifact path, loaded with
+    its validation-selected thresholds, or an object with
+    ``next_candidates`` that is used as given. The object form exists for
+    threshold selection and for baselines replayed through the same loop
+    (``depth_model.PrecomputedDepth``, ``RelativeDepth``). A predictor is
+    stateful, so each replay needs a fresh one.
     """
     if mode == "stride":
         return StridePrefetcher()
@@ -869,6 +883,14 @@ def _make_predictor(mode: str, lstm_model_path: str | None, *,
             raise ValueError("lstm mode requires --lstm-model path")
         from .lstm import load_predictor
         return load_predictor(lstm_model_path)
+    if mode == "learned_depth":
+        if depth_model is None:
+            raise RuntimeError("no trained learned_depth artifact; "
+                               "optional baseline skipped")
+        if hasattr(depth_model, "next_candidates"):
+            return depth_model
+        from .depth_model import load_prefetcher
+        return load_prefetcher(depth_model)
     if mode not in MODES_SUPPORTED:
         raise ValueError(f"unknown mode: {mode!r}")
     return None
