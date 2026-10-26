@@ -500,9 +500,14 @@ class EndToEndParityTests(unittest.TestCase):
                 self.assertEqual(main(argv), 0)
             self.assertEqual(len(read_rows("live/live_metrics.csv",
                                            results / "live_metrics.csv")), 4)
-            # A refused run writes nothing new.
+            # A run whose planned rate is too high is refused and writes no results.
+            refused = argv[:argv.index("--results-dir")] + [
+                "--results-dir", str(directory / "refused"), "--max-load", "1000",
+                "--bootstrap-reps", "50", "--max-rps-per-shard", "0.001"]
+            refused.remove("--no-probe")
             with mock.patch("sys.stdout"):
-                self.assertEqual(main(argv + ["--max-rps-per-shard", "0.001"]), 2)
+                self.assertEqual(main(refused), 2)
+            self.assertFalse((directory / "refused").exists())
 
 
 if __name__ == "__main__":

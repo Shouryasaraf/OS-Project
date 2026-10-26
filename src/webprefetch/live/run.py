@@ -330,10 +330,6 @@ def run(args, argv) -> int:
     device = objects.device_of(store_meta["store"])
     label = args.store_label or objects.store_label(store_meta["store"])
     results_dir = Path(args.results_dir)
-    results_dir.mkdir(parents=True, exist_ok=True)
-    if not args.no_probe:
-        probe = objects.probe(store_meta["store"], store_meta["index"], label=label)
-        (results_dir / f"disk_probe_{label}.json").write_text(json.dumps(probe, indent=1) + "\n")
     sizes = {item: size for item, (_, size) in objects.load_index(store_meta["index"]).items()}
     sessions = plan["sessions"]
     config = ClientConfig(capacity=args.capacity, conns=args.conns,
@@ -356,6 +352,10 @@ def run(args, argv) -> int:
               f"({args.shards} shard(s) x {args.max_rps_per_shard:g}); "
               "lengthen --ramp-s, lower --target-rps or add --shards", flush=True)
         return EXIT_REFUSED
+    results_dir.mkdir(parents=True, exist_ok=True)
+    if not args.no_probe:
+        probe = objects.probe(store_meta["store"], store_meta["index"], label=label)
+        (results_dir / f"disk_probe_{label}.json").write_text(json.dumps(probe, indent=1) + "\n")
     meta = {"experiment": args.experiment, "store": label, "config": config_label(args),
             "link": args.link, "rtt_ms": float(args.rtt_ms), "mbps": float(args.mbps),
             "size_median_kib": args.size_median / 1024, "gap_cap_s": float(args.gap_cap_s),
