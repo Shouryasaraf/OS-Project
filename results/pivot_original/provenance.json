@@ -1,11 +1,18 @@
 {
+  "format": "prefetch_common.provenance/1",
   "study": "web",
-  "source": "branch pivot/retailrocket-adaptive-prefetch, directory outputs/",
-  "git_sha": "8569cdf476ab49442ed9077c9617ab0574b48fd5",
   "command": "webprefetch run (full validation and test splits, pivot layout)",
-  "copied_verbatim": true,
-  "note": "The pivot branch's committed outputs, kept unmodified for the reproduction claim. They were produced before any master-branch change to webprefetch; session_parity.json was written by hand on pivot (no script generates it).",
-  "sha256": {
+  "git_sha": "8569cdf476ab49442ed9077c9617ab0574b48fd5",
+  "git_dirty": null,
+  "created_utc": null,
+  "host": null,
+  "load_avg": null,
+  "wall_s": null,
+  "gpu": null,
+  "inputs": {
+    "data/raw/events.csv": "3745aa83238b1e6d44d8fda209807899f420084398f94ddf745f3cbcfecbf9e7"
+  },
+  "outputs": {
     "benchmark.json": "a6f40638a55fd8c8f77edcfdf8f8ebcf2759cbb77b32675089accfeab2cb2cd5",
     "break_even.csv": "161589dcc9a78b60121e25cf61406948fa46f44969345850ce0aa14422bd6e23",
     "break_even_curve.csv": "d1ccfa99ed05c534a8624c902bb0e4b07886c9cc091ffd62cd8409e19b297184",
@@ -23,5 +30,8 @@
     "test_metrics.csv": "410a1519fe9688523310e22a53e1baea398ac1b01a1321126f760ac8df198b90",
     "transition_baseline.csv": "370ee1933baa89224482034c464728dd609ce6e18de9f0133ff885bbe4bbf277",
     "validation_metrics.csv": "c18b3734fc3655fb5ef71b31e56f50db1fa20f2328e46a2e3829a2e197af7b9f"
-  }
+  },
+  "notes": "The pivot branch's committed outputs, kept unmodified for the reproduction claim. They were produced before any master-branch change to webprefetch; session_parity.json was written by hand on pivot (no script generates it). Keys reconciled with prefetch_common.provenance (format 1) on master: the per-file hashes moved from 'sha256' to 'outputs', unchanged. The pivot run did not record its host, load, wall time, GPU state or creation time, so those are null. The input hash is not a run-time record either: it is the EXPECTED_CSV_SHA256 pin in pivot's src/webprefetch/data.py, which prepare() enforces before any output is produced.",
+  "source": "branch pivot/retailrocket-adaptive-prefetch, directory outputs/",
+  "copied_verbatim": true
 }
