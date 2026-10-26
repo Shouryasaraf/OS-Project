@@ -260,6 +260,10 @@ def build_disk_tables(sweep: list[dict]) -> None:
     _w("disk/table_by_corpus.csv", by_corpus)
     _w("disk/deltas.csv", deltas)
     _w("disk/kappa.csv", kappa)
+    # winners.csv (schema added by WP10) comes from WP10's own analysis code,
+    # run on the synthetic sweep, so the fixture has exactly its layout.
+    from adaptive_prefetch.analysis import group_rows, winners_rows  # noqa: PLC0415
+    _w("disk/winners.csv", winners_rows(group_rows(sweep)))
 
 
 def build_corpus_profile(rng) -> None:
