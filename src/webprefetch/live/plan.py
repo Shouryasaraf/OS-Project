@@ -26,12 +26,15 @@ ramp); it does not re-learn the gate in live time, which would make the
 counters order-dependent and break parity. The gate learns only from the
 sampled sessions, not from the whole split.
 
-Scorers: ``logistic`` (the trained ranker over the frozen split-0 index,
-``models/web``) and the transition-count scorers ``trans_s0``,
-``trans_prior`` and ``trans_online`` (:func:`webprefetch.index.transition_index`).
-A policy name may end in ``@<scorer>``; without one it uses ``logistic``.
-Until WP6's scorer registry is merged, the transition scorers are built here
-from ``index.transition_index`` and ``simulator.TransitionScorer`` directly.
+Scorers come from the benchmark's registry (:func:`webprefetch.scorers.
+build_scorer`), so a live policy ranks exactly as the replay benchmark's
+policy of the same name: ``logistic`` (the trained ranker over the frozen
+split-0 index, ``models/web``), ``logistic_novel`` (the relabelled ranker,
+if trained) and the transition-count scorers ``trans_s0``, ``trans_prior``
+and ``trans_online``. ``seq`` is left out: it needs a GPU pass at plan time
+and is not in the E6 design. A policy name may end in ``@<scorer>``; without
+one it uses ``logistic``. Names ``validated_<family>`` are resolved from E4's
+per-capacity selection before a plan is built (:mod:`.selection`).
 """
 
 from __future__ import annotations
@@ -47,16 +50,23 @@ from pathlib import Path
 from ..cachecore import Cache, Counters, FeedbackGate, GateTracker, Policy
 
 FORMAT = "webprefetch.live.plan/1"
-SCORERS = ("logistic", "trans_s0", "trans_prior", "trans_online")
+SCORERS = ("logistic", "logistic_novel", "trans_s0", "trans_prior", "trans_online")
 DEFAULT_SCORER = "logistic"
 DEFAULT_SPLIT = 3
 DEFAULT_SESSIONS = 2000
 DEFAULT_MIN_VIEWS = 2
 DEFAULT_SEED = 42
 DEFAULT_CAPACITY = 8
-#: E6(a): the headline policy set (plan section 3.3).
-HEADLINE_POLICIES = ("fixed0", "fixed1", "fixed4", "fixed8", "adaptive_0.002", "adaptive_0.01",
-                     "gate_0.01", "feedback_0.01", "adaptive_0.01@trans_online")
+#: E6(a) as amended for the runtime budget (results/live/PREREGISTERED.md,
+#: amendment 1): the fixed depths 0, 4 and 8, and the controllers E4
+#: validated at the live capacity (:mod:`.selection`), including the online
+#: index's own adaptive controller.
+HEADLINE_POLICIES = ("fixed0", "fixed4", "fixed8", "validated_adaptive", "validated_feedback",
+                     "validated_adaptive@trans_online")
+#: The original nine (plan section 3.3), kept for reference.
+PLANNED_HEADLINE_POLICIES = ("fixed0", "fixed1", "fixed4", "fixed8", "adaptive_0.002",
+                             "adaptive_0.01", "gate_0.01", "feedback_0.01",
+                             "adaptive_0.01@trans_online")
 BASELINE = "fixed0"
 PLAN_NAME = "plan.json"
 SIM_NAME = "sim.json"
@@ -66,7 +76,8 @@ _PATTERNS = (
     (re.compile(rf"gate_{_NUMBER}$"), "gate"),
     (re.compile(rf"adaptive_ca_{_NUMBER}$"), "adaptive_ca"),
     (re.compile(rf"adaptive_{_NUMBER}$"), "adaptive"),
-    (re.compile(rf"feedback_{_NUMBER}(?:_e{_NUMBER})?(?:_w{_NUMBER})?$"), "feedback"),
+    # ``_e`` here, ``_eps`` in the benchmark's grid (benchmark.policy_grid).
+    (re.compile(rf"feedback_{_NUMBER}(?:_e(?:ps)?{_NUMBER})?(?:_w{_NUMBER})?$"), "feedback"),
 )
 
 
@@ -89,7 +100,8 @@ class LivePolicy:
 
 def parse_policy(name: str) -> LivePolicy:
     """``fixed<k>``, ``gate_<t>``, ``adaptive_<p>``, ``adaptive_ca_<p>`` or
-    ``feedback_<c>[_e<epsilon>][_w<pollution>]``, optionally ``@<scorer>``."""
+    ``feedback_<c>[_e<epsilon>|_eps<epsilon>][_w<pollution>]``, optionally
+    ``@<scorer>``."""
     base, _, scorer = name.partition("@")
     scorer = scorer or DEFAULT_SCORER
     if scorer not in SCORERS:
@@ -116,21 +128,28 @@ def parse_policies(names) -> list[LivePolicy]:
 
 
 def make_scorers(views, names, *, models_dir=None, split: int = DEFAULT_SPLIT) -> dict:
-    """``{scorer name: (index, scorer)}`` for every name in ``names``."""
-    from ..index import transition_index
-    from ..simulator import TransitionScorer
+    """``{scorer name: (index, scorer)}`` for every name in ``names``.
+
+    Built by the benchmark's registry for the evaluated ``split``; a scorer
+    the registry skips (no artifact) is an error here, never a substitute.
+    """
+    from ..scorers import build_scorer
     out = {}
+    artifacts = None
     for name in sorted(set(names)):
-        if name == "logistic":
-            from ..model import FastScorer, load_artifacts
+        if name not in SCORERS:
+            raise ValueError(f"unknown scorer {name!r}; expected one of {SCORERS}")
+        if name.startswith("logistic"):
             if models_dir is None:
-                raise ValueError("the logistic scorer needs models_dir (webprefetch train)")
-            index, ranker = load_artifacts(models_dir)
-            out[name] = (index, FastScorer(ranker))
-        elif name in SCORERS:
-            out[name] = (transition_index(views, name, split), TransitionScorer())
-        else:
-            raise ValueError(f"unknown scorer {name!r}")
+                raise ValueError(f"the {name} scorer needs models_dir (webprefetch train)")
+            if artifacts is None:
+                from ..model import load_artifacts
+                artifacts = load_artifacts(models_dir)
+        spec = build_scorer(name, views, split, models_dir if models_dir is not None else ".",
+                            artifacts=artifacts)
+        if not spec.ok:
+            raise ValueError(f"scorer {name}: {spec.status}")
+        out[name] = (spec.index, spec.scorer)
     return out
 
 

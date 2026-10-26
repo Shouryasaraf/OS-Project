@@ -6,6 +6,8 @@ Ported from the web-realexp prototype. Modules:
   and the disk probe.
 * :mod:`.plan` -- sampled sessions, per-view prefetch decisions and the
   ``simulator.replay`` reference they must reproduce (needs the [web] extra).
+* :mod:`.selection` -- ``validated_*`` policy names resolved from E4's
+  per-capacity validation selection (``results/web/comparisons.csv``).
 * :mod:`.origin` -- asyncio origin: real ``pread`` from the store, emulated
   RTT and per-session link, ``/hint`` (server WILLNEED), ``/stats``.
 * :mod:`.client` -- emulated browsers: ``cachecore.Cache`` per session,
