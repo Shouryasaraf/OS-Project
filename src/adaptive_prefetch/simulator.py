@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import json
+import warnings
 from collections import Counter, OrderedDict
 from dataclasses import dataclass
+from pathlib import Path
 from time import perf_counter
 
-from .baselines import MarkovPrefetcher, StridePrefetcher
-from .features import STREAM_FEATURES, WindowContext, dominant_stride, extract
+from .baselines import (DEFAULT_LINUX_RA_MAX_BLOCKS, LinuxReadahead,
+                        MarkovPrefetcher, StridePrefetcher)
+from .features import (DEFAULT_AGE_TABLE_BOUND, STREAM_FEATURES, WindowContext,
+                       dominant_stride, extract)
 from .guard import GateController, read_ahead
 from .model import OnlineGaussianNB
 from .pipeline import PolicySmoother
@@ -60,7 +65,14 @@ class LatencyModel:
         cost ranking.
 
         Returns defaults unchanged when the trace carries no measurements.
+        ``prefetch_multiple`` is validated before that fallback, so a bad
+        value is never silently accepted just because the trace had no
+        service times. A measured mean of zero leaves no saving for a hit to
+        make, so the break-even is infinite; that is warned about rather than
+        returned quietly, because it vetoes every gated prefetch.
         """
+        if prefetch_multiple <= 0:
+            raise ValueError("prefetch_multiple must be positive")
         values = _measured_service_us(trace) if trace is not None else None
         if not values:
             if path is not None:
@@ -71,17 +83,22 @@ class LatencyModel:
                     values = None
         if not values:
             return cls()
-        if prefetch_multiple <= 0:
-            raise ValueError("prefetch_multiple must be positive")
         mean_service = sum(values) / len(values)
         # A hit is served from cache and costs a small fraction of a device
         # service. 1% is an explicitly-documented approximation, not a
         # measurement: the traces record device time only, never cache time.
-        return cls(
+        model = cls(
             hit_us=max(0.001, mean_service * 0.01),
             demand_miss_us=mean_service,
             prefetch_us=mean_service * prefetch_multiple,
         )
+        if model.break_even_precision() == float("inf"):
+            warnings.warn(
+                f"measured mean service time is {mean_service:g} us, so a hit "
+                "saves nothing and the break-even precision is infinite: every "
+                "feedback-gated mode will refuse to prefetch",
+                RuntimeWarning, stacklevel=2)
+        return model
 
     def break_even_precision(self) -> float:
         """Prefetch precision needed for a speculative read to pay for itself.
@@ -102,6 +119,81 @@ def _measured_service_us(requests) -> list[float]:
     """Service times in microseconds for requests that recorded one."""
     return [r.service_ms * 1000.0 for r in requests
             if getattr(r, "service_ms", None) is not None]
+
+
+@dataclass(frozen=True)
+class IOCostModel:
+    """Device time as positioning plus transfer: ``T = N_io*t_pos + N_blk*t_xfer``.
+
+    :class:`LatencyModel` charges a whole mean service time per 512-B block,
+    for demand and prefetch alike, so a 64-block sequential read costs 64
+    seeks. That unit mismatch is what makes its break-even 1.0101 regardless
+    of the device (D11, D18). This model charges one positioning cost per
+    *device I/O* (``Metrics.device_ios``, a maximal contiguous run after
+    block-layer merging) and a transfer cost per block moved
+    (``Metrics.blocks_moved``). It sits beside ``LatencyModel`` and replaces
+    none of its fields: the legacy per-block columns and the D11 break-even
+    are unchanged.
+
+    It is a device-work model, not a latency model: there is no queueing, no
+    overlap of prefetch with demand, and no completion timing. The constants
+    come from a device calibration (``from_device_json``), never from a trace.
+    """
+
+    t_pos_us: float
+    t_xfer_us_per_block: float
+
+    def __post_init__(self) -> None:
+        if self.t_pos_us < 0 or self.t_xfer_us_per_block < 0:
+            raise ValueError("IOCostModel times must be non-negative")
+
+    @classmethod
+    def from_device_json(cls, path) -> "IOCostModel":
+        """Load ``t_pos_us`` and ``t_xfer_us_per_block`` from a calibration file.
+
+        The file is ``results/realio/device_<dev>.json`` as written by the
+        real-device calibration. Missing keys raise rather than defaulting,
+        because a guessed device constant is exactly what this model exists
+        to replace.
+        """
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        try:
+            return cls(t_pos_us=float(payload["t_pos_us"]),
+                       t_xfer_us_per_block=float(payload["t_xfer_us_per_block"]))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(
+                f"{path}: device calibration needs numeric t_pos_us and "
+                f"t_xfer_us_per_block ({exc})") from exc
+
+    @property
+    def kappa(self) -> float:
+        """This device's positioning-to-transfer ratio, in blocks."""
+        if self.t_xfer_us_per_block == 0:
+            return float("inf")
+        return self.t_pos_us / self.t_xfer_us_per_block
+
+    def device_time_us(self, metrics: "Metrics") -> float:
+        return (metrics.device_ios * self.t_pos_us
+                + metrics.blocks_moved * self.t_xfer_us_per_block)
+
+    @staticmethod
+    def kappa_star(policy: "Metrics", none: "Metrics") -> float:
+        """Critical ``t_pos/t_xfer`` above which ``policy`` costs less than ``none``.
+
+        ``kappa* = dBlocks / -dIOs``. A policy that issues fewer device I/Os
+        than ``none`` wins once positioning is at least kappa* times dearer
+        than moving one block; a device with ``kappa > kappa*`` favours it.
+        ``inf`` means the policy never wins as positioning comes to dominate:
+        it issues at least as many I/Os. ``0.0`` means it wins at every
+        ratio (fewer I/Os and no extra blocks).
+        """
+        d_ios = policy.device_ios - none.device_ios
+        d_blocks = policy.blocks_moved - none.blocks_moved
+        if d_ios < 0:
+            return max(0.0, d_blocks / -d_ios)
+        if d_ios == 0 and d_blocks < 0:
+            return 0.0
+        return float("inf")
 
 
 @dataclass
@@ -125,6 +217,28 @@ class Metrics:
     precision_margin: float = -1.0
     #: Stride confirmed by the correlation detector, when one is running.
     observed_stride: int | None = None
+    #: Device-I/O accounting (D18). A demand I/O is one maximal run of
+    #: contiguous missed blocks inside one read request -- a resident block in
+    #: the middle splits the read, as it does in a page cache. A prefetch I/O
+    #: is one maximal run of contiguous blocks newly prefetched after one
+    #: request, in issue order. A prefetch run that starts at the request's
+    #: end while the request's last block missed would be merged by the block
+    #: layer into that demand read, so it is counted as mergeable.
+    demand_ios: int = 0
+    prefetch_ios: int = 0
+    prefetch_ios_mergeable: int = 0
+    #: Block-age entries the bounded ``WindowContext`` dropped. Non-zero means
+    #: the contextual features differ from an unbounded table (M9).
+    age_table_evictions: int = 0
+
+    @property
+    def device_ios(self) -> int:
+        return self.demand_ios + self.prefetch_ios - self.prefetch_ios_mergeable
+
+    @property
+    def blocks_moved(self) -> int:
+        """Blocks read from the device: demand-missed plus prefetched."""
+        return self.read_blocks - self.read_hits + self.prefetches
 
     @property
     def hit_ratio(self) -> float:
@@ -195,6 +309,40 @@ class LRUCache:
         self._insert(block, True)
         self.metrics.prefetches += 1
         return True
+
+
+class CacheView:
+    """Read-only view of the replay cache for cache-aware predictors.
+
+    A predictor that sets ``cache_aware = True`` is driven through
+    ``observe(request, missed_blocks, cache_view)`` instead of
+    ``next_candidates``. It may ask whether a block is resident and whether a
+    resident block is a still-unused prefetch, but it cannot change the
+    cache: every prefetch still goes through the replay loop, under the same
+    first-window gate and accounting as every other mode.
+
+    ``prefetch_hits`` holds the blocks of the *current* request that were
+    served from a still-unused prefetch. After the demand reads those flags
+    are already cleared, so this is the only way a predictor can see "the
+    request touched my read-ahead marker". The replay loop sets it before
+    each ``observe`` call.
+    """
+
+    __slots__ = ("_blocks", "capacity", "prefetch_hits")
+
+    def __init__(self, cache: LRUCache):
+        self._blocks = cache.blocks
+        self.capacity = cache.capacity
+        self.prefetch_hits: list[int] = []
+
+    def __contains__(self, block: int) -> bool:
+        return block in self._blocks
+
+    def __len__(self) -> int:
+        return len(self._blocks)
+
+    def is_unused_prefetch(self, block: int) -> bool:
+        return bool(self._blocks.get(block, False))
 
 
 def candidates(request: Request, policy: str, stride: int | None) -> list[int]:
@@ -279,12 +427,14 @@ DEFAULT_CAPACITY = 2048
 #: Every mode ``replay()`` accepts. ``_make_predictor`` must agree.
 MODES_SUPPORTED = frozenset({
     "adaptive", "adaptive_evidence", "none", "sequential", "strided",
-    "stride", "markov", "lstm", "deep", *GATED_MODES,
+    "stride", "markov", "lstm", "deep", "linux_ra", *GATED_MODES,
 })
 
 
 def _validate_replay(mode: str, window_size: int, policy_interval: int | None,
-                     read_ahead_depth: int) -> int:
+                     read_ahead_depth: int,
+                     linux_ra_max_blocks: int = DEFAULT_LINUX_RA_MAX_BLOCKS,
+                     age_table_bound: int | None = DEFAULT_AGE_TABLE_BOUND) -> int:
     """Shared parameter checks for ``replay`` and ``replay_stream``.
 
     These two paths had drifted: the streamed one accepted a ``window_size``
@@ -302,6 +452,10 @@ def _validate_replay(mode: str, window_size: int, policy_interval: int | None,
         raise ValueError("policy_interval must be at least 8")
     if read_ahead_depth < 0:
         raise ValueError("read_ahead_depth must be non-negative")
+    if linux_ra_max_blocks < 1:
+        raise ValueError("linux_ra_max_blocks must be at least 1")
+    if age_table_bound is not None and age_table_bound < 1:
+        raise ValueError("age_table_bound must be positive or None")
     return policy_interval or window_size
 
 
@@ -318,6 +472,67 @@ def _publish_gate(gate: "GateController", metrics: "Metrics") -> None:
     metrics.observed_stride = gate.stride
 
 
+def _demand_read(cache: LRUCache, metrics: Metrics, latency: LatencyModel,
+                 request: Request, missed: list[int] | None = None,
+                 reused: list[int] | None = None) -> bool:
+    """Serve one request's blocks from the cache; shared by both replay paths.
+
+    Counts one demand device I/O per maximal run of missed blocks. When given,
+    ``missed`` collects the blocks that missed and ``reused`` the blocks that
+    hit a still-unused prefetch. Returns whether the request's last block
+    missed, which is what decides if a read-ahead run starting at its end can
+    merge into the demand read.
+    """
+    start = request.lba
+    end = start + request.size_blocks
+    if request.operation != "R":
+        for block in range(start, end):
+            cache.write(block)
+        return False
+    hit_us = latency.hit_us
+    miss_us = latency.demand_miss_us
+    in_run = False
+    useful = metrics.useful_prefetches
+    for block in range(start, end):
+        if cache.read(block):
+            metrics.demand_latency_us += hit_us
+            in_run = False
+            if reused is not None and metrics.useful_prefetches != useful:
+                reused.append(block)
+                useful = metrics.useful_prefetches
+        else:
+            metrics.demand_latency_us += miss_us
+            if not in_run:
+                metrics.demand_ios += 1
+                in_run = True
+            if missed is not None:
+                missed.append(block)
+    return in_run
+
+
+def _issue_prefetches(cache: LRUCache, metrics: Metrics, latency: LatencyModel,
+                      gate: "GateController | None", proposed, end: int,
+                      tail_missed: bool) -> None:
+    """Issue one request's prefetch candidates; shared by both replay paths.
+
+    A prefetch I/O is a maximal run of consecutive *newly issued* blocks, so a
+    candidate that is already resident splits the run. Only the caller
+    decides whether to call this at all (the first-window gate).
+    """
+    cost = latency.prefetch_us
+    last = None
+    for block in proposed:
+        if cache.prefetch(block):
+            metrics.prefetch_cost_us += cost
+            if last is None or block != last + 1:
+                metrics.prefetch_ios += 1
+                if tail_missed and block == end:
+                    metrics.prefetch_ios_mergeable += 1
+            last = block
+            if gate is not None:
+                gate.note_prefetch()
+
+
 def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
            window_size: int = 32,
            mode: str = "adaptive", model: OnlineGaussianNB | None = None,
@@ -328,7 +543,10 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
            smoothing: tuple[int, float] | None = None,
            contextual: bool = True,
            policy_interval: int | None = None,
-           read_ahead_depth: int = DEFAULT_READ_AHEAD_DEPTH):
+           read_ahead_depth: int = DEFAULT_READ_AHEAD_DEPTH,
+           cache_factory=LRUCache,
+           linux_ra_max_blocks: int = DEFAULT_LINUX_RA_MAX_BLOCKS,
+           age_table_bound: int | None = DEFAULT_AGE_TABLE_BOUND):
     """Replay in request order; a completed window only affects later requests.
 
     ``labels`` represent controlled ground truth. Optional pseudo-label updates
@@ -339,9 +557,18 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
     once per window. The classifier still scores a whole window (it needs the
     data), but the throttle can act on a shorter cadence, which is what lets it
     react when the workload changes mid-window. Defaults to ``window_size``.
+
+    ``cache_factory(capacity, metrics)`` builds the cache. It must keep
+    ``LRUCache``'s semantics and attributes; it exists so an instrumented
+    subclass (for example one that records every operation for a real-device
+    replay) sees exactly the cache operations this loop performs.
+    ``linux_ra_max_blocks`` is the ``linux_ra`` window ceiling, and
+    ``age_table_bound`` caps the contextual block-age table (``None`` for
+    unbounded).
     """
     interval_size = _validate_replay(mode, window_size, policy_interval,
-                                    read_ahead_depth)
+                                     read_ahead_depth, linux_ra_max_blocks,
+                                     age_table_bound)
     if mode == "adaptive" and model is None:
         raise ValueError("adaptive replay requires a trained model")
     if smoothing is not None and mode not in ("adaptive", "adaptive_evidence"):
@@ -354,27 +581,21 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
 
     latency = latency_model or LatencyModel()
     metrics = Metrics()
-    cache = LRUCache(capacity, metrics)
+    cache = cache_factory(capacity, metrics)
     smoother = PolicySmoother(*smoothing) if smoothing else None
     remaining_reads = Counter(block for req in requests if req.operation == "R"
                               for block in range(req.lba, req.lba + req.size_blocks))
-    predictor = None
-    if mode == "stride":
-        predictor = StridePrefetcher()
-    elif mode == "markov":
-        predictor = MarkovPrefetcher()
-    elif mode == "lstm":
-        if not lstm_model_path:
-            raise ValueError("lstm mode requires --lstm-model path")
-        from .lstm import load_predictor
-        predictor = load_predictor(lstm_model_path)
+    predictor = _make_predictor(mode, lstm_model_path, window_size=window_size,
+                                linux_ra_max_blocks=linux_ra_max_blocks)
+    observer = predictor if getattr(predictor, "cache_aware", False) else None
+    view = CacheView(cache) if observer is not None else None
 
     history: list[Request] = []
     predictions: list[tuple[int, str, float]] = []
     # Contextual feature state: block ages and the previous window's spatial
     # features. This is stream information a real system has at decision time
     # (block-age tracking), not lookahead.
-    context = WindowContext() if contextual else None
+    context = WindowContext(age_table_bound) if contextual else None
     # A block is a "prefetchable miss" once. Counting it again after eviction
     # inflated the oracle-recall denominator whenever the cache was smaller
     # than the working set, which silently biased recall.
@@ -390,19 +611,28 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
             if gated else None)
     interval = 0
     for index, request in enumerate(requests):
-        for block in range(request.lba, request.lba + request.size_blocks):
-            if request.operation == "R":
+        end = request.lba + request.size_blocks
+        if request.operation == "R":
+            for block in range(request.lba, end):
                 remaining_reads[block] -= 1
-                hit = cache.read(block)
-                if (not hit and remaining_reads[block] > 0
-                        and block not in counted_misses):
-                    counted_misses.add(block)
-                    metrics.prefetchable_misses += 1
-                metrics.demand_latency_us += latency.hit_us if hit else latency.demand_miss_us
-            else:
-                cache.write(block)
+        missed: list[int] = []
+        reused = [] if observer is not None else None
+        tail_missed = _demand_read(cache, metrics, latency, request, missed,
+                                   reused)
+        # Blocks of one request are distinct, so checking the misses after
+        # the whole request was decremented equals checking each in turn.
+        for block in missed:
+            if remaining_reads[block] > 0 and block not in counted_misses:
+                counted_misses.add(block)
+                metrics.prefetchable_misses += 1
 
-        if predictor is not None:
+        if observer is not None:
+            view.prefetch_hits = reused  # type: ignore[union-attr]
+            start = perf_counter()
+            proposed = observer.observe(request, missed, view)
+            metrics.inference_ms += (perf_counter() - start) * 1000
+            metrics.inference_calls += 1
+        elif predictor is not None:
             start = perf_counter()
             proposed = predictor.next_candidates(request)
             metrics.inference_ms += (perf_counter() - start) * 1000
@@ -415,11 +645,8 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
         else:
             proposed = candidates(request, policy, stride)
         if index >= window_size:
-            for block in proposed:
-                if cache.prefetch(block):
-                    metrics.prefetch_cost_us += latency.prefetch_us
-                    if gate is not None:
-                        gate.note_prefetch()
+            _issue_prefetches(cache, metrics, latency, gate, proposed, end,
+                              tail_missed)
 
         if gate is not None:
             gate.observe(request)
@@ -482,6 +709,8 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
             gate.note_useful(metrics.useful_prefetches)
             gate.decide()
         _publish_gate(gate, metrics)
+    if context is not None:
+        metrics.age_table_evictions = context.evictions
     return metrics, predictions
 
 
@@ -492,7 +721,11 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
                   lstm_model_path: str | None = None,
                   contextual: bool = True,
                   policy_interval: int | None = None,
-                  read_ahead_depth: int = DEFAULT_READ_AHEAD_DEPTH) -> Metrics:
+                  read_ahead_depth: int = DEFAULT_READ_AHEAD_DEPTH,
+                  cache_factory=LRUCache,
+                  linux_ra_max_blocks: int = DEFAULT_LINUX_RA_MAX_BLOCKS,
+                  age_table_bound: int | None = DEFAULT_AGE_TABLE_BOUND
+                  ) -> Metrics:
     """Replay a request stream delivered in bounded chunks.
 
 
@@ -507,16 +740,23 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
     needs to know whether a missed block is read *again later*, which is
     whole-stream knowledge that a bounded-memory pass cannot have without
     holding a block index for the entire trace. Hit ratio, precision, wasted
-    I/O, modelled cost and policy switches are all exact, and those are the
-    metrics that rank policies.
+    I/O, device I/Os, modelled cost, policy switches and inference counters
+    are all exact, and those are the metrics that rank policies.
+
+    ``cache_factory``, ``linux_ra_max_blocks`` and ``age_table_bound`` mean
+    exactly what they mean for :func:`replay`.
     """
     interval_size = _validate_replay(mode, window_size, policy_interval,
-                                    read_ahead_depth)
+                                     read_ahead_depth, linux_ra_max_blocks,
+                                     age_table_bound)
     latency = latency_model or LatencyModel()
     metrics = Metrics()
-    cache = LRUCache(capacity, metrics)
-    context = WindowContext() if contextual else None
-    predictor = _make_predictor(mode, lstm_model_path)
+    cache = cache_factory(capacity, metrics)
+    context = WindowContext(age_table_bound) if contextual else None
+    predictor = _make_predictor(mode, lstm_model_path, window_size=window_size,
+                                linux_ra_max_blocks=linux_ra_max_blocks)
+    observer = predictor if getattr(predictor, "cache_aware", False) else None
+    view = CacheView(cache) if observer is not None else None
     # Same controller as replay(). These two paths used to carry separate
     # copies of this logic, which is how the gated modes ended up missing
     # from the streamed path entirely.
@@ -531,15 +771,24 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
 
     for chunk in chunks:
         for request in chunk:
-            for block in range(request.lba, request.lba + request.size_blocks):
-                if request.operation == "R":
-                    hit = cache.read(block)
-                    metrics.demand_latency_us += (latency.hit_us if hit
-                                                  else latency.demand_miss_us)
-                else:
-                    cache.write(block)
-            if predictor is not None:
+            missed = [] if observer is not None else None
+            reused = [] if observer is not None else None
+            tail_missed = _demand_read(cache, metrics, latency, request,
+                                       missed, reused)
+            # Inference is timed and counted exactly as replay() does it;
+            # leaving it out here made the streamed rows report zero
+            # inference cost for every per-request predictor (M13).
+            if observer is not None:
+                view.prefetch_hits = reused  # type: ignore[union-attr]
+                start = perf_counter()
+                proposed = observer.observe(request, missed, view)
+                metrics.inference_ms += (perf_counter() - start) * 1000
+                metrics.inference_calls += 1
+            elif predictor is not None:
+                start = perf_counter()
                 proposed = predictor.next_candidates(request)
+                metrics.inference_ms += (perf_counter() - start) * 1000
+                metrics.inference_calls += 1
             elif gate is not None:
                 proposed = gate.candidates(request)
             elif mode == "deep":
@@ -549,11 +798,9 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
             # Causality, matching ``replay`` exactly: the first
             # ``window_size`` requests observe without prefetching.
             if seen >= window_size:
-                for block in proposed:
-                    if cache.prefetch(block):
-                        metrics.prefetch_cost_us += latency.prefetch_us
-                        if gate is not None:
-                            gate.note_prefetch()
+                _issue_prefetches(cache, metrics, latency, gate, proposed,
+                                  request.lba + request.size_blocks,
+                                  tail_missed)
             if gate is not None:
                 gate.observe(request)
                 gate.note_useful(metrics.useful_prefetches)
@@ -567,7 +814,10 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
             if len(history) == window_size:
                 stride = dominant_stride(history)
                 if mode == "adaptive_evidence":
+                    start = perf_counter()
                     chosen = route_window(history, stride)
+                    metrics.inference_ms += (perf_counter() - start) * 1000
+                    metrics.inference_calls += 1
                     # Matches replay(): a switch is a change of chosen
                     # policy, and omitting this made the two paths disagree
                     # by ~230 on web_3 while agreeing on every cache metric.
@@ -592,14 +842,28 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
             gate.note_useful(metrics.useful_prefetches)
             gate.decide()
         _publish_gate(gate, metrics)
+    if context is not None:
+        metrics.age_table_evictions = context.evictions
     return metrics
 
 
-def _make_predictor(mode: str, lstm_model_path: str | None):
+def _make_predictor(mode: str, lstm_model_path: str | None, *,
+                    window_size: int = 32,
+                    linux_ra_max_blocks: int = DEFAULT_LINUX_RA_MAX_BLOCKS):
+    """The per-request predictor for ``mode``, or ``None`` for window modes.
+
+    Both replay paths build their predictor here, so a mode cannot be wired
+    into one path and forgotten in the other.
+    """
     if mode == "stride":
         return StridePrefetcher()
     if mode == "markov":
         return MarkovPrefetcher()
+    if mode == "linux_ra":
+        # The emulation keeps its window state still through the first
+        # window, exactly like the validated prototype, so its first decision
+        # sees the same history every other mode's first decision sees.
+        return LinuxReadahead(linux_ra_max_blocks, warmup=window_size)
     if mode == "lstm":
         if not lstm_model_path:
             raise ValueError("lstm mode requires --lstm-model path")

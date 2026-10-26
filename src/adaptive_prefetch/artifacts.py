@@ -47,11 +47,21 @@ def save_model(path: str | Path, model, metadata: dict[str, object]) -> None:
         "statistics": _statistics(model),
         "metadata": metadata,
     }
+    if isinstance(model, OnlineQDA):
+        # Shrinkage changes every QDA prediction. It used to be dropped here,
+        # so a model trained at any other value silently reloaded at 0.05.
+        payload["shrink"] = model.shrink
     destination.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
-def load_model(path: str | Path):
-    """Return ``(model, metadata)``; raise ``ValueError`` on any mismatch."""
+def load_model(path: str | Path, *, classifier: str | None = None,
+               decay_factor: float | None = None, shrink: float | None = None):
+    """Return ``(model, metadata)``; raise ``ValueError`` on any mismatch.
+
+    ``classifier``, ``decay_factor`` and ``shrink``, when given, are what the
+    caller expects the artifact to contain; a different stored value is
+    rejected instead of being silently used.
+    """
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if (payload.get("format_version") != FORMAT_VERSION
             or payload.get("features") != list(FEATURE_NAMES)
@@ -63,6 +73,9 @@ def load_model(path: str | Path):
     name = payload.get("classifier")
     if name not in CLASSIFIERS:
         raise ValueError(f"unknown classifier {name!r} in artifact")
+    if classifier is not None and name != classifier:
+        raise ValueError(
+            f"artifact holds a {name!r} classifier, expected {classifier!r}")
 
     decay = float(payload["decay_factor"])
     floor = float(payload["variance_floor"])
@@ -70,14 +83,28 @@ def load_model(path: str | Path):
         raise ValueError("artifact decay_factor must be in (0, 1]")
     if floor <= 0:
         raise ValueError("artifact variance_floor must be positive")
+    if decay_factor is not None and decay != decay_factor:
+        raise ValueError(
+            f"artifact decay_factor {decay} does not match the expected "
+            f"{decay_factor}; regenerate the artifact")
 
     if name == "gnb":
+        if shrink is not None:
+            raise ValueError("shrink applies to qda artifacts only")
         model = OnlineGaussianNB(len(FEATURE_NAMES), floor, decay)
     else:
-        shrink = float(payload.get("shrink", 0.05))
-        if not 0.0 <= shrink < 1.0:
+        if "shrink" not in payload:
+            raise ValueError(
+                "qda artifact has no stored shrink, so the value it was "
+                "trained with is unknown; regenerate the artifact")
+        stored = float(payload["shrink"])
+        if not 0.0 <= stored < 1.0:
             raise ValueError("artifact shrink must be in [0, 1)")
-        model = OnlineQDA(len(FEATURE_NAMES), floor, decay, shrink)
+        if shrink is not None and stored != shrink:
+            raise ValueError(
+                f"artifact shrink {stored} does not match the expected "
+                f"{shrink}; regenerate the artifact")
+        model = OnlineQDA(len(FEATURE_NAMES), floor, decay, stored)
 
     stats = payload.get("statistics")
     if not isinstance(stats, dict):
