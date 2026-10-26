@@ -14,6 +14,7 @@ Typical use::
 
 from __future__ import annotations
 
+import heapq
 from collections import Counter
 from statistics import mean, pstdev
 
@@ -55,19 +56,147 @@ def request_profile(requests: list[Request]) -> dict:
     }
 
 
-def locality_profile(requests: list[Request], capacity: int = 128) -> dict:
-    """Re-access statistics and the ceiling an ideal predictor could reach.
+def _block_accesses(requests: list[Request]) -> list[tuple[int, bool]]:
+    """The 512-B block access stream, ``(block, is_read)``, in request order.
 
-    ``cacheable_ceiling`` is the fraction of read blocks that repeat within a
-    window the cache can actually hold. This is the honest upper bound for any
-    prefetcher on this trace: a policy cannot beat it, and on high-reuse /
-    long-distance workloads it is far below 1.0.
+    Writes are included because the simulator's cache allocates on write
+    (``LRUCache.write``): a block written and then read is a hit there.
+    """
+    return [(block, request.operation == "R") for request in requests
+            for block in range(request.lba, request.lba + request.size_blocks)]
+
+
+def lru_stack_distances(requests: list[Request]) -> tuple[Counter, int]:
+    """Mattson LRU stack distance of every read block access.
+
+    Returns ``(histogram, read_blocks)``. ``histogram[d]`` counts reads whose
+    block was the ``d``-th most recently used block (1 = most recent) when it
+    was accessed; first touches have no distance and are absent. Writes take
+    part in recency exactly as in ``LRUCache``. By the inclusion property a
+    read hits an LRU cache of ``c`` blocks iff its distance is at most ``c``,
+    so one pass gives the demand hit ratio at every capacity. A Fenwick tree
+    over access times makes this O(n log n).
+    """
+    accesses = _block_accesses(requests)
+    size = len(accesses)
+    tree = [0] * (size + 1)
+    last: dict[int, int] = {}
+    histogram: Counter = Counter()
+    reads = 0
+    live = 0
+    for now, (block, is_read) in enumerate(accesses):
+        reads += is_read
+        previous = last.get(block)
+        if previous is not None:
+            # Markers sit at each block's most recent access time, so the
+            # markers after `previous` are the distinct blocks touched since.
+            index, before = previous + 1, 0
+            while index > 0:
+                before += tree[index]
+                index -= index & -index
+            if is_read:
+                histogram[live - before + 1] += 1
+            index = previous + 1
+            while index <= size:
+                tree[index] -= 1
+                index += index & -index
+        else:
+            live += 1
+        index = now + 1
+        while index <= size:
+            tree[index] += 1
+            index += index & -index
+        last[block] = now
+    return histogram, reads
+
+
+def lru_demand_curve(requests: list[Request],
+                     capacities: list[int] | tuple[int, ...]) -> dict[int, float]:
+    """LRU demand hit ratio (no prefetch) at each capacity, in one pass.
+
+    At a given capacity this is exactly the hit ratio of the ``none`` mode,
+    because ``none`` is the same LRU cache with nothing prefetched.
+    """
+    histogram, reads = lru_stack_distances(requests)
+    result = {}
+    for capacity in capacities:
+        if capacity < 1:
+            raise ValueError("cache capacity must be positive")
+        hits = sum(count for distance, count in histogram.items()
+                   if distance <= capacity)
+        result[capacity] = hits / reads if reads else 0.0
+    return result
+
+
+def lru_demand_hit_ratio(requests: list[Request], capacity: int) -> float:
+    """LRU demand hit ratio at one capacity; see :func:`lru_demand_curve`."""
+    return lru_demand_curve(requests, (capacity,))[capacity]
+
+
+def belady_demand_hit_ratio(requests: list[Request], capacity: int) -> float:
+    """Belady MIN demand hit ratio: the best any demand-only cache can do.
+
+    Offline optimal replacement over the block stream: on overflow, evict the
+    resident block (the incoming one included, i.e. bypass is allowed) whose
+    next *read* is farthest away. A block whose next access is a write is
+    dead, because the write re-allocates it whatever happens. Built from the
+    reconstructed block stream with a two-pass next-use array and a max-heap.
+
+    This uses future knowledge and is a **reference, not a policy**. It bounds
+    demand caching only: a prefetcher fetches blocks before their first read,
+    so ``deep`` can and does exceed it.
+    """
+    if capacity < 1:
+        raise ValueError("cache capacity must be positive")
+    accesses = _block_accesses(requests)
+    dead = len(accesses) + 1
+    next_use = [dead] * len(accesses)
+    upcoming: dict[int, tuple[int, bool]] = {}
+    for now in range(len(accesses) - 1, -1, -1):
+        block, is_read = accesses[now]
+        following = upcoming.get(block)
+        if following is not None and following[1]:
+            next_use[now] = following[0]
+        upcoming[block] = (now, is_read)
+
+    resident: dict[int, int] = {}
+    heap: list[tuple[int, int]] = []
+    hits = reads = 0
+    for now, (block, is_read) in enumerate(accesses):
+        if is_read:
+            reads += 1
+            hits += block in resident
+        resident[block] = next_use[now]
+        heapq.heappush(heap, (-next_use[now], block))
+        if len(resident) > capacity:
+            # Lazy deletion: an entry is current only while it still matches
+            # the block's recorded next use.
+            while True:
+                negative, victim = heapq.heappop(heap)
+                if resident.get(victim) == -negative:
+                    del resident[victim]
+                    break
+    return hits / reads if reads else 0.0
+
+
+def locality_profile(requests: list[Request], capacity: int = 128) -> dict:
+    """Re-access statistics and demand-cache references at ``capacity``.
+
+    ``read_reuse_within_capacity`` (also kept under its old key
+    ``cacheable_ceiling``) is the fraction of read blocks re-read within
+    ``capacity`` *read accesses* of their previous read. It is a reuse
+    statistic, **not a bound**: it ignores writes, counts accesses rather than
+    distinct blocks, and says nothing about prefetching, so the ``none`` mode
+    can exceed it. The demand-cache references are
+    ``lru_demand_hit_ratio`` (Mattson; equals the ``none`` mode) and
+    ``belady_demand_hit_ratio`` (offline-optimal replacement, no prefetch).
     """
     reads = [r for r in requests if r.operation == "R"]
     read_blocks = [b for r in reads for b in range(r.lba, r.lba + r.size_blocks)]
     if not read_blocks:
         return {"read_blocks": 0, "locality_ceiling": 0.0,
-                "cacheable_ceiling": 0.0}
+                "cacheable_ceiling": 0.0, "read_reuse_within_capacity": 0.0,
+                "lru_demand_hit_ratio": 0.0, "belady_demand_hit_ratio": 0.0}
     total = Counter(read_blocks)
     repeats = sum(count - 1 for count in total.values())
     last_seen: dict[int, int] = {}
@@ -83,6 +212,9 @@ def locality_profile(requests: list[Request], capacity: int = 128) -> dict:
         "repeats": repeats,
         "locality_ceiling": repeats / len(read_blocks),
         "cacheable_ceiling": cacheable / len(read_blocks),
+        "read_reuse_within_capacity": cacheable / len(read_blocks),
+        "lru_demand_hit_ratio": lru_demand_hit_ratio(requests, capacity),
+        "belady_demand_hit_ratio": belady_demand_hit_ratio(requests, capacity),
     }
 
 
@@ -267,11 +399,16 @@ def profile_trace(requests: list[Request], name: str,
     if locality["read_blocks"]:
         out.append(f"- read blocks: {locality['read_blocks']:,} "
                    f"({locality['distinct_read_blocks']:,} distinct)")
-        out.append(f"- locality ceiling (blocks that ever repeat): "
+        out.append(f"- read blocks that repeat an earlier read: "
                    f"{100 * locality['locality_ceiling']:.2f}%")
-        out.append(f"- **cacheable ceiling (repeats within {capacity} reads): "
-                   f"{100 * locality['cacheable_ceiling']:.2f}%**  <- "
-                   f"upper bound for any prefetcher here")
+        out.append(f"- read-reuse within {capacity} reads (not a bound): "
+                   f"{100 * locality['read_reuse_within_capacity']:.2f}%")
+        out.append(f"- **LRU demand hit ratio (Mattson, no prefetch): "
+                   f"{100 * locality['lru_demand_hit_ratio']:.2f}%**  "
+                   f"<- equals the `none` mode")
+        out.append(f"- **Belady MIN demand hit ratio (no prefetch): "
+                   f"{100 * locality['belady_demand_hit_ratio']:.2f}%**  "
+                   f"<- best possible replacement; prefetching can exceed it")
     else:
         out.append("- no read requests: every cache metric is 0/0 for this trace")
 

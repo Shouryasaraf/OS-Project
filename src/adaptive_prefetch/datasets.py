@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .simulator import DEFAULT_CAPACITY
-from .trace import load_csv, transition_trace
+from .trace import Request, load_csv, transition_trace
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -20,6 +20,10 @@ MSR_SAMPLES = {
 }
 MSRC_TRACE_DIR = REPO / "data" / "MSRC-trace-003" / "final-trace"
 LSTM_ARTIFACT = REPO / "models" / "lstm_delta.pt"
+#: Sidecar recording what ``main.py`` trained :data:`LSTM_ARTIFACT` on. A
+#: cached artifact is reused only when this matches the current selection, so
+#: an artifact trained on the benchmark traces can never be silently reused.
+LSTM_TRAINING_RECORD = LSTM_ARTIFACT.with_suffix(".training.json")
 OUTPUT_DIR = REPO / "outputs"
 FORMATS = ("auto", "normalized", "msr", "iotta8", "alibaba", "revised")
 
@@ -38,35 +42,107 @@ REAL_TRACE_LIMIT = 40000
 #: Name prefixes that mark a dataset as generated rather than measured.
 SYNTHETIC_PREFIXES = ("synthetic", "demo")
 
+#: Prefix of the pooled rows ``main.py`` adds after the per-dataset rows.
+#: Synthetic and real datasets are pooled separately (``ALL_SYNTHETIC``,
+#: ``ALL_REAL``): one mean over both mixes generator structure into a claim
+#: about real workloads.
+AGGREGATE_PREFIX = "ALL_"
+
+#: Generator seeds of the synthetic benchmark datasets (``synthetic_seed_N``
+#: is built from seed ``200000 + N``), and of the traces the LSTM baseline is
+#: trained on. The two ranges must never meet: the LSTM used to be trained on
+#: the benchmark traces themselves and then scored on them, in-sample.
+BENCHMARK_SEEDS = tuple(42 + 200000 + offset for offset in range(3))
+LSTM_TRAINING_SEEDS = tuple(42 + 300000 + offset for offset in range(3))
+#: Windows per class of every generated benchmark and training trace.
+SYNTHETIC_WINDOWS_PER_CLASS = 8
+
 
 def is_synthetic(name: str) -> bool:
     """True for generated datasets, false for recorded workloads."""
     return str(name).startswith(SYNTHETIC_PREFIXES)
 
 
+def is_aggregate(name: str) -> bool:
+    """True for the pooled rows, which are not datasets of their own."""
+    return str(name).startswith(AGGREGATE_PREFIX)
+
+
+def synthetic_datasets(window_size: int = 32) -> list[tuple[str, list]]:
+    """The labelled synthetic benchmark traces, one per :data:`BENCHMARK_SEEDS`."""
+    datasets = []
+    for seed in BENCHMARK_SEEDS:
+        requests, _ = transition_trace(seed, SYNTHETIC_WINDOWS_PER_CLASS,
+                                       window_size)
+        datasets.append((f"synthetic_seed_{seed - 200000}", requests))
+    return datasets
+
+
 def default_datasets(window_size: int = 32,
-                     capacity: int = DEFAULT_CAPACITY) -> list[tuple[str, list]]:
-    """The dataset set used when running non-interactively."""
-    datasets: list[tuple[str, list]] = []
-    for offset in range(3):
-        requests, _ = transition_trace(42 + 200000 + offset, 8, window_size)
-        datasets.append((f"synthetic_seed_{42 + offset}", requests))
+                     capacity: int = DEFAULT_CAPACITY, *,
+                     msrc_dir: str | Path | None = None) -> list[tuple[str, list]]:
+    """The dataset set used when running non-interactively.
+
+    ``data/samples/demo.csv`` is deliberately not in it. It is one more
+    generated transition trace (``export-demo``), so pooling it with the
+    seeded synthetic traces only double-counts the generator, and the copy
+    committed before the generator fix (D10) carried the largest "gain" of
+    any dataset. The interactive picker can still load it as a custom file.
+    """
+    datasets = synthetic_datasets(window_size)
     for number in ("1", "2"):
         path = MSR_SAMPLES[number]
         if path.is_file():
             datasets.append((path.stem, load_csv(path, "msr")))
-    if MSRC_TRACE_DIR.is_dir():
+    trace_dir = Path(msrc_dir) if msrc_dir is not None else MSRC_TRACE_DIR
+    if trace_dir.is_dir():
         for name in QUICK_MSRC:
-            path = MSRC_TRACE_DIR / name
+            path = trace_dir / name
             if path.is_file():
                 requests = load_csv(path, "revised")
                 if len(requests) > REAL_TRACE_LIMIT:
                     requests = requests[:REAL_TRACE_LIMIT]
                 datasets.append((f"msrc_{path.stem}", requests))
-    demo = REPO / "data" / "samples" / "demo.csv"
-    if demo.is_file():
-        datasets.append(("demo_normalized", load_csv(demo, "auto")))
     return datasets
+
+
+def _signature(requests: list[Request]) -> tuple:
+    return tuple((r.lba, r.size_blocks, r.operation) for r in requests)
+
+
+def lstm_training_set(datasets: list[tuple[str, list]],
+                      window_size: int = 32) -> tuple[list[tuple[str, list]], dict]:
+    """Traces the LSTM baseline is trained on, disjoint from ``datasets``.
+
+    Always generated transition traces from :data:`LSTM_TRAINING_SEEDS`, never
+    a benchmark dataset. On the synthetic benchmark rows the LSTM is therefore
+    scored on held-out traces from the same generator; on real traces it is
+    out of domain, which is the honest reading of its row. Raises if any
+    training trace coincides with a benchmark dataset, so a seed collision
+    cannot reintroduce the leak silently.
+
+    Returns ``(named_traces, record)``; ``record`` is the JSON-safe
+    description written next to the artifact.
+    """
+    training = []
+    for seed in LSTM_TRAINING_SEEDS:
+        requests, _ = transition_trace(seed, SYNTHETIC_WINDOWS_PER_CLASS,
+                                       window_size)
+        training.append((f"lstm_train_seed_{seed}", requests))
+    benchmark = {_signature(requests) for _, requests in datasets}
+    clashes = [name for name, requests in training
+               if _signature(requests) in benchmark]
+    if clashes:
+        raise ValueError(f"LSTM training trace(s) {clashes} also appear in the "
+                         "benchmark; training would be in-sample")
+    record = {
+        "source": "transition_trace",
+        "seeds": list(LSTM_TRAINING_SEEDS),
+        "windows_per_class": SYNTHETIC_WINDOWS_PER_CLASS,
+        "window_size": window_size,
+        "requests": sum(len(requests) for _, requests in training),
+    }
+    return training, record
 
 
 def dataset_summary(datasets: list[tuple[str, list]]) -> dict:
