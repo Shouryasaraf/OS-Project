@@ -1,0 +1,53 @@
+{
+  "format": "prefetch_common.provenance/1",
+  "study": "web",
+  "command": [
+    "reproduce.py",
+    "web",
+    "--workers",
+    "40"
+  ],
+  "git_sha": "443687f9b4bd0331fa326c310e07ad767ab54225",
+  "git_dirty": false,
+  "created_utc": "2026-10-26T15:04:52+00:00",
+  "host": {
+    "hostname": "antpc",
+    "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+    "kernel": "6.14.0-37-generic",
+    "python": "3.12.3",
+    "cpu_count": 128
+  },
+  "load_avg": {
+    "start": [
+      3.96,
+      6.16,
+      11.3
+    ],
+    "end": [
+      89.08,
+      105.65,
+      90.14
+    ]
+  },
+  "wall_s": 1319.366,
+  "gpu": null,
+  "inputs": {
+    "data/raw/events.csv": "3745aa83238b1e6d44d8fda209807899f420084398f94ddf745f3cbcfecbf9e7",
+    "data/processed/views.csv.gz": "adf414625abed518fa0a6b3c6aaf4e057db3a25f73d11331842f168807338090",
+    "models/web/ranker.joblib": "fbb743a077c06b5f1ea73e39b7c17ef9b8515d3bb8205d07ec59964a16d20142",
+    "models/web/candidate_index.joblib": "a92f9e663b05d2c1941d1d6f0f5771447a8541e71458d6c5bd5834c12667c476"
+  },
+  "outputs": {
+    "PREREGISTERED.md": "8a928bccaf548e4c5a0615b9ca92a05f29f744ef3010907c8cb95fe931d4c0dc",
+    "calibration.csv": "780500b6deb374c33c2e0aac68a82a61389dd3d8e92acc36a8418adf04166098",
+    "comparisons.csv": "982f0c0dfaace1afeba5b6bdf9a953debfd8ab09a721fc64f571bbcff03ef761",
+    "dataset_profile.json": "b89cae5a15142dae34d17178f61031ec4fae0c707a4277e7a17631de364abda3",
+    "decomposition.csv": "1dba774a81e833cc17ab381fd96085b2f2e24aee776c62de8b64c25fc2035d4d",
+    "freshness.csv": "0569584b8d16da0eabf103be833bf3520abb60ef8f359d90690fb544f3d52fb9",
+    "learning_curve.csv": "893eb65fe291781f0bbc874ea319b81bc1e5307222f943be22d77bb33c304728",
+    "policy_metrics.csv": "8ec7fb90a2dbefdbf5106227b2ea19d8986e79d4c3568be6b995fe66a0dfe410",
+    "session_parity.json": "e05c3d0321d615e4a04f35dd7eff1aa2a210ae856c04401607860aadf4d72766",
+    "think_time.json": "c29252599518b24d725f7b45cce4f9b11196f18b7cd5b155a0b44b0b21a31800"
+  },
+  "notes": "E4: per-capacity validation selection, frozen test replay; costs are assumed, not measured"
+}
