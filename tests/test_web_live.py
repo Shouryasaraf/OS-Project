@@ -11,6 +11,7 @@ load-sensitive ("slow") group: they skip when the 1-minute load average is
 above 32, the same bound the experiment itself enforces.
 """
 
+import argparse
 import asyncio
 import importlib.util
 import json
@@ -500,6 +501,23 @@ class EndToEndParityTests(unittest.TestCase):
                 self.assertEqual(main(argv), 0)
             self.assertEqual(len(read_rows("live/live_metrics.csv",
                                            results / "live_metrics.csv")), 4)
+            # ... and its config entry keeps the replaced passes as superseded.
+            run = next(iter(json.loads((results / "live_config.json").read_text())
+                            ["runs"].values()))
+            self.assertEqual((len(run["passes"]), len(run["superseded"]),
+                              len(run["invocations"])), (4, 4, 2))
+            # A changed views file builds a new plan instead of reusing the old one.
+            from webprefetch.live.run import add_arguments, ensure_plan
+            parser = argparse.ArgumentParser()
+            add_arguments(parser)
+            args = parser.parse_args(argv)
+            names = ["fixed0@trans_s0", "fixed2@trans_s0"]
+            with mock.patch("sys.stdout"):
+                first, _, _ = ensure_plan(args, names)
+                stat = views.stat()
+                os.utime(views, ns=(stat.st_atime_ns, stat.st_mtime_ns + 10**9))
+                second, _, _ = ensure_plan(args, names)
+            self.assertNotEqual(first, second)
             # A run whose planned rate is too high is refused and writes no results.
             refused = argv[:argv.index("--results-dir")] + [
                 "--results-dir", str(directory / "refused"), "--max-load", "1000",

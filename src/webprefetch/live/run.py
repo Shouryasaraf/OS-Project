@@ -16,7 +16,13 @@ client configuration, and a policy list (the baseline is always added). It
 5. checks parity and validity, and merges the rows into
    ``live_metrics.csv`` and ``live_parity.csv`` (rows with the same
    experiment, store, config, link, rep and policy are replaced), updates
-   ``live_config.json`` and ``live_report.md``, and writes provenance last.
+   ``live_config.json`` (a re-run keeps the run's earlier passes; replaced
+   ones move to ``superseded``) and ``live_report.md``, and writes
+   provenance last.
+
+The plan directory is named by a digest of the plan parameters and of the
+size and mtime of its inputs (views, and the ranker for ``logistic``), so a
+changed input builds a new plan rather than reusing a stale one.
 
 Raw per-view and per-fetch records go to ``<work-dir>/raw/`` as ``.csv.gz``
 and are not committed.
@@ -145,12 +151,34 @@ def _session_gap_ms() -> int:
     return SESSION_GAP_MS
 
 
+def _fingerprint(path: Path) -> dict | None:
+    try:
+        st = Path(path).stat()
+    except OSError:
+        return None
+    return {"path": str(path), "bytes": st.st_size, "mtime_ns": st.st_mtime_ns}
+
+
+def plan_inputs(args, base_names: list[str]) -> dict:
+    """Size and mtime of every file the plan is built from.
+
+    They are part of the plan directory's name, so a re-prepared views file
+    or a retrained ranker builds a new plan instead of reusing a stale one.
+    """
+    inputs = {"views": _fingerprint(args.views)}
+    if any(p.scorer == "logistic" for p in plan_module.parse_policies(base_names)):
+        for name in ("candidate_index.joblib", "ranker.joblib"):
+            inputs[name] = _fingerprint(Path(args.models) / name)
+    return inputs
+
+
 def ensure_plan(args, base_names: list[str]) -> tuple[Path, dict, dict]:
     params = {"splits": [args.split], "sessions_requested": args.sessions,
               "min_views": args.min_views, "seed": args.seed, "capacity": args.capacity,
               "session_gap_ms": _session_gap_ms(),
               "policies": [p.record() for p in plan_module.parse_policies(base_names)]}
-    digest = hashlib.sha256(json.dumps(params, sort_keys=True).encode()).hexdigest()
+    key = {"params": params, "inputs": plan_inputs(args, base_names)}
+    digest = hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()
     directory = Path(args.work_dir) / f"plan_{digest[:12]}"
     if plan_module.plan_matches(directory, params):
         plan, sim = plan_module.load_plan(directory)
@@ -318,6 +346,7 @@ def main(argv=None) -> int:
 def run(args, argv) -> int:
     from prefetch_common.provenance import snapshot, write_provenance
     start = snapshot()
+    invocation = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     if args.reps < 1 or args.shards < 1:
         raise SystemExit("--reps and --shards must be positive")
     labels, base_names = resolve_policies(args.policies, args.baseline)
@@ -371,7 +400,7 @@ def run(args, argv) -> int:
             for pass_label in labels[shift:] + labels[:shift]:
                 quiet, load = wait_for_quiet(args.max_load, args.load_wait_s)
                 if not quiet:
-                    aborted.append({"rep": rep, "policy": pass_label,
+                    aborted.append({"rep": rep, "policy": pass_label, "invocation": invocation,
                                     "reason": f"load {load:.1f} >= {args.max_load:g}"})
                     print(f"[live] rep {rep} {pass_label}: aborted, load {load:.1f}", flush=True)
                     continue
@@ -401,7 +430,8 @@ def run(args, argv) -> int:
                 load_avg = max(load_start, os.getloadavg()[0])
                 summaries[(rep, pass_label)] = (summary, record, valid, server, client_lag,
                                                 foreign, load_avg)
-                passes.append({"rep": rep, "policy": pass_label, "wall_s": round(wall, 3),
+                passes.append({"rep": rep, "policy": pass_label, "invocation": invocation,
+                               "wall_s": round(wall, 3),
                                "load_avg": load_avg, "valid": valid, "invalid_reasons": reasons,
                                "planned_rate": rates[pass_label], "foreign_io_frac": foreign,
                                "server": {k: v for k, v in server.items() if k != "config"},
@@ -429,15 +459,31 @@ def run(args, argv) -> int:
     config_path = results_dir / CONFIG_NAME
     live_config = json.loads(config_path.read_text()) if config_path.is_file() else {
         "format": "webprefetch.live.config/1", "runs": {}}
+    command = ["python", "-m", "webprefetch.live", "run", *argv]
+    previous = live_config["runs"].get(run_tag, {})
+    # A re-run (say, of an aborted pass) replaces only its own (rep, policy)
+    # rows, so the run entry keeps every earlier pass whose row is still in
+    # live_metrics.csv. A replaced pass moves to "superseded": earlier rows
+    # were compared with the baseline pass of their own invocation.
+    redone = {(p["rep"], p["policy"]) for p in passes}
+    kept, superseded = [], list(previous.get("superseded", []))
+    for p in previous.get("passes", []):
+        (superseded if (p["rep"], p["policy"]) in redone else kept).append(p)
     live_config["runs"][run_tag] = {
-        "command": ["python", "-m", "webprefetch.live", "run", *argv],
-        "created_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "command": command,
+        "created_utc": invocation,
+        "invocations": [*previous.get("invocations", []),
+                        {"command": command, "created_utc": invocation, "reps": args.reps,
+                         "policies": labels}],
         "plan": {"dir": str(plan_dir), "params": plan["params"],
+                 "inputs": plan_inputs(args, base_names),
                  "sessions": plan["sessions_selected"], "views": plan["views"],
                  "objects": len(plan["items"])},
         "assumptions": assumptions(args, store_meta, device),
         "reps": args.reps, "shards": args.shards, "policies": labels,
-        "passes": passes, "aborted": aborted}
+        "passes": kept + passes, "superseded": superseded,
+        "aborted": [a for a in previous.get("aborted", [])
+                    if (a["rep"], a["policy"]) not in redone] + aborted}
     tmp = config_path.with_name(CONFIG_NAME + ".tmp")
     tmp.write_text(json.dumps(live_config, indent=1, sort_keys=True) + "\n")
     tmp.replace(config_path)

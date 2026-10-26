@@ -112,8 +112,9 @@ def _inputs_missing() -> str | None:
     from webprefetch.paths import MODELS, PROCESSED
     if not (PROCESSED / "views.csv.gz").is_file():
         return f"{PROCESSED / 'views.csv.gz'} missing (run reproduce.py web or webprefetch prepare)"
-    if not (MODELS / "ranker.joblib").is_file():
-        return f"{MODELS / 'ranker.joblib'} missing (run webprefetch train)"
+    for name in ("candidate_index.joblib", "ranker.joblib"):
+        if not (MODELS / name).is_file():
+            return f"{MODELS / name} missing (run webprefetch train)"
     return None
 
 
