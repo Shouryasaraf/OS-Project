@@ -1,0 +1,2 @@
+policy,capacity,views,hits,hit_ratio,prefetch_hits,issued,useful,precision,unused,evicted_unused,demand_evicted_by_prefetch,issued_per_view,utility_per_view,depth_counts
+transition_top1,8,532844,66337,0.12449610017190772,5434,452409,5434,0.012011255302171266,446975,35022,16012,0.8490458745899363,-0.08776536847557634,{1: 532844}

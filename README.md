@@ -6,23 +6,36 @@ is: trace requests → window features → online-capable classifier → pattern
 prefetch policy → LRU cache simulation. It does **not** modify the operating
 system or perform physical disk reads.
 
+This `master` branch also carries a second study, adaptive **web
+product-page** prefetching on the RetailRocket clickstream
+(`src/webprefetch`); see [docs/web/README.md](docs/web/README.md) and
+[NOTICE.md](NOTICE.md) for its data attribution. The rest of this README
+describes the disk study. `python reproduce.py --help` lists the per-study
+reproduce commands (being filled in study by study).
+
 ## Repository layout
 
 | Location | Contents |
 | --- | --- |
 | `src/adaptive_prefetch/` | Trace loading, features, models, policies, replay, benchmark, and CLI |
 | `src/adaptive_prefetch/guard.py` | Feedback-gated policies: observed prefetch precision vs break-even |
-| `tests/` | Automated checks (131) |
+| `src/webprefetch/` | Web study: RetailRocket replay, ranker, controllers, demo server |
+| `tests/` | Automated checks: `test_project.py` (disk, 131), `test_web_*.py` (web), `test_repro_smoke.py` |
 | `data/samples/` | Small demonstration traces and format notes |
 | `data/MSRC-trace-003/final-trace/` | The 32-file, 11.86 GB collection (gitignored) |
-| `docs/` | Pipeline, architecture, decision log, classifier analysis, Review 2 guide, results |
+| `docs/` | Pipeline, architecture, decision log, classifier analysis, presentation outline; `docs/web/` for the web study |
 | `docs/reference/` | Original lab brief |
-| `presentation/` | Review 2 slide decks (both currently stale) |
-| `outputs/` | Generated results (gitignored) |
+| `presentation/` | Points to `docs/PRESENTATION.md` (the stale `.pptx` decks were removed) |
+| `results/` | Tracked result aggregates; `results/pivot_original/` is the web study's original run, verbatim |
+| `repro/`, `reproduce.py` | One reproduce module per study |
+| `outputs/` | Generated results (gitignored; the web study uses `outputs/web/`) |
 
 Run commands below from the repository root. Keep new trace datasets under
 `data/` and generated benchmark outputs under `outputs/` (create that ignored
-folder before writing results there).
+folder before writing results there). Only the named large-data folders
+(`data/block-traces`, `data/raw`, `data/processed`, `data/MSRC-trace-003`)
+are gitignored, so a new dataset elsewhere under `data/` needs its own
+`.gitignore` entry.
 
 ## What is implemented
 
@@ -297,8 +310,9 @@ adaptation. The LSTM predicts address deltas, not workload classes, so its
 cache outcomes and compute cost can be compared, but classification accuracy
 cannot be compared directly.
 
-See [Review 2 guide](docs/REVIEW2.md) for architecture, module completion,
-demonstration steps, and discussion questions. See the
+See the [presentation outline](docs/PRESENTATION.md) for the Review 2
+architecture, module completion, demonstration steps, and discussion
+questions. See the
 [architecture document](docs/architecture.md) for the module map, data flow,
 and design principles. See
 [docs/DECISIONS.md](docs/DECISIONS.md) for the decision log: what was tried,
@@ -306,9 +320,8 @@ what the measurement said, and why the default classifier is still Naive
 Bayes despite QDA being available and better on some regimes. See
 [docs/CLASSIFIER_EVAL.md](docs/CLASSIFIER_EVAL.md) for the detailed
 classifier comparison, the LSTM rework, the bug list, and the measured limits
-of what the available data can support. See the
-[Stage 2 verification snapshot](docs/STAGE2_RESULTS.md) for actual results
-and explicit gaps; rerun the benchmark before presenting any numbers. The
+of what the available data can support. Rerun the benchmark before presenting
+any numbers. The
 [pipeline guide](docs/PIPELINE.md) and [Stage 2 plan](docs/implementation-stage2.md)
 are kept under `docs/`; sample traces and their format notes are under
 `data/samples/`.

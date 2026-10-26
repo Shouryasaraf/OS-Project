@@ -1,0 +1,87 @@
+Dataset ready: data/raw/events.csv
+{
+  "source": "https://www.kaggle.com/datasets/retailrocket/ecommerce-dataset",
+  "dataset_version": 2,
+  "raw_sha256": "3745aa83238b1e6d44d8fda209807899f420084398f94ddf745f3cbcfecbf9e7",
+  "raw_rows": 2756101,
+  "duplicate_rows_removed": 460,
+  "event_counts_after_dedup": {
+    "view": 2664218,
+    "addtocart": 68966,
+    "transaction": 22457
+  },
+  "views": 2664218,
+  "visitors": 1407580,
+  "sessions": 1755781,
+  "sessions_with_2plus_views": 367480,
+  "sessions_with_3plus_views": 158987,
+  "sessions_with_5plus_views": 56981,
+  "eligible_next_view_pairs": 908355,
+  "session_length_quantiles": {
+    "0.5": 1.0,
+    "0.75": 1.0,
+    "0.9": 2.0,
+    "0.95": 4.0,
+    "0.99": 8.0
+  },
+  "split_cutoffs_ms": [
+    1435270223822,
+    1437508264878,
+    1439869763043
+  ],
+  "views_by_split": {
+    "0": 1065687,
+    "1": 532844,
+    "2": 532843,
+    "3": 532844
+  },
+  "eligible_pairs_by_split": {
+    "0": 384445,
+    "1": 181373,
+    "2": 174057,
+    "3": 168480
+  },
+  "prepared_path": "data/processed/views.csv.gz"
+}
+EDA written to outputs/eda.md
+{
+  "training_decisions": 30000,
+  "training_eligible_next_views": 10332,
+  "candidate_rows": 415181,
+  "positive_candidates": 1667,
+  "candidate_coverage": 0.1613433991482772,
+  "validation_decisions": 10000,
+  "validation_eligible_next_views": 3266,
+  "validation_candidate_rows": 131681,
+  "validation_positives": 347,
+  "C_tuning": [
+    {
+      "C": 0.1,
+      "validation_log_loss": 0.014554187547802867
+    },
+    {
+      "C": 1.0,
+      "validation_log_loss": 0.014553572658541946
+    },
+    {
+      "C": 10.0,
+      "validation_log_loss": 0.014553515803841639
+    }
+  ],
+  "validation_coverage_at_8": 0.09338640538885487,
+  "validation_hit_at_1": 0.038885486834047765,
+  "validation_mrr_at_8": 0.05576721196745688,
+  "selected_C": 10.0,
+  "feature_names": [
+    "log_pair_count",
+    "pair_probability",
+    "log_source_support",
+    "log_global_popularity",
+    "candidate_is_previous",
+    "log_session_position",
+    "log_preceding_gap_seconds",
+    "cart_count",
+    "retrieval_rank"
+  ]
+}
+Benchmark report written to outputs/report.md

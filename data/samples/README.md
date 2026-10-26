@@ -7,6 +7,12 @@
 - `MSR_trace_format.txt` preserves the supplied format and attribution notes
   for MSR-style traces. The note describes the broader dataset; it does not
   establish the provenance of this particular sample.
+- `web_fixture.csv` is a **synthetic** 200-row clickstream for the web-study
+  tests. It has the RetailRocket `events.csv` header and value conventions but
+  contains no RetailRocket data; never use it as research data.
+  `make_web_fixture.py` regenerates it byte for byte (stdlib, seed 42), and
+  `webprefetch prepare` deliberately rejects it because it checks the real
+  file's SHA-256.
 
 From the repository root, run:
 

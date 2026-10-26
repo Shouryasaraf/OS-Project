@@ -42,8 +42,9 @@ is worth very little. See section 5.
 board. That was a property of the **old degenerate generator**, which had no
 within-class variance at all. The corrected generator produces realistic
 variance, and 0.9688 is the intended outcome, not a regression. The 100%
-headline in `docs/STAGE2_RESULTS.md` is likewise a property of the generator,
-and that document is now marked stale.
+headline in `docs/STAGE2_RESULTS.md` is likewise a property of the generator;
+that stale document has since been removed from `master` (it remains in git
+history).
 
 ### What was actually broken: two absolute thresholds in the features
 

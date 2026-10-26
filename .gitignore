@@ -4,14 +4,30 @@ __pycache__/
 .venv/
 *.egg-info/
 outputs/
-data/
-data/raw/
-data/MSRC-trace-003
+.realio/
+
+# Large or licensed source data stays out of Git. These are listed one by one
+# (not a blanket data/) so tracked samples and fixtures under data/samples/
+# need no `git add -f`. No trailing slash: a worktree may make them symlinks.
+/data/block-traces
+/data/raw
+/data/processed
+/data/MSRC-trace-003
+
 .build/
 .codex-finalizer/
 .chart-data-*/
 models/*
 !models/msr_sample_gnb.json
+
+# LaTeX build products; the paper is compiled on Overleaf. Figures under
+# paper/figures/ stay tracked.
+paper/*.aux
+paper/*.log
+paper/*.pdf
+
+# results/ is deliberately NOT ignored: it holds the small, provenance-tagged
+# aggregates the paper reads.
 
 # Console transcript of a completed sweep run; nothing generates it and it
 # goes stale the moment a mode is added. outputs/ is gitignored already.

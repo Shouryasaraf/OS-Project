@@ -1,0 +1,7 @@
+dimension,cohort,eligible_pairs,candidate_coverage_at_8
+month,2015-08,75767,0.09494898834584978
+month,2015-09,92713,0.08740953264375007
+source,cold_source,30804,6.492663290481755e-05
+source,seen_source,137676,0.11110142653766815
+target,cold_target,30686,0.0
+target,seen_target,137794,0.1110207991639694
