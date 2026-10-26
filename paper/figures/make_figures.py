@@ -459,21 +459,22 @@ def f7_live_saved_vs_bytes(results, out, path):
     for row in rows:
         if row["valid"] and row["experiment"] == "headline":
             groups[(row["store"], row["policy"])].append(row)
-    if not groups:
+    if not any(g.live_saved(items) is not None for items in groups.values()):
         out.missing.append("live/live_metrics.csv: no valid headline rows")
         raise Missing
     fig, ax = _figure("f7_live_saved_vs_bytes")
     out.note = "points: mean over valid passes; bars: envelope of the per-pass 95% CIs"
     for k, store in enumerate(sorted({key[0] for key in groups})[:3]):
         keys = sorted((key for key in groups if key[0] == store), key=lambda key: g.policy_key(key[1]))
+        keys = [key for key in keys if g.live_saved(groups[key]) is not None]
         xs, ys, lo, hi = [], [], [], []
         for key in keys:
-            items = groups[key]
-            saved = -statistics.fmean(r["delta_vs_base_ms"] for r in items)
+            items = g.live_comparable(groups[key])
+            saved, low, high = g.live_saved(items)
             xs.append(statistics.fmean(r["wasted_kb_per_view"] for r in items))
             ys.append(saved)
-            lo.append(saved + max(r["delta_vs_base_ms_hi"] for r in items))
-            hi.append(-min(r["delta_vs_base_ms_lo"] for r in items) - saved)
+            lo.append(saved - low)
+            hi.append(high - saved)
         ax.errorbar(xs, ys, yerr=[lo, hi], fmt=MARKERS[k], color=CATEGORICAL[k], markersize=4,
                     markeredgecolor="white", markeredgewidth=0.5, elinewidth=0.6, capsize=1.2,
                     label=f"{store} store")
@@ -497,7 +498,11 @@ C_GRID = tuple(10 ** (-3 + i * (math.log10(1.1) + 3) / 120) for i in range(121))
 
 def _disk_utility_rows(sweep, capacity):
     """Mean over traces of each policy's hit ratio and prefetches per block,
-    on the traces where every drawn policy has an ok row (paired)."""
+    on the traces where every drawn policy has an ok row (paired).
+
+    Only policies with an ok row on every trace any policy covers are drawn,
+    so one partially covered mode cannot shrink every curve to its traces.
+    """
     rows = [r for r in sweep if r["config"] == g.HEADLINE_CONFIG and r["merge"] == g.HEADLINE_MERGE
             and r["latency"] == g.HEADLINE_LATENCY and r["capacity"] == capacity]
     by_policy = defaultdict(dict)
@@ -506,7 +511,11 @@ def _disk_utility_rows(sweep, capacity):
             by_policy[_label(row)][row["trace"]] = row
     if not by_policy:
         return [], 0
-    traces = set.intersection(*(set(v) for v in by_policy.values()))
+    covered = set.union(*(set(v) for v in by_policy.values()))
+    by_policy = {p: v for p, v in by_policy.items() if set(v) == covered}
+    if not by_policy:
+        return [], 0
+    traces = covered
     out = []
     for policy in sorted(by_policy, key=g.policy_key):
         items = [by_policy[policy][t] for t in sorted(traces)]

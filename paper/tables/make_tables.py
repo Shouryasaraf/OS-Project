@@ -497,12 +497,17 @@ def t6_web_comparisons(results, out):
 # T7: live HTTP
 # ---------------------------------------------------------------------------
 
-def _live_saved(items):
-    """Mean saving over valid passes and the envelope of their 95% CIs
-    (saved = -delta_vs_base_ms; the per-pass CIs are not pooled)."""
-    estimate = -statistics.fmean(r["delta_vs_base_ms"] for r in items)
-    return (estimate, -max(r["delta_vs_base_ms_hi"] for r in items),
-            -min(r["delta_vs_base_ms_lo"] for r in items))
+def _live_saved_cell(items) -> str:
+    saved = g.live_saved(items)
+    return ci_cell(*saved, fnum, digits=2) if saved else DASH
+
+
+def _live_ideal_cell(items) -> str:
+    """Model-ideal saving, over the passes whose baseline was valid too."""
+    compared = g.live_comparable(items)
+    if not compared:
+        return DASH
+    return fnum(-statistics.fmean(r["ideal_delta_vs_base_ms"] for r in compared), 2)
 
 
 def _live_groups(rows, experiments):
@@ -536,7 +541,7 @@ def t7_live(results, out):
         table.group(f"{esc(store)} object store")
         for key in sorted((k for k in groups if k[1] == store), key=lambda k: g.policy_key(k[4])):
             items = groups[key]
-            estimate, low, high = _live_saved(items)
+            compared = g.live_comparable(items)
             parity_cell = (fcount(mismatches.get((key[0], key[1], key[2], key[4]), 0))
                            if parity is not None else DASH)
             table.row([esc(store), esc(key[4]) + ("" if len({k[2] for k in groups if k[1] == store})
@@ -544,15 +549,20 @@ def t7_live(results, out):
                        fcount(len(items)),
                        fnum(100 * statistics.fmean(r["hit_ratio"] for r in items), 1),
                        fnum(statistics.fmean(r["mean_wait_ms"] for r in items), 1),
-                       ci_cell(estimate, low, high, fnum, digits=2),
-                       fnum(-statistics.fmean(r["ideal_delta_vs_base_ms"] for r in items), 2),
+                       _live_saved_cell(items), _live_ideal_cell(items),
                        fnum(statistics.fmean(r["wasted_kb_per_view"] for r in items), 1),
-                       fratio(statistics.fmean(r["bytes_vs_base"] for r in items), 2),
+                       fratio(statistics.fmean(r["bytes_vs_base"] for r in compared), 2)
+                       if compared else DASH,
                        parity_cell])
     invalid = [r for r in rows if r["experiment"] == "headline" and not r["valid"]]
-    return float_env("t7_live", caption, table.latex(), wide=True, out=out,
-                     note=f"{fcount(len(invalid))} headline pass-policy row(s) failed the "
-                          "validity gate and are excluded.")
+    valid = [r for r in rows if r["experiment"] == "headline" and r["valid"]]
+    unpaired = len(valid) - len(g.live_comparable(valid))
+    note = (f"{fcount(len(invalid))} headline pass-policy row(s) failed the validity gate "
+            "and are excluded.")
+    if unpaired:
+        note += (f" {fcount(unpaired)} valid row(s) have no valid baseline pass and are "
+                 "left out of the savings and bytes columns.")
+    return float_env("t7_live", caption, table.latex(), wide=True, out=out, note=note)
 
 
 def t7b_live_ablation(results, out):
@@ -569,10 +579,8 @@ def t7b_live_ablation(results, out):
                              "Ideal"])
     for key in sorted(groups, key=lambda k: (k[0], k[1], k[2], g.policy_key(k[4]))):
         items = groups[key]
-        estimate, low, high = _live_saved(items)
         table.row([esc(key[0]), f"{esc(key[1])} / {esc(key[3])}", esc(key[4]),
-                   fcount(len(items)), ci_cell(estimate, low, high, fnum, digits=2),
-                   fnum(-statistics.fmean(r["ideal_delta_vs_base_ms"] for r in items), 2)])
+                   fcount(len(items)), _live_saved_cell(items), _live_ideal_cell(items)])
     return float_env("t7b_live_ablation", caption, table.latex(), wide=False, out=out)
 
 
@@ -655,7 +663,10 @@ def t8_cross_domain(results, out):
     live_rows = results.rows("live/live_metrics.csv", out)
     groups = _live_groups(live_rows or (), ("headline",))
     for store in sorted({k[1] for k in groups}):
-        scored = {k: _live_saved(v) for k, v in groups.items() if k[1] == store}
+        scored = {k: g.live_saved(v) for k, v in groups.items() if k[1] == store}
+        scored = {k: v for k, v in scored.items() if v is not None}
+        if not scored:
+            continue
         best = max(scored, key=lambda k: scored[k][0])
         gate = next((k for k in scored if "feedback" in k[4]), None)
         any_rows = True

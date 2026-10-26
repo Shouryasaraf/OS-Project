@@ -131,6 +131,14 @@ class FixtureTests(unittest.TestCase):
             self.assertTrue((FIXTURES / name).is_file(), name)
         self.assertTrue(list(FIXTURES.glob("realio/device_*.json")))
 
+    def test_fixture_counts_are_physically_possible(self):
+        # Synthetic, but never impossible: a negative device-I/O count once
+        # produced a negative device-I/O ratio for linux_ra in T2.
+        sweep = [r for r in _rows("disk/sweep.jsonl") if r["status"] == "ok"]
+        self.assertTrue(all(r["device_ios"] > 0 for r in sweep))
+        self.assertTrue(all(r["device_io_ratio"] > 0 for r in _rows("disk/table_main.csv")
+                            if r["device_io_ratio"] is not None))
+
     def test_every_fixture_provenance_matches_its_files(self):
         from prefetch_common.provenance import verify_provenance
         for study in ("disk", "gpu", "realio", "web", "live"):
@@ -169,6 +177,44 @@ class NumbersTests(_Tmp):
         self.assertIn("webCoverageOnlineKEight", macros)
         # The fixture holds one invalid live pass; it is counted, not hidden.
         self.assertEqual(macros["liveInvalidPasses"], r"\fixturemark{1}")
+
+    def test_relative_errors_print_as_percent_and_paired_counts_are_counted(self):
+        macros = _macros(self.build(FIXTURES))
+        row = next(r for r in _rows("realio/realio_summary.csv") if r["pred_err"] is not None)
+        name = ("realioPredErr" + genlib.camel(row["device"]) + genlib.camel(row["backend"])
+                + genlib.camel(row["mode"]) + genlib.camel(row["think"])
+                + genlib.camel(row["trace"]))
+        # (pred - measured) / measured: a percent, never percentage points.
+        self.assertEqual(macros[name], r"\fixturemark{" + numbers_py.fsignedpct(row["pred_err"])
+                         + "}")
+        self.assertNotIn("pp", macros[name])
+        traces = {r["trace"] for r in _rows("gpu/disk_learned_depth.csv") if r["status"] == "ok"
+                  and r["vcf_hit_ratio"] is not None}
+        self.assertEqual(macros["ldVsVcfN"], r"\fixturemark{" + genlib.fcount(len(traces)) + "}")
+
+    def test_live_savings_skip_valid_passes_without_a_valid_baseline(self):
+        root = self.fixture_copy()
+        (root / "FIXTURE").unlink()
+        rows = _rows("live/live_metrics.csv")
+        group = [r for r in rows if (r["experiment"], r["store"], r["policy"])
+                 == ("headline", "hdd", "fixed4") and r["valid"]]
+        self.assertGreater(len(group), 1)
+        # webprefetch.live.analyze writes NaN deltas when the baseline pass is invalid.
+        for key in ("delta_vs_base_ms", "delta_vs_base_ms_lo", "delta_vs_base_ms_hi",
+                    "ideal_delta_vs_base_ms", "bytes_vs_base"):
+            group[0][key] = float("nan")
+        schemas.write_rows("live/live_metrics.csv", rows, root / "live" / "live_metrics.csv")
+        macros = _macros(self.build(root))
+        kept = group[1:]
+        expected = -sum(r["delta_vs_base_ms"] for r in kept) / len(kept)
+        self.assertEqual(macros["liveSavedHddFixedFour"], numbers_py.fms(expected))
+        self.assertEqual(macros["liveComparedRepsHddFixedFour"], genlib.fcount(len(kept)))
+        self.assertEqual(macros["liveRepsHddFixedFour"], genlib.fcount(len(group)))
+        tables = tables_py.generate(genlib.Results(root), self.tmp)
+        self.assertTrue(tables)
+        text = (self.tmp / "tables" / "t7_live.tex").read_text(encoding="utf-8")
+        self.assertNotIn("nan", text.lower())
+        self.assertIn("1 valid row(s) have no valid baseline pass", text)
 
     def test_curated_macros_exist_without_any_results(self):
         empty = self.tmp / "empty"

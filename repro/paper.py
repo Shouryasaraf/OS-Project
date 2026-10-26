@@ -64,7 +64,13 @@ def load(module: str, relative: str):
         spec = importlib.util.spec_from_file_location(module, PAPER / relative)
         loaded = importlib.util.module_from_spec(spec)
         sys.modules[module] = loaded
-        spec.loader.exec_module(loaded)
+        try:
+            spec.loader.exec_module(loaded)
+        except BaseException:
+            # A half-run module (matplotlib missing) must not be returned
+            # by the next load() as if it had imported.
+            del sys.modules[module]
+            raise
     return sys.modules[module]
 
 

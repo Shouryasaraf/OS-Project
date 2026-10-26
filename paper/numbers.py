@@ -144,6 +144,13 @@ def fms(value, digits: int = 2) -> str:
     return fnum(value, digits) + (r"\,ms" if g.finite(value) else "")
 
 
+def fsignedpct(fraction, digits: int = 1) -> str:
+    """A signed relative change as a percentage: -0.2 -> ``$-20.0$\\,\\%``."""
+    if not g.finite(fraction):
+        return fnum(fraction)
+    return fnum(100.0 * fraction, digits, sign=True) + r"\,\%"
+
+
 def fpvalue(p) -> str:
     if p is None:
         return g.DASH
@@ -423,6 +430,7 @@ def learned_depth(results: g.Results, out: g.Output, m: Macros) -> None:
             won, lost, tied = stats.wins(a, b)
             m.add("ld" + quantity + word + "Wins", fcount(won), relative)
             m.add("ld" + quantity + word + "Losses", fcount(lost), relative)
+            m.add("ld" + quantity + word + "N", fcount(len(pairs)), relative)
         oracle = [(mean("oracle_same_actions_hit_ratio", t), a) for a, t in zip(model, traces)]
         oracle = [(o, a) for o, a in oracle if o is not None and a is not None]
         if oracle:
@@ -431,8 +439,6 @@ def learned_depth(results: g.Results, out: g.Output, m: Macros) -> None:
                   relative)
         if cap == caps[-1]:
             m.alias("ldVsVcf", "ldVsVcf" + word)
-            if "ldVsVcf" in m.values:
-                m.add("ldVsVcfN", fcount(len(traces)), relative)
 
 
 # ---------------------------------------------------------------------------
@@ -458,8 +464,10 @@ def realio(results: g.Results, out: g.Output, m: Macros) -> None:
         m.add("realioFullHit" + tail, fpct(row["full_hit_request_frac"]), relative)
         m.add("realioLateHits" + tail, fnum(row["late_hits"], 0), relative)
         m.add("realioReps" + tail, fcount(row["reps"]), relative)
+        # pred_err is a relative error, (pred - measured) / measured, so it is
+        # a signed percent, not percentage points.
         for quantity, key, formatter in (("SimHit", "sim_hit_ratio", fpct),
-                                         ("PredErr", "pred_err", fpp),
+                                         ("PredErr", "pred_err", fsignedpct),
                                          ("KEff", "k_eff", lambda v: fnum(v, 2))):
             if row[key] is not None:
                 m.add("realio" + quantity + tail, formatter(row[key]), relative)
@@ -601,7 +609,7 @@ def web_dataset(results: g.Results, out: g.Output, m: Macros) -> None:
         name = "webData" + "".join(camel(p) for p in path)
         fraction = any(word in path[-1] for word in ("frac", "share", "ratio"))
         text = (fcount(value) if isinstance(value, int)
-                else fpct(value) if fraction else fnum(value, 2))
+                else fpct(value) if fraction and abs(value) <= 1 else fnum(value, 2))
         m.add(name, text, relative)
 
 
@@ -617,15 +625,6 @@ def live_groups(rows):
             groups[(row["experiment"], row["store"], row["config"], row["link"],
                     row["policy"])].append(row)
     return groups
-
-
-def saved_ms(items):
-    """Milliseconds saved per view, as the mean over valid passes, and the
-    envelope of the per-pass 95% CIs (sign flipped: saved = -delta)."""
-    estimate = -statistics.fmean(r["delta_vs_base_ms"] for r in items)
-    low = -max(r["delta_vs_base_ms_hi"] for r in items)
-    high = -min(r["delta_vs_base_ms_lo"] for r in items)
-    return estimate, low, high
 
 
 def live(results: g.Results, out: g.Output, m: Macros) -> None:
@@ -649,13 +648,19 @@ def live(results: g.Results, out: g.Output, m: Macros) -> None:
         tail = pre + camel(store) + camel(policy)
         if len(configs[(experiment, store)]) > 1:
             tail += camel(config) + camel(link)
-        estimate, low, high = saved_ms(items)
-        m.add_ci("liveSaved" + tail, estimate, low, high, fms, relative)
-        m.add("liveIdealSaved" + tail,
-              fms(-statistics.fmean(r["ideal_delta_vs_base_ms"] for r in items)), relative)
+        # Savings, ideal savings and bytes are relative to a baseline pass, so
+        # they use only the passes whose baseline was valid too (g.live_saved).
+        saved = g.live_saved(items)
+        compared = g.live_comparable(items)
+        if saved is not None:
+            m.add_ci("liveSaved" + tail, *saved, fms, relative)
+            m.add("liveIdealSaved" + tail,
+                  fms(-statistics.fmean(r["ideal_delta_vs_base_ms"] for r in compared)),
+                  relative)
+            m.add("liveBytesX" + tail,
+                  fratio(statistics.fmean(r["bytes_vs_base"] for r in compared), 2), relative)
+            m.add("liveComparedReps" + tail, fcount(len(compared)), relative)
         m.add("liveHit" + tail, fpct(statistics.fmean(r["hit_ratio"] for r in items)), relative)
-        m.add("liveBytesX" + tail,
-              fratio(statistics.fmean(r["bytes_vs_base"] for r in items), 2), relative)
         m.add("liveWastedKiB" + tail,
               fnum(statistics.fmean(r["wasted_kb_per_view"] for r in items), 1) + r"\,KiB",
               relative)

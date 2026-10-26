@@ -234,6 +234,30 @@ def _mode_order() -> tuple[str, ...]:
 _MODE_ORDER = _mode_order()
 
 
+def live_comparable(items: Sequence[dict]) -> list[dict]:
+    """Valid live passes that carry a delta against their baseline.
+
+    ``webprefetch.live.analyze`` writes NaN deltas on a valid pass whose
+    baseline pass failed the validity gate, so such a pass is kept out of the
+    savings rather than turning their mean into NaN.
+    """
+    return [r for r in items if r["valid"] and finite(r["delta_vs_base_ms"])
+            and finite(r["delta_vs_base_ms_lo"]) and finite(r["delta_vs_base_ms_hi"])]
+
+
+def live_saved(items: Sequence[dict]):
+    """``(estimate, low, high)`` milliseconds saved per view over comparable
+    passes: the mean saving, and the envelope of the per-pass 95% CIs (saved =
+    -delta_vs_base_ms; the per-pass CIs are not pooled). ``None`` when no pass
+    is comparable."""
+    items = live_comparable(items)
+    if not items:
+        return None
+    return (-sum(r["delta_vs_base_ms"] for r in items) / len(items),
+            -max(r["delta_vs_base_ms_hi"] for r in items),
+            -min(r["delta_vs_base_ms_lo"] for r in items))
+
+
 def policy_key(policy: str) -> tuple:
     """Sort key: benchmark.MODES order, then the numeric ``@`` parameter."""
     base, _, parameter = str(policy).partition("@")

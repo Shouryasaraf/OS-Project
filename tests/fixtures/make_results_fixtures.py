@@ -98,11 +98,12 @@ def _sweep_row(rng, config, trace, corpus, capacity, label, mode, depth, max_blo
     misses = read_blocks - hits
     demand_ios = max(1, int(misses / 6))
     prefetch_ios = max(0, int(issued / max(depth, 2))) if issued else 0
-    mergeable = prefetch_ios // 3
     if mode == "linux_ra" or (mode == "deep" and depth >= 128):
         # Large windows: few, long device I/Os, so kappa* is finite on some traces.
         demand_ios = max(1, demand_ios // 3)
         prefetch_ios = max(1, issued // (256 * 4))
+    # After the override, so device_ios can never go negative.
+    mergeable = prefetch_ios // 3
     row.update({
         "read_blocks": read_blocks, "hit_ratio": hits / read_blocks,
         "precision": useful / issued if issued else 0.0, "total_prefetches": issued,
