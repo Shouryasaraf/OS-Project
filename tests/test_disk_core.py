@@ -82,6 +82,7 @@ class CacheFactoryTests(unittest.TestCase):
     def setUpClass(cls):
         cls.lstm_dir = tempfile.TemporaryDirectory()
         cls.lstm_path = None
+        cls.depth_path = None
         if HAVE_TORCH:
             import torch
             # A tiny model; the default thread pool would take the whole of
@@ -92,6 +93,15 @@ class CacheFactoryTests(unittest.TestCase):
             train_lstm(path, traces=[transition_trace(42, windows_per_class=2)[0]],
                        epochs=1)
             cls.lstm_path = str(path)
+            # learned_depth (WP9) needs an artifact too; a tiny one on a
+            # different trace is enough to pin the parity of both paths.
+            from adaptive_prefetch import depth_model
+            prepared = depth_model.prepare(
+                depth_model.prefix_from_requests(mixed_trace(seed=21)), 256)
+            cls.depth_path = str(depth_model.train_and_select(
+                prepared, Path(cls.lstm_dir.name) / "depth.pt", epochs=1,
+                batch_size=256, device="cpu", hidden=8, layers=1,
+                action_caps=(256,), val_replay=200).artifact)
 
     @classmethod
     def tearDownClass(cls):
@@ -103,11 +113,15 @@ class CacheFactoryTests(unittest.TestCase):
             kwargs["model"] = make_model(42)
         if mode == "lstm":
             kwargs["lstm_model_path"] = self.lstm_path
+        if mode == "learned_depth":
+            kwargs["depth_model"] = self.depth_path
         return kwargs
 
     def _modes(self):
         for mode in MODES:
             if mode == "lstm" and self.lstm_path is None:
+                continue
+            if mode == "learned_depth" and self.depth_path is None:
                 continue
             yield mode
 
@@ -161,7 +175,7 @@ class CacheFactoryTests(unittest.TestCase):
                                      f"{mode}.{field} differs between paths")
                 self.assertEqual(a.device_ios, b.device_ios)
                 self.assertEqual(a.blocks_moved, b.blocks_moved)
-                if mode in ("stride", "markov", "lstm", "linux_ra"):
+                if mode in ("stride", "markov", "lstm", "linux_ra", "learned_depth"):
                     self.assertEqual(b.inference_calls, len(requests))
                 if mode in ("adaptive", "adaptive_evidence"):
                     self.assertEqual(b.inference_calls, len(requests) // 32)

@@ -13,13 +13,12 @@ from .features import FEATURE_NAMES, WindowContext, dominant_stride, extract
 from .model import CLASSIFIERS, DEFAULT_CLASSIFIER, OnlineGaussianNB
 from .simulator import (DEFAULT_CAPACITY, LatencyModel, confusion_matrix,
                          replay)
-from .trace import CLASSES, load_csv, synthetic_dataset, transition_trace, write_csv
+from .trace import (CLASSES, FORMATS, load_csv, synthetic_dataset,
+                    transition_trace, write_csv)
 
-#: Every ``--format`` the commands accept. ``oracle`` (libCacheSim
-#: oracleGeneral block traces) is listed here so the CLI already routes it;
-#: ``trace.load_csv`` reports an unsupported format as an ordinary error until
-#: its loader is present. It is never auto-detected.
-FORMATS = ("auto", "normalized", "msr", "iotta8", "alibaba", "revised", "oracle")
+# ``FORMATS`` is re-exported from ``trace`` so the loader and every
+# ``--format`` choice come from one tuple. ``oracle`` (libCacheSim
+# oracleGeneral block traces) is never auto-detected.
 
 
 def train(seed: int = 42, examples_per_class: int = 100,
@@ -86,16 +85,23 @@ def run_replay(args: argparse.Namespace) -> None:
         if mode == "lstm" and not args.lstm_model:
             print("lstm        skipped: no trained artifact")
             continue
+        if mode == "learned_depth":
+            reason = _depth_skip_reason(args.depth_model, args.trace, len(requests))
+            if reason:
+                print(f"learned_depth skipped: {reason}")
+                continue
         smoothing = ((args.smoothing, 0.0)
                      if args.smoothing and mode == "adaptive" else None)
         try:
             metrics, predictions = replay(requests, args.cache_blocks, args.window_size,
                                           mode, model, lstm_model_path=args.lstm_model,
-                                          smoothing=smoothing)
-        except (RuntimeError, FileNotFoundError) as exc:
-            if mode != "lstm":
+                                          smoothing=smoothing,
+                                          depth_model=(args.depth_model
+                                                       if mode == "learned_depth" else None))
+        except (RuntimeError, FileNotFoundError, ValueError) as exc:
+            if mode not in ("lstm", "learned_depth"):
                 raise
-            print(f"lstm        skipped: {exc}")
+            print(f"{mode:11} skipped: {exc}")
             continue
         print(f"{mode:11} hit={metrics.hit_ratio:.3f} "
               f"prefetch_precision={metrics.prefetch_precision:.3f} "
@@ -106,6 +112,37 @@ def run_replay(args: argparse.Namespace) -> None:
             print(f"Classified {len(predictions)} complete windows")
 
 
+#: Committed samples that are a prefix of a block trace an artifact may have
+#: been trained on. ``msr-cambridge1-sample.csv`` matches the first 1000
+#: ``msr_hm_0`` oracle requests row for row (MASTER_PLAN §0.1), so an
+#: ``msr_hm_0`` artifact must not be scored on it either.
+_TRACE_ALIASES = {"msr-cambridge1-sample.csv": "msr_hm_0"}
+
+
+def _depth_skip_reason(artifact: str | None, trace: str | None,
+                       requests: int) -> str | None:
+    """Why ``learned_depth`` may not be scored on requests ``[0, requests)``.
+
+    ``trace`` is the replayed file, or ``None`` for generated requests. An
+    artifact without a matching training record is refused, as in ``sweep``:
+    its training range is unknown, so no slice can be shown to be clean.
+    """
+    if not artifact:
+        return "no trained learned_depth artifact"
+    from .corpora import trace_stem
+    from .depth_model import read_training_record, scoring_conflict
+    if not Path(artifact).is_file():
+        return None  # the replay reports the missing file itself
+    record = read_training_record(artifact)
+    if record is None:
+        return ("learned_depth artifact has no matching training record, so "
+                "its training range is unknown")
+    if trace is None:
+        return None
+    stem = trace_stem(trace)
+    return scoring_conflict(record, _TRACE_ALIASES.get(stem, stem), 0, requests)
+
+
 def run_benchmark(args: argparse.Namespace) -> None:
     datasets = []
     if "synthetic" in args.datasets:
@@ -113,14 +150,17 @@ def run_benchmark(args: argparse.Namespace) -> None:
             requests, _ = transition_trace(args.seed + 200000 + offset,
                                            args.windows_per_class, args.window_size)
             datasets.append((f"synthetic_seed_{args.seed + offset}", requests))
+    sources = {}  # dataset name -> replayed file, for the constraint-14 guard
     if "msr" in args.datasets:
         sample = (Path(__file__).resolve().parents[2] / "data" / "samples" /
                   "msr-cambridge1-sample.csv")
         datasets.append(("msr_format_sample", load_csv(sample, "msr")))
+        sources["msr_format_sample"] = str(sample)
     if "iotta" in args.datasets:
         if not args.trace:
             raise ValueError("--datasets iotta requires --trace and its --format")
         datasets.append(("iotta_supplied", load_csv(args.trace, args.format)))
+        sources["iotta_supplied"] = args.trace
     if args.cost_model == "measured":
         sources = [(name, reqs) for name, reqs in datasets
                    if any(getattr(r, "service_ms", None) is not None for r in reqs)]
@@ -140,18 +180,27 @@ def run_benchmark(args: argparse.Namespace) -> None:
         latency = LatencyModel(args.hit_us, args.miss_us, args.prefetch_us)
     rows = []
     for name, requests in datasets:
-        rows.extend(benchmark_dataset(name, requests, seed=args.seed,
-                                      capacity=args.cache_blocks,
-                                      window_size=args.window_size,
-                                      latency=latency,
-                                      lstm_model_path=args.lstm_model,
-                                      online_real=args.online_real and not name.startswith("synthetic"),
-                                      classifier=args.classifier))
+        refused = (_depth_skip_reason(args.depth_model, sources.get(name), len(requests))
+                   if args.depth_model else None)
+        dataset_rows = benchmark_dataset(
+            name, requests, seed=args.seed, capacity=args.cache_blocks,
+            window_size=args.window_size, latency=latency,
+            lstm_model_path=args.lstm_model,
+            online_real=args.online_real and not name.startswith("synthetic"),
+            classifier=args.classifier,
+            depth_model_path=None if refused else args.depth_model)
+        if refused:
+            for row in dataset_rows:
+                if row["mode"] == "learned_depth":
+                    row["status"] = f"skipped: {refused}"
+        rows.extend(dataset_rows)
     table = markdown_table(rows)
     print(table)
     print("\nModelled latency includes configured prefetch cost; it is not measured device latency.")
     print("Recall uses measurement-only future-reaccess lookahead, never policy input.")
     print("Skipped LSTM means no PyTorch/model artifact was available; no comparison claim is made.")
+    print("learned_depth is scored only with --depth-model; pass an artifact that was not "
+          "trained or selected on these traces.")
     print("\nDrift switch lag on labelled synthetic phases:")
     for item in drift_report(args.seed, args.windows_per_class, args.window_size,
                              args.classifier):
@@ -173,11 +222,86 @@ def run_normalize(args: argparse.Namespace) -> None:
     print(f"Normalized {len(requests)} requests into {args.output}")
 
 
+def _progress(message: str) -> None:
+    print(f"  {message}", flush=True)
+
+
 def run_train_lstm(args: argparse.Namespace) -> None:
-    from .lstm import train_lstm
-    traces = [load_csv(path, args.format) for path in args.trace] if args.trace else None
-    result = train_lstm(args.save, traces, args.epochs, seed=args.seed)
-    print(f"Saved offline LSTM to {args.save}: {result}")
+    from .corpora import trace_stem
+    from .lstm import train_lstm, train_lstm_on_trace
+    save = args.save or (f"models/lstm_{trace_stem(args.trace[0])}_s{args.seed}.pt"
+                         if args.trace else "models/lstm_delta.pt")
+    if args.format == "oracle":
+        # A real block trace: the chronological 60/20/20 split, recorded.
+        if len(args.trace) != 1:
+            raise ValueError("--format oracle trains on exactly one --trace "
+                             "(its own chronological split)")
+        result = train_lstm_on_trace(
+            save, args.trace[0], format="oracle", n=args.n, epochs=args.epochs,
+            batch_size=args.batch_size, seed=args.seed, device=args.device,
+            num_threads=args.num_threads, patience=args.patience,
+            progress=_progress)
+        print(f"Saved LSTM to {save}; train/val/test = {result['split']}; "
+              f"the test range is the only part of {result['trace']} it may be scored on")
+    else:
+        traces = [load_csv(path, args.format) for path in args.trace] if args.trace else None
+        # Every request of a supplied trace was used for training or early
+        # stopping, so the record claims the whole trace.
+        record = ({"source": args.format,
+                   "traces": [{"trace": trace_stem(path), "path": str(path),
+                               "format": args.format, "n_requests": len(t),
+                               "train": [0, len(t)], "val": None, "test": None}
+                              for path, t in zip(args.trace, traces)]}
+                  if traces else {"source": "transition_trace",
+                                  "seeds": [args.seed + i for i in range(4)],
+                                  "windows_per_class": 8})
+        result = train_lstm(save, traces, args.epochs, seed=args.seed,
+                            device=args.device, num_threads=args.num_threads,
+                            val_fraction=args.val_fraction,
+                            batch_size=args.batch_size, patience=args.patience,
+                            record=record, progress=_progress)
+        print(f"Saved offline LSTM to {save}")
+    print(f"  {result['examples']:,} training examples, {result['val_examples']:,} "
+          f"validation, best epoch {result['best_epoch']}, {result['train_s']:.1f} s "
+          f"on {result['device']}")
+    if result.get("gpu_contention"):
+        print(f"  {result['gpu_contention']}")
+
+
+def run_train_depth(args: argparse.Namespace) -> None:
+    from .corpora import trace_stem
+    from .depth_model import (ACTION_CAPS, load_prefix, prepare,
+                              train_and_select)
+    if args.save and len(args.traces) != 1:
+        raise ValueError("--save names one artifact; use --out-dir for several traces")
+    caps = tuple(args.action_caps or ACTION_CAPS)
+    for path in args.traces:
+        stem = trace_stem(path)
+        save = args.save or str(Path(args.out_dir) / f"{stem}_s{args.seed}.pt")
+        print(f"{stem}: loading the first {args.n:,} canonical requests", flush=True)
+        start = perf_counter()
+        prefix = load_prefix(path, args.format, args.n)
+        prepared = prepare(prefix, args.cache_blocks)
+        print(f"  {len(prefix):,} requests, split {prepared.split}, horizon "
+              f"{prepared.horizon}, prepared in {perf_counter() - start:.1f} s", flush=True)
+        result = train_and_select(
+            prepared, save, seed=args.seed, epochs=args.epochs,
+            batch_size=args.batch_size, device=args.device, action_caps=caps,
+            val_replay=args.val_replay, decide_every=args.decide_every,
+            num_threads=args.num_threads, patience=args.patience,
+            progress=_progress)
+        record = result.record
+        print(f"  trained {record['epochs_run']} epoch(s) on {record['device']} in "
+              f"{record['train_s']:.1f} s ({record['train_examples']:,} examples, "
+              f"{record['params']:,} parameters, {record['oom_retries']} OOM retries)")
+        if record.get("gpu_contention"):
+            print(f"  {record['gpu_contention']}")
+        for cap, chosen in result.thresholds.items():
+            print(f"  cap {cap}: validation chose seg>={chosen['seg']} gap="
+                  f"{chosen['gap']} (validation hit {chosen['val_hit_ratio']:.4f} on "
+                  f"requests {chosen['val_slice']})")
+        print(f"  saved {result.artifact} and {result.artifact.with_suffix('.training.json')}; "
+              f"score it only on requests {record['traces'][0]['test']} of {stem}")
 
 
 def run_train_msr_sample(args: argparse.Namespace) -> None:
@@ -266,6 +390,9 @@ def build_parser() -> argparse.ArgumentParser:
     replay_command.add_argument("--format", default="auto",
                                 choices=FORMATS)
     replay_command.add_argument("--lstm-model")
+    replay_command.add_argument("--depth-model",
+                                help="learned_depth artifact (train-depth); refused on "
+                                     "the requests it was trained or selected on")
     replay_command.add_argument("--model-path", help="saved Gaussian NB classifier JSON")
     benchmark = commands.add_parser("benchmark", help="compare all available policies")
     benchmark.add_argument("--datasets", nargs="+", default=["synthetic", "msr"],
@@ -286,6 +413,7 @@ def build_parser() -> argparse.ArgumentParser:
                            help="'measured' calibrates from the trace's own "
                                 "recorded device service times")
     benchmark.add_argument("--lstm-model")
+    benchmark.add_argument("--depth-model", help="learned_depth artifact (train-depth)")
     benchmark.add_argument("--online-real", action="store_true")
     benchmark.add_argument("--classifier", default=DEFAULT_CLASSIFIER,
                            choices=tuple(CLASSIFIERS))
@@ -297,12 +425,44 @@ def build_parser() -> argparse.ArgumentParser:
     normalize.add_argument("--format", default="auto",
                            choices=FORMATS)
     lstm = commands.add_parser("train-lstm", help="train optional offline LSTM baseline")
-    lstm.add_argument("--save", default="models/lstm_delta.pt")
+    lstm.add_argument("--save", default=None,
+                      help="default models/lstm_delta.pt, or models/lstm_<trace>_s<seed>.pt "
+                           "with --trace")
     lstm.add_argument("--trace", action="append", default=[])
     lstm.add_argument("--format", default="auto",
                       choices=FORMATS)
     lstm.add_argument("--epochs", type=int, default=60)
     lstm.add_argument("--seed", type=int, default=42)
+    lstm.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda"))
+    lstm.add_argument("--num-threads", type=int, default=4,
+                      help="torch CPU threads (the host is shared)")
+    lstm.add_argument("--n", type=int, default=2_000_000,
+                      help="--format oracle: canonical requests in the 60/20/20 prefix")
+    lstm.add_argument("--batch-size", type=int, default=128)
+    lstm.add_argument("--val-fraction", type=float, default=0.2,
+                      help="CSV traces: chronological tail held out for early stopping")
+    lstm.add_argument("--patience", type=int, default=None,
+                      help="stop after this many epochs without validation improvement")
+    depth = commands.add_parser(
+        "train-depth", help="train learned_depth per trace (60/20/20, thresholds on validation)")
+    depth.add_argument("--traces", nargs="+", required=True)
+    depth.add_argument("--format", default="oracle", choices=FORMATS)
+    depth.add_argument("--device", default="auto", choices=("auto", "cpu", "cuda"))
+    depth.add_argument("--seed", type=int, default=0)
+    depth.add_argument("--n", type=int, default=2_000_000,
+                       help="canonical requests in the prefix that is split 60/20/20")
+    depth.add_argument("--epochs", type=int, default=8)
+    depth.add_argument("--batch-size", type=int, default=8192)
+    depth.add_argument("--patience", type=int, default=2)
+    depth.add_argument("--cache-blocks", type=int, default=DEFAULT_CAPACITY)
+    depth.add_argument("--val-replay", type=int, default=100_000,
+                       help="validation requests replayed per threshold candidate")
+    depth.add_argument("--action-caps", type=int, nargs="+", default=None,
+                       help="segment-end caps to select thresholds for (default 64 256)")
+    depth.add_argument("--decide-every", type=int, default=32)
+    depth.add_argument("--num-threads", type=int, default=4)
+    depth.add_argument("--out-dir", default="models/depth")
+    depth.add_argument("--save", default=None, help="artifact path (one trace only)")
     msr_train = commands.add_parser("train-msr-sample", help="weakly adapt classifier on the unlabelled MSR sample")
     msr_train.add_argument("--trace", default=str(Path(__file__).resolve().parents[2] /
                                                  "data" / "samples" / "msr-cambridge1-sample.csv"))
@@ -354,6 +514,8 @@ def main(argv: list[str] | None = None) -> None:
             run_normalize(args)
         elif args.command == "train-lstm":
             run_train_lstm(args)
+        elif args.command == "train-depth":
+            run_train_depth(args)
         elif args.command == "train-msr-sample":
             run_train_msr_sample(args)
         elif args.command == "evaluate":

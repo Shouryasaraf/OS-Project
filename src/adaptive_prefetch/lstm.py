@@ -22,7 +22,7 @@ Design notes (the earlier exact-delta-vocabulary version was near-useless):
 from __future__ import annotations
 
 import math
-from collections import Counter
+import time
 from pathlib import Path
 
 from .trace import Request, transition_trace
@@ -105,6 +105,7 @@ def _read_deltas(requests: list[Request]) -> list[int]:
 def _build_examples(
     traces: list[list[Request]],
 ) -> list[tuple[list[float], int]]:
+    """Per-example lists; the reference for :func:`_example_tensors`."""
     examples: list[tuple[list[float], int]] = []
     for trace in traces:
         deltas = _read_deltas(trace)
@@ -114,48 +115,138 @@ def _build_examples(
     return examples
 
 
+def _bucket_tensor(deltas):
+    """Vectorised :func:`bucket_of` over an int64 tensor."""
+    torch = _torch()
+    edges = torch.tensor(BUCKET_EDGES, dtype=torch.int64)
+    magnitude = deltas.abs()
+    index = torch.searchsorted(edges, magnitude, right=False)
+    classes = torch.where(deltas >= 0, index, len(BUCKET_EDGES) + index)
+    return torch.where(magnitude > MAX_DELTA, torch.full_like(classes, UNK), classes)
+
+
+def _encode_tensor(deltas):
+    """Vectorised :func:`_encode`, computed in float64 then stored as float32."""
+    torch = _torch()
+    clamped = deltas.clamp(-MAX_DELTA, MAX_DELTA).to(torch.float64)
+    return (torch.sign(clamped) * torch.log1p(clamped.abs())
+            / math.log1p(MAX_DELTA)).to(torch.float32)
+
+
+def _example_tensors(sequences):
+    """``(inputs (N, HISTORY, 1), labels (N,))`` from read-``lba`` sequences.
+
+    Same examples, in the same order, as :func:`_build_examples`, without a
+    Python list per example: a 1.2M-example real-trace split as lists of
+    floats needs several GB and minutes to build.
+    """
+    torch = _torch()
+    inputs, labels = [], []
+    for lbas in sequences:
+        lbas = torch.as_tensor(lbas, dtype=torch.int64)
+        if len(lbas) < HISTORY + 2:
+            continue
+        deltas = lbas[1:] - lbas[:-1]
+        encoded = _encode_tensor(deltas)
+        windows = encoded.unfold(0, HISTORY, 1)[:len(deltas) - HISTORY]
+        inputs.append(windows)
+        labels.append(_bucket_tensor(deltas[HISTORY:]))
+    if not inputs:
+        return (torch.zeros((0, HISTORY, 1), dtype=torch.float32),
+                torch.zeros(0, dtype=torch.long))
+    return torch.cat(inputs).unsqueeze(-1).contiguous(), torch.cat(labels).long()
+
+
+def _read_lbas(trace: list[Request]) -> list[int]:
+    return [req.lba for req in trace if req.operation == "R"]
+
+
 def train_lstm(
     save_path: str | Path,
     traces: list[list[Request]] | None = None,
     epochs: int = 60,
     vocab_size: int = 0,
     seed: int = 42,
-) -> dict[str, int]:
+    *,
+    device: str = "auto",
+    num_threads: int = 4,
+    val_fraction: float = 0.2,
+    validation: list[list[Request]] | None = None,
+    batch_size: int = 128,
+    patience: int | None = None,
+    record: dict | None = None,
+    progress=None,
+    _sequences=None,
+) -> dict:
     """Train the offline next-delta LSTM and save a versioned artifact.
 
     ``vocab_size`` is accepted for backward compatibility with the older
     exact-delta head and is ignored: the bucketed head has a fixed size.
+
+    Validation and early stopping: ``validation`` traces, when given, score
+    every epoch and the best epoch's weights are saved. Otherwise the
+    chronological tail ``val_fraction`` of each training trace is held out
+    for that purpose (``0`` trains on everything and keeps the last epoch,
+    the old behaviour). ``patience`` epochs without improvement stop early;
+    ``None`` runs every epoch.
+
+    ``device`` is ``auto`` (CUDA when available), ``cuda`` or ``cpu``.
+    torch's intra-op pool is capped at ``num_threads`` (M15: the default of
+    one thread per core took 859 s instead of 3.7 s on this shared host).
+    A CUDA out-of-memory error, which happens on the shared GPU, restarts
+    at half the batch size up to four times.
+
+    ``record`` is written as the ``.training.json`` sidecar, bound to the
+    artifact by its SHA-256 (the same file ``main.py`` writes for the
+    synthetic artifact), so whoever trained an artifact describes it.
     """
     torch = _torch()
+    from .depth_model import (GpuSampler, _is_oom, configure_threads,
+                              resolve_device, write_training_record)
     if epochs < 1:
         raise ValueError("epochs must be positive")
-    if traces is None:
-        traces = [transition_trace(seed + i, windows_per_class=8)[0] for i in range(4)]
-
-    examples = _build_examples(traces)
-    if not examples:
+    if not 0 <= val_fraction < 1:
+        raise ValueError("val_fraction must be in [0, 1)")
+    if batch_size < 1:
+        raise ValueError("batch_size must be positive")
+    configure_threads(num_threads)
+    device = resolve_device(device)
+    if _sequences is not None:
+        train_sequences, val_sequences = _sequences
+    else:
+        if traces is None:
+            traces = [transition_trace(seed + i, windows_per_class=8)[0] for i in range(4)]
+        lbas = [_read_lbas(trace) for trace in traces]
+        if validation is not None:
+            train_sequences = lbas
+            val_sequences = [_read_lbas(trace) for trace in validation]
+        elif val_fraction > 0:
+            cuts = [len(seq) - int(len(seq) * val_fraction) for seq in lbas]
+            train_sequences = [seq[:cut] for seq, cut in zip(lbas, cuts)]
+            val_sequences = [seq[cut:] for seq, cut in zip(lbas, cuts)]
+        else:
+            train_sequences, val_sequences = lbas, []
+    inputs, labels = _example_tensors(train_sequences)
+    val_inputs, val_labels = _example_tensors(val_sequences)
+    if not len(labels):
         raise ValueError("need at least 18 read requests in training traces")
 
-    torch.manual_seed(seed)
-    network = _network()
-    optimizer = torch.optim.Adam(network.parameters(), lr=0.003)
-    loss_fn = torch.nn.CrossEntropyLoss()
-
-    inputs = torch.tensor([x for x, _ in examples], dtype=torch.float32).unsqueeze(-1)
-    labels = torch.tensor([y for _, y in examples], dtype=torch.long)
-
-    network.train()
-    generator = torch.Generator().manual_seed(seed)
-    for _ in range(epochs):
-        # Shuffle every epoch: fixed-order minibatches let adjacent deltas
-        # stay correlated within a batch and measurably hurt convergence.
-        order = torch.randperm(len(examples), generator=generator)
-        for start in range(0, len(examples), 128):
-            index = order[start:start + 128]
-            optimizer.zero_grad()
-            loss = loss_fn(network(inputs[index]), labels[index])
-            loss.backward()
-            optimizer.step()
+    retries = 0
+    sampler = GpuSampler()
+    with sampler:
+        while True:
+            try:
+                network, info = _fit_lstm(inputs, labels, val_inputs, val_labels,
+                                          epochs, batch_size, seed, device,
+                                          patience, progress)
+                break
+            except RuntimeError as exc:
+                if device != "cuda" or not _is_oom(exc) or retries >= 4 or batch_size < 2:
+                    raise
+                retries += 1
+                batch_size //= 2
+                torch.cuda.empty_cache()
+                time.sleep(5)
 
     destination = Path(save_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -171,12 +262,143 @@ def train_lstm(
         },
         destination,
     )
-
-    return {
-        "examples": len(examples),
+    result = {
+        "examples": int(len(labels)),
+        "val_examples": int(len(val_labels)),
         "classes": NUM_CLASSES,
         "epochs": epochs,
+        "batch_size": batch_size,
+        "oom_retries": retries,
+        "gpu_contention": sampler.summary() if device == "cuda" else None,
+        **info,
     }
+    if record is not None:
+        write_training_record(destination, {**record, "model": "lstm", **result})
+    result["gpu_samples"] = sampler.samples
+    return result
+
+
+def _fit_lstm(inputs, labels, val_inputs, val_labels, epochs, batch_size,
+              seed, device, patience, progress):
+    torch = _torch()
+    torch.manual_seed(seed)
+    network = _network().to(device)
+    optimizer = torch.optim.Adam(network.parameters(), lr=0.003)
+    loss_fn = torch.nn.CrossEntropyLoss()
+    x, y = inputs.to(device), labels.to(device)
+    vx, vy = val_inputs.to(device), val_labels.to(device)
+    generator = torch.Generator().manual_seed(seed)
+    best = (math.inf, None, -1)
+    history: list[float] = []
+    stale = 0
+    start = time.perf_counter()
+    for epoch in range(epochs):
+        network.train()
+        # Shuffle every epoch: fixed-order minibatches let adjacent deltas
+        # stay correlated within a batch and measurably hurt convergence.
+        order = torch.randperm(len(y), generator=generator).to(device)
+        for offset in range(0, len(y), batch_size):
+            index = order[offset:offset + batch_size]
+            optimizer.zero_grad()
+            loss = loss_fn(network(x[index]), y[index])
+            loss.backward()
+            optimizer.step()
+        if not len(vy):
+            continue
+        network.eval()
+        total = 0.0
+        with torch.no_grad():
+            for offset in range(0, len(vy), 65536):
+                out = network(vx[offset:offset + 65536])
+                total += float(loss_fn(out, vy[offset:offset + 65536])) * len(out)
+        val_loss = total / len(vy)
+        history.append(round(val_loss, 5))
+        if progress is not None:
+            progress(f"epoch {epoch}: val loss {val_loss:.4f}")
+        if val_loss < best[0]:
+            best = (val_loss, {k: v.detach().to("cpu").clone()
+                               for k, v in network.state_dict().items()}, epoch)
+            stale = 0
+        else:
+            stale += 1
+            if patience is not None and stale >= patience:
+                break
+    if device == "cuda":
+        torch.cuda.synchronize()
+    train_s = time.perf_counter() - start
+    cpu = _network()
+    if best[1] is not None:
+        cpu.load_state_dict(best[1])
+    else:
+        cpu.load_state_dict({k: v.to("cpu") for k, v in network.state_dict().items()})
+    cpu.eval()
+    return cpu, {"device": device, "epochs_run": len(history) or epochs,
+                 "best_epoch": best[2] if best[1] is not None else epochs - 1,
+                 "val_loss": history, "train_s": round(train_s, 3), "seed": seed}
+
+
+def train_lstm_on_trace(save_path: str | Path, path: str | Path, *,
+                        format: str = "oracle", n: int | None = 2_000_000,
+                        epochs: int = 8, batch_size: int = 4096,
+                        seed: int = 42, device: str = "auto",
+                        num_threads: int = 4, patience: int | None = 2,
+                        progress=None, prefix=None) -> dict:
+    """Train on one real trace with the chronological 60/20/20 split.
+
+    Train on the first 60% of the first ``n`` canonical requests, stop early
+    on the next 20%, and leave the last 20% untouched for scoring. The split
+    is recorded in the sidecar, which ``sweep`` and the E2 runner use to
+    refuse any scoring slice that overlaps training or validation.
+    """
+    from .depth_model import chronological_split, load_prefix
+    prefix = prefix or load_prefix(path, format, n)
+    split = chronological_split(len(prefix))
+    (a, b), (c, d), (e, f) = split
+    reads = prefix.lba[prefix.read]
+    # Read-only positions of each split, so a write never becomes a delta.
+    index = prefix.read.cumsum()
+    cut1, cut2 = int(index[b - 1]), int(index[d - 1])
+    record = {
+        "source": format,
+        "traces": [{"trace": prefix.trace, "path": prefix.path, "format": format,
+                    "n_requests": len(prefix), "train": [a, b], "val": [c, d],
+                    "test": [e, f]}],
+    }
+    result = train_lstm(save_path, epochs=epochs, seed=seed, device=device,
+                        num_threads=num_threads, batch_size=batch_size,
+                        patience=patience, record=record, progress=progress,
+                        _sequences=([reads[:cut1]], [reads[cut1:cut2]]))
+    result["split"] = [list(s) for s in split]
+    result["trace"] = prefix.trace
+    return result
+
+
+def bucket_accuracy(network, lbas, reference_lbas=None) -> dict:
+    """Top-1 bucket accuracy on a read sequence, with two references.
+
+    ``majority`` always predicts the most common target bucket of
+    ``reference_lbas`` (pass the training reads), or of ``lbas`` itself when
+    none is given, which flatters it; ``repeat`` predicts the bucket of the
+    previous delta. This is delta-bucket prediction, not workload
+    classification, so it is never a classifier accuracy.
+    """
+    torch = _torch()
+    inputs, labels = _example_tensors([lbas])
+    if not len(labels):
+        return {"examples": 0, "top1": None, "majority": None, "repeat": None}
+    with torch.no_grad():
+        predicted = torch.cat([network(inputs[i:i + 65536]).argmax(1)
+                               for i in range(0, len(labels), 65536)])
+    lbas = torch.as_tensor(lbas, dtype=torch.int64)
+    deltas = lbas[1:] - lbas[:-1]
+    previous = _bucket_tensor(deltas[HISTORY - 1:HISTORY - 1 + len(labels)])
+    reference = (labels if reference_lbas is None
+                 else _example_tensors([reference_lbas])[1])
+    majority = int(torch.bincount(reference if len(reference) else labels).argmax())
+    return {"examples": int(len(labels)),
+            "top1": float((predicted == labels).double().mean()),
+            "majority": float((labels == majority).double().mean()),
+            "repeat": float((previous == labels).double().mean())}
 
 
 class LSTMPrefetcher:
@@ -246,13 +468,17 @@ class LSTMPrefetcher:
         return list(dict.fromkeys(candidates))
 
 
-def load_predictor(path: str | Path) -> LSTMPrefetcher:
+def load_predictor(path: str | Path, num_threads: int = 4) -> LSTMPrefetcher:
     # Check the file before importing torch, so a missing artifact reports
     # itself the same way with or without the [lstm] extra installed.
     source = Path(path)
     if not source.is_file():
         raise FileNotFoundError(f"LSTM artifact not found: {source}")
     torch = _torch()
+    from .depth_model import configure_threads
+    # Batch-1 inference on every request: the default one-thread-per-core
+    # pool only adds contention on a shared host (M15).
+    configure_threads(num_threads)
 
     artifact = torch.load(source, map_location="cpu", weights_only=True)
     if artifact.get("artifact_version") != ARTIFACT_VERSION:

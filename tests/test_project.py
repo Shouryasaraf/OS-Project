@@ -760,6 +760,12 @@ class LSTMTests(unittest.TestCase):
         self.assertLessEqual(len(predictor.deltas), HISTORY)
 
 
+def _relative_depth():
+    """A fresh stdlib-only learned_depth policy per call (no torch needed)."""
+    from adaptive_prefetch.depth_model import RelativeDepth
+    return lambda: RelativeDepth(1.0)
+
+
 def pytest_torch():
     try:
         import torch  # noqa: F401
@@ -1376,12 +1382,18 @@ class GateAuditRegressionTests(unittest.TestCase):
         rng = random.Random(5)
         requests = [Request(i * 0.5, rng.randrange(0, 100_000), 8)
                     for i in range(3000)]
+        depth = _relative_depth()
         for mode in ("none", "sequential", "strided", "adaptive_evidence",
                      "guard", "depth_adaptive", "correlate", "deep",
-                     "stride", "markov", "adaptive", "linux_ra"):
+                     "stride", "markov", "adaptive", "linux_ra",
+                     "learned_depth"):
             model = make_model(42) if mode == "adaptive" else None
-            a, _ = replay(requests, mode=mode, model=model)
-            b = replay_stream(iter([iter(requests)]), mode=mode, model=model)
+            # learned_depth runs through the same loop with any per-request
+            # depth policy; a trained artifact is pinned in test_disk_gpu.
+            extra = ({"depth_model": depth()} if mode == "learned_depth" else {})
+            a, _ = replay(requests, mode=mode, model=model, **extra)
+            b = replay_stream(iter([iter(requests)]), mode=mode, model=model,
+                              **({"depth_model": depth()} if extra else {}))
             for field in ("read_hits", "read_blocks", "prefetches",
                           "useful_prefetches", "policy_switches",
                           "prefetch_cost_us", "demand_latency_us",
