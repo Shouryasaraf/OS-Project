@@ -147,7 +147,10 @@ def _refresh_web_provenance(start: dict, views: Path, models: Path, outputs: Pat
     previous = provenance.read_provenance(directory)
     e4 = (previous.get("extra") or {}).get("e4_provenance", previous)
     artifact = seq_artifact(models / "seq", 3)
-    inputs = [path for path in (views, outputs / "benchmark.json", artifact / "config.json")
+    # The decomposition also replays the logistic ranker; config.json pins
+    # the seq artifact's weights and vocabulary by SHA-256.
+    inputs = [path for path in (views, models / "ranker.joblib", models / "candidate_index.joblib",
+                                outputs / "benchmark.json", artifact / "config.json")
               if path.is_file()]
     return provenance.write_provenance(
         directory, ["reproduce.py", *sys.argv[1:]], inputs, study="web",

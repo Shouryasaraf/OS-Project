@@ -33,8 +33,9 @@ resolution is recorded in the run's ``live_config.json`` entry.
 Every pass records ``foreign_io_frac``: the share of the store device's
 sectors read during the pass (``/proc/diskstats``) that the origin did not
 read itself. The SSD store shares the root disk with other tenants, so its
-rows are only citable together with that column. A store or work directory on
-any disk under ``/mnt`` other than sdb is refused (lead decision L2).
+rows are only citable together with that column. A store or work directory at
+any path under ``/mnt`` outside sdb's ``os-project-prefetch/`` is refused (lead
+decision L2).
 
 Raw per-view and per-fetch records go to ``<work-dir>/raw/`` as ``.csv.gz``
 and are not committed.
@@ -73,10 +74,12 @@ ROW_KEY = ("experiment", "store", "config", "link", "rep", "policy")
 EXIT_REFUSED = 2
 EXIT_PARITY = 1
 #: Lead decision L2: the stores live on the SSD (repository or scratch
-#: paths) or on the sdb HDD mounted here; every other disk under /mnt (sdd
-#: and sde among them) is refused.
+#: paths) or on the sdb HDD under ``HDD_ROOT``, the directory the project
+#: already writes to; every other path under /mnt (sdd and sde among them,
+#: and the rest of sdb) is refused.
 HDD_MOUNT = Path("/mnt/b18edc65-4395-4a85-976a-bed3428c073b")
-HDD_STORE = HDD_MOUNT / "os-project-prefetch" / "web-store"
+HDD_ROOT = HDD_MOUNT / "os-project-prefetch"
+HDD_STORE = HDD_ROOT / "web-store"
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
@@ -194,9 +197,9 @@ def check_store_dir(path) -> None:
     if path is None:
         return
     resolved = Path(path).resolve()
-    if resolved.is_relative_to("/mnt") and not resolved.is_relative_to(HDD_MOUNT):
+    if resolved.is_relative_to("/mnt") and not resolved.is_relative_to(HDD_ROOT):
         raise SystemExit(f"refused: {path} is on a disk the project may not write to "
-                         f"(lead decision L2: only the SSD and sdb under {HDD_MOUNT})")
+                         f"(lead decision L2: only the SSD and sdb under {HDD_ROOT})")
 
 
 def _session_gap_ms() -> int:

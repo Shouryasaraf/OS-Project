@@ -368,7 +368,8 @@ class LiveSelectionTests(unittest.TestCase):
     def test_store_dirs_outside_the_ssd_and_sdb_are_refused(self):
         from webprefetch.live import run
         for bad in ("/mnt/9792e947-f73e-45c8-a77f-0ba5cd89e363/os-project-web",
-                    "/mnt/c609e3de-d917-4ea6-8519-cd5416d1154d/x"):
+                    "/mnt/c609e3de-d917-4ea6-8519-cd5416d1154d/x",
+                    "/mnt/b18edc65-4395-4a85-976a-bed3428c073b/elsewhere"):
             with self.assertRaises(SystemExit):
                 run.check_store_dir(bad)
         run.check_store_dir(run.HDD_STORE)
