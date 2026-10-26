@@ -3,14 +3,17 @@
 The split is deliberate: **the console shows findings, the files hold raw
 data.** Nothing here decides anything -- it only formats results that
 :mod:`adaptive_prefetch.benchmark`, :mod:`adaptive_prefetch.eda` and
-:mod:`adaptive_prefetch.pipeline` already computed.
+:mod:`adaptive_prefetch.pipeline` already computed. Every figure in the narrative is computed from the rows
+and the cost model passed in; a sentence whose figure cannot be computed from
+this run's data is left out rather than quoted from an earlier run.
 """
 
 from __future__ import annotations
 
 from statistics import mean
 
-from .simulator import LatencyModel, oracle_reference
+from .datasets import is_aggregate, is_synthetic
+from .simulator import DEFAULT_READ_AHEAD_DEPTH, LatencyModel, oracle_reference
 from .trace import CLASSES
 
 RULE = "=" * 78
@@ -51,8 +54,12 @@ def dataset_overview(datasets: list[tuple[str, list]], capacity: int) -> str:
         lines.append(f"  {name:<26} {len(requests):>9,} "
                      f"{100 * fraction:>6.1f}% {oracle:>8}")
     lines.append("")
-    lines.append("  oracle = hit ratio a PERFECT one-request-lookahead predictor")
-    lines.append("           reaches. It bounds every policy in the comparison.")
+    lines.append("  oracle = hit ratio with PERFECT one-request lookahead: every read")
+    lines.append("           after the first window is prefetched just before it is")
+    lines.append("           issued, so it falls short of 100% only through that")
+    lines.append("           unprefetched window and requests larger than the cache.")
+    lines.append("           A reference; eda.md has the LRU and Belady MIN")
+    lines.append("           demand-cache references.")
     lines.append("  read% = 0.0 means no read blocks at all, so every cache metric")
     lines.append("  is 0/0 and no policy can be credited with an improvement.")
     lines.append("")
@@ -98,9 +105,13 @@ def classifier_section(accuracy: float, correct: int, total: int,
             lines.append(f"    {regime:<20} " + " ".join(cells))
         lines.append("")
         lines.append(f"  Default classifier: {default_classifier!r}.")
-        lines.append("  Both models are at ceiling on cleanly separable windows, so")
-        lines.append("  the algorithm is not the accuracy bottleneck. The choice turns")
-        lines.append("  on which risk you accept -- see docs/CLASSIFIER_EVAL.md.")
+        baseline = by_regime.get("baseline", {})
+        if baseline and min(baseline.values()) >= 0.99:
+            lines.append("  Both models are at ceiling on the baseline regime, so the")
+            lines.append("  algorithm is not the accuracy bottleneck there. The choice")
+            lines.append("  turns on which risk you accept -- see docs/CLASSIFIER_EVAL.md.")
+        else:
+            lines.append("  See docs/CLASSIFIER_EVAL.md for how the default was chosen.")
 
     if transfer_rows:
         lines.append("")
@@ -111,9 +122,19 @@ def classifier_section(accuracy: float, correct: int, total: int,
                          f"{100 * float(row['gnb']):>9.2f}% "
                          f"{100 * float(row['qda']):>9.2f}%")
         lines.append("")
-        lines.append("  -> a diagonal model survives a 128x change of device block")
-        lines.append("     size; a full covariance does not. This is why the default")
-        lines.append("     stays Naive Bayes despite QDA winning the transition regime.")
+        widest = transfer_rows[-1]
+        gnb, qda = float(widest["gnb"]), float(widest["qda"])
+        if gnb == qda:
+            lines.append(f"  -> at the widest shift ({widest['label']}) both models score")
+            lines.append(f"     {100 * gnb:.2f}%, so this run does not separate them.")
+        elif gnb > qda:
+            lines.append(f"  -> at the widest shift ({widest['label']}) the diagonal model")
+            lines.append(f"     keeps {100 * gnb:.2f}% and the full covariance {100 * qda:.2f}%.")
+            lines.append("     This is the measurement behind the Naive Bayes default.")
+        else:
+            lines.append(f"  -> at the widest shift ({widest['label']}) the full covariance")
+            lines.append(f"     scores {100 * qda:.2f}% against {100 * gnb:.2f}% for the")
+            lines.append("     diagonal model, so this run does not support the default.")
     lines.append("")
     return "\n".join(lines)
 
@@ -160,7 +181,7 @@ def benchmark_section(rows: list[dict], capacity: int,
 
     for name in sorted(by_dataset):
         group = by_dataset[name]
-        if name == "ALL_TRACES":
+        if is_aggregate(name):
             continue
         baseline = next((r for r in group if r["mode"] == "none"), None)
         usable = [r for r in group if r["status"] == "ok" and r["mode"] != "none"]
@@ -186,14 +207,32 @@ def benchmark_section(rows: list[dict], capacity: int,
     lines.append("")
     lines.append("  vs none   = hit-ratio difference in percentage points")
     lines.append("  wasted    = share of issued prefetches that were never used")
-    lines.append("  oracle    = perfect one-request-lookahead upper bound")
-    lines.append("  caught    = share of that oracle bound the winner achieved")
+    lines.append("  oracle    = perfect one-request-lookahead reference")
+    lines.append("  caught    = share of that oracle reference the winner achieved")
     lines.append("")
+
+    # Pooled rows, synthetic and real kept apart (request-weighted).
+    for name in sorted(n for n in by_dataset if is_aggregate(n)):
+        group = by_dataset[name]
+        baseline = next((r for r in group if r["mode"] == "none"
+                         and str(r["status"]).startswith("ok")), None)
+        usable = [r for r in group if str(r["status"]).startswith("ok")
+                  and r["mode"] != "none"]
+        if baseline is None or not usable:
+            continue
+        best = max(usable, key=lambda r: float(r["hit_ratio"]))
+        base_hit = float(baseline["hit_ratio"])
+        lines.append(f"  pooled {name}: best {best['mode']} "
+                     f"{_pct(float(best['hit_ratio']))} vs none {_pct(base_hit)} "
+                     f"({_signed_pp(float(best['hit_ratio']) - base_hit)}, "
+                     "request-weighted)")
+    if any(is_aggregate(n) for n in by_dataset):
+        lines.append("")
 
     # Which modes ever win, and how often the adaptive policy is competitive.
     wins: dict[str, int] = {}
-    for group in by_dataset.values():
-        if any(str(r["dataset"]) == "ALL_TRACES" for r in group):
+    for name, group in by_dataset.items():
+        if is_aggregate(name):
             continue
         usable = [r for r in group if r["status"] == "ok" and r["mode"] != "none"]
         if usable:
@@ -287,15 +326,47 @@ def cost_model_section(latency, cost_model: str = "measured") -> str:
     return "\n".join(lines)
 
 
-def caveats_section() -> str:
+def caveats_section(cost_source: str = "assumed",
+                    service_means_us: dict[str, float] | None = None) -> str:
+    """What the run's numbers do and do not show.
+
+    ``cost_source`` names the cost model actually applied and
+    ``service_means_us`` maps each trace that recorded device service times to
+    its mean, in microseconds. The cost sentences are built from these, so
+    they describe this run rather than an earlier one.
+    """
+    assumed_miss = LatencyModel().demand_miss_us
+    if service_means_us:
+        low, high = min(service_means_us.values()), max(service_means_us.values())
+        spread = (f"{low:,.0f}-{high:,.0f} us" if high > low else f"{low:,.0f} us")
+        ratio = (f"{low / assumed_miss:.1f}-{high / assumed_miss:.1f}x" if high > low
+                 else f"{low / assumed_miss:.1f}x")
+        cost_text = [
+            f"Cost model: {cost_source}.",
+            f"Mean recorded device service time is {spread} across the",
+            f"{len(service_means_us)} trace(s) that record one, i.e. {ratio} the "
+            f"{assumed_miss:g} us",
+            "demand-miss cost of the assumed model.",
+        ]
+        if cost_source.startswith("measured"):
+            cost_text += [
+                "The hit cost remains an approximation: the traces record device time",
+                "only, never cache service time, so it is set to 1% of mean service.",
+            ]
+        else:
+            cost_text += [
+                "This run did not calibrate from them (pass --cost-model measured).",
+            ]
+    else:
+        cost_text = [
+            f"Cost model: {cost_source}.",
+            "No trace in this run recorded device service times, so every",
+            "latency and speedup figure rests on the assumed per-block costs,",
+            "not on a measurement.",
+        ]
     lines = ["WHAT THESE NUMBERS DO AND DO NOT SHOW", THIN, ""]
     for text in (
-        "Cost model: hit/demand-miss/prefetch costs come from the traces' own",
-        "recorded device service times where available, otherwise from the",
-        "original assumed 5/100/50 us model. Real measured service times are",
-        "287-5491 us, so the assumed model understated misses by 3-50x.",
-        "The hit cost remains an approximation: the traces record device time",
-        "only, never cache service time, so it is set to 1% of mean service.",
+        *cost_text,
         "",
         "Classification accuracy is measured on windows produced by the",
         "synthetic generator. The real traces carry no access-pattern labels,",
@@ -305,7 +376,8 @@ def caveats_section() -> str:
         "",
         "The LSTM predicts the next address DELTA, not a workload class. Compare",
         "its cache outcomes and compute cost; its 'accuracy' is not comparable",
-        "to the four-class number.",
+        "to the four-class number. It is trained on generated traces whose",
+        "seeds are disjoint from every benchmark dataset.",
         "",
         "Oracle re-access recall uses future reads for SCORING ONLY. It can look",
         "high while hit ratio is low, so read it together with wasted prefetches.",
@@ -315,16 +387,26 @@ def caveats_section() -> str:
     return "\n".join(lines)
 
 
-def real_world_section(rows: list[dict], capacity: int) -> str:
+def _ok_row(group: list[dict], mode: str) -> dict | None:
+    return next((r for r in group if r["mode"] == mode and r["status"] == "ok"),
+                None)
+
+
+def _wasted(row: dict) -> int:
+    return int(row.get("unused") or 0)
+
+
+def real_world_section(rows: list[dict], capacity: int,
+                       latency: LatencyModel | None = None) -> str:
     """The honest result: does any adaptive policy beat doing nothing?
 
     Reported separately because it is the finding that matters for a claim
     about real workloads, and because the synthetic result points the other
-    way.
+    way. Every figure below is computed from ``rows`` (and ``latency`` for the
+    break-even sentence, which is omitted when no model is given).
     """
-    real = [r for r in rows if not str(r["dataset"]).startswith("synthetic")
-            and not str(r["dataset"]).startswith("demo")
-            and str(r["dataset"]) != "ALL_TRACES"]
+    real = [r for r in rows if not is_synthetic(r["dataset"])
+            and not is_aggregate(r["dataset"])]
     if not real:
         return ""
     by_dataset: dict[str, list[dict]] = {}
@@ -333,13 +415,15 @@ def real_world_section(rows: list[dict], capacity: int) -> str:
 
     lines = ["REAL-WORKLOAD RESULT", THIN, "",
              "  Synthetic traces have repeatable structure. Real traces do not.",
-             " This is the comparison that decides whether the method works.",
+             "  This is the comparison that decides whether the method works.",
              ""]
     lines.append(f"  {'dataset':<24} {'best mode':<12} {'hit%':>7} "
                  f"{'best adaptive':>13} {'no-pf':>7} {'adaptive':>9}")
     lines.append("")
     adaptive_wins = 0
     comparable = 0
+    # Datasets with read blocks, where hit ratio means something.
+    scored: dict[str, list[dict]] = {}
     for name in sorted(by_dataset):
         group = by_dataset[name]
         baseline = next((r for r in group if r["mode"] == "none"), None)
@@ -349,6 +433,7 @@ def real_world_section(rows: list[dict], capacity: int) -> str:
         if int(baseline.get("_read_blocks") or 0) == 0:
             lines.append(f"  {name:<24} {'(no read requests)':<12}")
             continue
+        scored[name] = group
         winner = max(usable, key=lambda r: float(r["hit_ratio"]))
         best_adaptive = max(
             (r for r in usable if r["mode"].startswith("adaptive")),
@@ -376,60 +461,95 @@ def real_world_section(rows: list[dict], capacity: int) -> str:
     lines.append("  is highest. Where 'best mode' is a fixed heuristic, adaptive")
     lines.append("  gained less than read-ahead did.")
     lines.append("")
-    lines.append("  WHAT WON, AND WHAT IT MEANS")
+    if not scored:
+        return "\n".join(lines)
+
+    lines.append("  WHAT WON, AND WHAT IT MEANS (computed from the rows above)")
     lines.append("")
-    winners = {}
-    for name, group in by_dataset.items():
-        winners[name] = max(
-            (r for r in group if r["status"] == "ok" and r["mode"] != "none"),
-            key=lambda r: float(r["hit_ratio"]), default=None)
-    scored = sum(1 for w in winners.values() if w is not None)
-    fixed_wins = sum(1 for w in winners.values()
-                     if w is not None and w["mode"] == "deep")
-    adaptive_dataset_wins = sum(1 for w in winners.values()
-                                if w is not None
-                                and w["mode"].startswith("adaptive"))
-    if fixed_wins:
-        lines.append(f"  Fixed depth-8 read-ahead ('deep') has the highest hit")
-        lines.append(f"  ratio on {fixed_wins} of {scored} real datasets. It is")
-        lines.append("  not an adaptive policy; it never looks at the workload.")
+    total = len(scored)
+    wins: dict[str, int] = {}
+    for group in scored.values():
+        # 'none' competes here: on some real traces no prefetcher beats it.
+        best = max((r for r in group if r["status"] == "ok"),
+                   key=lambda r: float(r["hit_ratio"]))
+        wins[str(best["mode"])] = wins.get(str(best["mode"]), 0) + 1
+    lines.append("  Highest hit ratio per real dataset: " + ", ".join(
+        f"{mode} {count}/{total}" for mode, count in
+        sorted(wins.items(), key=lambda kv: (-kv[1], kv[0]))))
+    if wins.get("deep"):
+        lines.append(f"  Fixed depth-{DEFAULT_READ_AHEAD_DEPTH} read-ahead ('deep') is "
+                     "not an adaptive policy;")
+        lines.append("  it never looks at the workload.")
+    lines.append("")
+
+    def paired(mode: str, reference: str) -> list[tuple[str, dict, dict]]:
+        out = []
+        for name, group in scored.items():
+            row, ref = _ok_row(group, mode), _ok_row(group, reference)
+            if row is not None and ref is not None:
+                out.append((name, row, ref))
+        return out
+
+    depth = paired("deep", "sequential")
+    if depth:
+        deltas = [float(r["hit_ratio"]) - float(q["hit_ratio"]) for _, r, q in depth]
+        lines.append(f"  Depth: 'deep' (depth {DEFAULT_READ_AHEAD_DEPTH}) vs 'sequential' "
+                     f"(depth 2) is {_signed_pp(mean(deltas))}")
+        lines.append(f"  of mean hit ratio over {len(depth)} real dataset(s), from "
+                     f"{_signed_pp(min(deltas))} to {_signed_pp(max(deltas))}.")
         lines.append("")
-    lines.append("  That is the result, and it is not a win for this project. Two")
-    lines.append("  things have to be said about it honestly.")
-    lines.append("")
-    lines.append("  1. It was nearly invisible until the policy space was fixed.")
-    lines.append("     Every mode until now prefetched at most 2 blocks, so a")
-    lines.append("     perfect policy router had only +0.4 points of headroom over")
-    lines.append("     fixed read-ahead, which looked like proof that no routing")
-    lines.append("     decision could help. It was not. Read-ahead DEPTH is worth")
-    lines.append("     +4.10 points of mean hit ratio on its own, an order of")
-    lines.append("     magnitude more than the whole routing question. The earlier")
-    lines.append("     'no decision can help' conclusion was an artefact of a")
-    lines.append("     degenerate baseline, and it is retracted.")
-    lines.append("")
-    lines.append("  2. The learned classifier still loses to a fixed heuristic,")
-    lines.append(f"     winning {adaptive_dataset_wins} of {scored} datasets. Its")
-    lines.append("     accuracy on synthetic windows is real, but these traces are")
-    lines.append("     ~49% backward seeks and ~43% long forward jumps with reuse")
-    lines.append("     distances far exceeding the cache, so the next address is not")
-    lines.append("     recoverable from request history.")
-    lines.append("")
-    lines.append("  What the feedback gate buys, on the one trace where read-ahead")
-    lines.append("  actively destroys the cache (web_3), is +18.99 points of hit")
-    lines.append("  ratio over fixed read-ahead with 86.9% less wasted I/O.")
-    lines.append("  Everywhere else it trades a little hit ratio for a lot less")
-    lines.append("  waste. A targeted result, not a general one.")
-    lines.append("")
-    lines.append("  The modelled-cost column is degenerate at the default cost model:")
-    lines.append("  break-even precision is 1.0101, so no prefetcher can pay for")
-    lines.append("  itself and 'none' wins it by arithmetic. Read hit ratio,")
-    lines.append("  precision and wasted I/O instead. See DECISIONS.md D11, D14.")
-    lines.append("")
+
+    classifier = paired("adaptive", "sequential")
+    if classifier:
+        deltas = [float(r["hit_ratio"]) - float(q["hit_ratio"])
+                  for _, r, q in classifier]
+        better = sum(1 for d in deltas if d > 1e-12)
+        lines.append(f"  Classifier: 'adaptive' vs 'sequential' is {_signed_pp(mean(deltas))} "
+                     f"of mean hit ratio,")
+        lines.append(f"  better on {better} of {len(classifier)}; it has the highest "
+                     f"hit ratio on {wins.get('adaptive', 0)} of {total}.")
+        lines.append("  Its accuracy is measured on synthetic windows only; the request")
+        lines.append("  delta mix of each real trace is in eda.md.")
+        lines.append("")
+
+    gate = paired("guard", "sequential")
+    if gate:
+        deltas = [(name, float(r["hit_ratio"]) - float(q["hit_ratio"]),
+                   (1 - _wasted(r) / _wasted(q)) if _wasted(q) else None)
+                  for name, r, q in gate]
+        gains = [d for d in deltas if d[1] > 1e-12]
+        lines.append(f"  Feedback gate: 'guard' vs 'sequential' is "
+                     f"{_signed_pp(mean(d[1] for d in deltas))} of mean hit ratio,")
+        lines.append(f"  better on {len(gains)} of {len(gate)} real dataset(s).")
+        if gains:
+            name, delta, saved = max(gains, key=lambda d: d[1])
+            saved_text = (f", {100 * saved:.1f}% less wasted I/O"
+                          if saved is not None else "")
+            lines.append(f"  Largest gain: {name}, {_signed_pp(delta)}{saved_text}.")
+        reductions = [d[2] for d in deltas if d[2] is not None]
+        if reductions:
+            lines.append(f"  Mean wasted-I/O change vs 'sequential': "
+                         f"{-100 * mean(reductions):+.1f}%.")
+        lines.append("  A per-trace result; it does not generalise beyond these datasets.")
+        lines.append("")
+
+    if latency is not None:
+        break_even = latency.break_even_precision()
+        if break_even > 1.0:
+            lines.append("  The modelled-cost column is degenerate at this cost model:")
+            lines.append(f"  break-even precision is {break_even:.4f}, so no prefetcher can")
+            lines.append("  pay for itself and 'none' wins it by arithmetic. Read hit ratio,")
+            lines.append("  precision and wasted I/O instead. See DECISIONS.md D11, D14.")
+        else:
+            lines.append(f"  Break-even precision is {break_even:.4f} at this cost model, so")
+            lines.append("  a mode's modelled cost beats 'none' only where its precision")
+            lines.append("  exceeds that figure.")
+        lines.append("")
     return "\n".join(lines)
 
 
-def files_section(files: dict[str, str]) -> str:
-    lines = ["RAW DATA WRITTEN TO outputs/", THIN, ""]
+def files_section(files: dict[str, str], directory: str = "outputs/") -> str:
+    lines = [f"RAW DATA WRITTEN TO {directory}", THIN, ""]
     for name, description in files.items():
         lines.append(f"  {name:<24} {description}")
     lines.append("")

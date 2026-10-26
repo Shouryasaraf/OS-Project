@@ -9,11 +9,17 @@ from time import perf_counter
 from .benchmark import (MODES, benchmark_dataset, drift_report, make_model,
                         markdown_table, write_results_csv)
 from .artifacts import load_model
-from .features import FEATURE_NAMES, extract
+from .features import FEATURE_NAMES, WindowContext, dominant_stride, extract
 from .model import CLASSIFIERS, DEFAULT_CLASSIFIER, OnlineGaussianNB
 from .simulator import (DEFAULT_CAPACITY, LatencyModel, confusion_matrix,
                          replay)
 from .trace import CLASSES, load_csv, synthetic_dataset, transition_trace, write_csv
+
+#: Every ``--format`` the commands accept. ``oracle`` (libCacheSim
+#: oracleGeneral block traces) is listed here so the CLI already routes it;
+#: ``trace.load_csv`` reports an unsupported format as an ordinary error until
+#: its loader is present. It is never auto-detected.
+FORMATS = ("auto", "normalized", "msr", "iotta8", "alibaba", "revised", "oracle")
 
 
 def train(seed: int = 42, examples_per_class: int = 100,
@@ -25,8 +31,13 @@ def run_demo(args: argparse.Namespace) -> None:
     model = train(args.seed, args.train_per_class, args.classifier)
     # Different seed and independently generated traces prevent shared windows.
     held_out = synthetic_dataset(args.test_per_class, args.seed + 100000)
+    # The model takes the 12-feature contextual vector, built over the
+    # held-out windows as one stream exactly as replay and main.py build it.
+    # ``extract`` alone gives the 8 stream features and is rejected.
+    context = WindowContext()
     start = perf_counter()
-    pairs = [(label, model.predict(extract(window))[0]) for window, label in held_out]
+    pairs = [(label, model.predict(context.observe(window, dominant_stride(window)))[0])
+             for window, label in held_out]
     prediction_ms = 1000 * (perf_counter() - start) / len(held_out)
     correct = sum(truth == prediction for truth, prediction in pairs)
     print("REVIEW 2: ONLINE WORKLOAD CLASSIFIER + ADAPTIVE PREFETCH SIMULATOR")
@@ -230,7 +241,8 @@ def run_shift(args: argparse.Namespace) -> None:
     print("can be computed on them; only the distance above is meaningful.")
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
+    """The ``adaptive_prefetch`` argument parser, one sub-command per task."""
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     demo = commands.add_parser("demo", help="run reproducible synthetic Review 2 demo")
@@ -252,7 +264,7 @@ def main() -> None:
     replay_command.add_argument("--smoothing", type=int, default=0,
                                 help="require N agreeing windows before switching policy")
     replay_command.add_argument("--format", default="auto",
-                                choices=("auto", "normalized", "msr", "iotta8", "alibaba", "revised"))
+                                choices=FORMATS)
     replay_command.add_argument("--lstm-model")
     replay_command.add_argument("--model-path", help="saved Gaussian NB classifier JSON")
     benchmark = commands.add_parser("benchmark", help="compare all available policies")
@@ -260,7 +272,7 @@ def main() -> None:
                            choices=("synthetic", "msr", "iotta"))
     benchmark.add_argument("--trace")
     benchmark.add_argument("--format", default="auto",
-                           choices=("auto", "normalized", "msr", "iotta8", "alibaba", "revised"))
+                           choices=FORMATS)
     benchmark.add_argument("--seed", type=int, default=42)
     benchmark.add_argument("--seeds", type=int, default=3)
     benchmark.add_argument("--windows-per-class", type=int, default=8)
@@ -283,12 +295,12 @@ def main() -> None:
     normalize.add_argument("--input", required=True)
     normalize.add_argument("--output", required=True)
     normalize.add_argument("--format", default="auto",
-                           choices=("auto", "normalized", "msr", "iotta8", "alibaba", "revised"))
+                           choices=FORMATS)
     lstm = commands.add_parser("train-lstm", help="train optional offline LSTM baseline")
     lstm.add_argument("--save", default="models/lstm_delta.pt")
     lstm.add_argument("--trace", action="append", default=[])
     lstm.add_argument("--format", default="auto",
-                      choices=("auto", "normalized", "msr", "iotta8", "alibaba", "revised"))
+                      choices=FORMATS)
     lstm.add_argument("--epochs", type=int, default=60)
     lstm.add_argument("--seed", type=int, default=42)
     msr_train = commands.add_parser("train-msr-sample", help="weakly adapt classifier on the unlabelled MSR sample")
@@ -314,18 +326,23 @@ def main() -> None:
     eda = commands.add_parser("eda", help="exploratory profile of one trace")
     eda.add_argument("trace")
     eda.add_argument("--format", default="auto",
-                     choices=("auto", "normalized", "msr", "iotta8", "alibaba", "revised"))
+                     choices=FORMATS)
     eda.add_argument("--window-size", type=int, default=32)
     eda.add_argument("--cache-blocks", type=int, default=DEFAULT_CAPACITY)
     shift = commands.add_parser(
         "shift", help="domain shift between synthetic training and a real trace")
     shift.add_argument("trace")
     shift.add_argument("--format", default="auto",
-                       choices=("auto", "normalized", "msr", "iotta8", "alibaba", "revised"))
+                       choices=FORMATS)
     shift.add_argument("--window-size", type=int, default=32)
     shift.add_argument("--train-per-class", type=int, default=100)
     shift.add_argument("--seed", type=int, default=42)
-    args = parser.parse_args()
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = build_parser()
+    args = parser.parse_args(argv)
     try:
         if args.command == "demo":
             run_demo(args)
