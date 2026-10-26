@@ -122,3 +122,53 @@ reduction is made after looking at results.
 ## Amendment log
 
 (none)
+
+### Amendment 1 (2026-10-26): runtime budget
+
+Written and committed before any E6 pass was run. No E6 result existed, and
+E4 (whose selection E6 reads) had not finished. Reasons: the runtime budget
+(lead decision L3: E6 core about 3 h, against about 6 h for the design
+above), and the lead's ruling that E6 replays the controllers E4 selected on
+validation rather than named parameters. A named `feedback_0.01` has
+exploration rate 0, which is not a validated policy and over-issues.
+
+Changes:
+
+1. **Headline policies: nine become six.**
+   - Kept by name: fixed0 (the baseline), fixed4 and fixed8.
+   - Added, as E4's validated choices: the adaptive controller and the
+     feedback gate selected for the logistic ranker, and the adaptive
+     controller selected for the online-index scorer (`trans_online`).
+     Each is the policy E4 chose on validation (split 2) at cache
+     capacity 8 (the live capacity) and cost c = 0.01, per capacity, with
+     the feedback gate's c and exploration rate both validated.
+   - Dropped: fixed1, gate_0.01 and the named adaptive_0.002,
+     adaptive_0.01, feedback_0.01 and adaptive_0.01@trans_online.
+   - Source: `results/web/comparisons.csv`, rows `split=test`,
+     `selection=per_capacity`, `capacity=8`, `cost=0.01`, column
+     `adaptive_policy` for the family's controller. These names are read
+     when the plan is built. The resolved names and the file's SHA-256 are
+     recorded in `live_config.json` (`selection`).
+   - If the file or a requested row is missing, the run stops before any
+     pass. There is no fallback to named parameters.
+2. **Repetitions and stores are unchanged.** 3 repetitions on the SSD store
+   and 3 on the HDD store, with the policy order rotated each repetition.
+3. **Ablations are unchanged.** FIFO link and pool: fixed0, fixed4 and
+   fixed8, 1 repetition, SSD (H5). Server-side hints: fixed0, hint:fixed4
+   and hint:fixed8, 1 repetition, HDD (H6). Both read the headline's store
+   and keep the headline's `disk_probe_<store>.json`.
+4. **The optional one-axis sensitivity sweep is not run.**
+5. **Everything else is unchanged:** the sample (split 3, sessions with at
+   least 2 views, 2000 sessions, seed 42, capacity 8), the assumed network,
+   object sizes, think-time cap and ramp, the baseline, parity (H1), the
+   validity gate, the primary outcome and its interval, and the decision
+   rules H2-H7, now applied to the six policies. The validated feedback
+   gate was selected on a replay of the whole validation split, but here it
+   still learns only from the 2000 sampled sessions.
+
+Budget: 36 headline passes plus 3 FIFO and 3 hint passes, 42 in all. The
+2000-session schedule ends at 249 s (180 s ramp plus capped sessions), and a
+pass takes about 260 s with set-up. That is about 3.0 h of passes plus
+about 10 min to build the plans and stores and to probe them, excluding any
+wait for a quiet host. `reproduce.py live --store-dir <sdb web-store>` runs
+exactly this design by default and prints the estimate before it starts.

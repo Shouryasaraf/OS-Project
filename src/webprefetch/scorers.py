@@ -19,6 +19,15 @@ An optional scorer whose artifact or module is missing is returned with
 ``status="skipped: <reason>"`` and no scorer, never a substitute. ``seq``
 imports ``webprefetch.seqmodel`` lazily, so torch is needed only when it is
 asked for.
+
+``seq`` reads the artifacts E5 (``python -m webprefetch.seqmodel experiment``)
+leaves under ``models/web/seq/<model>_<protocol>_s<seed>``. By default it
+picks, per evaluated split, the protocol that never trained on that split
+(``validation`` for split 2, ``final`` for split 3) and seed
+:data:`SEQ_SEED`; an explicit artifact directory is used as it is, but is
+refused on a split it was trained on. Its ranking masks every item already
+in the session window, so its ranking hits must be compared with other
+rankers' on the ``novel_*`` columns, never on ``hit_at_1`` or ``mrr_at_8``.
 """
 
 from __future__ import annotations
@@ -42,8 +51,19 @@ DEFAULT_SCORERS = ("logistic",)
 #: reproduces the committed pivot rows.
 NOVEL_RANKER = "ranker_novel.joblib"
 NOVEL_SUMMARY = "ranker_novel_summary.json"
-#: Where ``seq`` looks for the WP11 artifact unless a path is given.
+#: Where ``seq`` looks for the WP11 artifacts unless a path is given: the
+#: root that ``seqmodel experiment`` fills, ``models/web/seq``.
 SEQ_DIRNAME = "seq"
+SEQ_MODEL = "gru"
+#: The seed whose artifact the benchmark and decomposition read by default.
+#: Fixed before E5 ran: the first of E5's seeds 0-4 (and ``seqmodel train``'s
+#: default), never the seed that scored best.
+SEQ_SEED = 0
+#: The protocol whose artifact may score each split without having trained
+#: on it (seqmodel.protocol_rows): validation trains on splits 0-1, final on 0-2.
+SEQ_PROTOCOLS = {2: "validation", 3: "final"}
+SEQ_NOTE = ("history-masked ranking: compare it with other rankers on the novel_* "
+            "columns, not on hit_at_1 / mrr_at_8")
 
 
 @dataclass
@@ -217,6 +237,24 @@ def build_scorer(name: str, views: pd.DataFrame, split: int, model_dir: str | Pa
     return _seq_scorer(views, split, model_dir, seq_path)
 
 
+def seq_artifact(path: str | Path, split: int, *, model: str = SEQ_MODEL,
+                 seed: int = SEQ_SEED) -> Path:
+    """The artifact directory ``seq`` reads for ``split``.
+
+    ``path`` is either one artifact (it holds ``config.json``), used as it
+    is, or an artifact root, in which case the directory is
+    ``<root>/<model>_<protocol>_s<seed>`` with the protocol of
+    :data:`SEQ_PROTOCOLS` for ``split``.
+    """
+    path = Path(path)
+    if (path / "config.json").is_file():
+        return path
+    if split not in SEQ_PROTOCOLS:
+        raise ValueError(f"no sequence-model protocol evaluates split {split}; "
+                         f"expected one of {sorted(SEQ_PROTOCOLS)}")
+    return path / f"{model}_{SEQ_PROTOCOLS[split]}_s{seed}"
+
+
 def _seq_scorer(views: pd.DataFrame, split: int, model_dir: Path,
                 seq_path: str | Path | None) -> ScorerSpec:
     """The WP11 sequence model, if both its module and an artifact exist.
@@ -224,15 +262,29 @@ def _seq_scorer(views: pd.DataFrame, split: int, model_dir: Path,
     Expected protocol: ``seqmodel.SequenceScorer.load(path)`` returns an
     object whose ``precompute(views, splits)`` gives ``{(session_id,
     position): ranked}``; an object that already has ``score(row, index)``
-    is used as it is.
+    is used as it is. ``seq_path`` (default ``model_dir/seq``) is an artifact
+    root or one artifact; see :func:`seq_artifact`.
     """
     try:
         from . import seqmodel  # noqa: PLC0415 - optional, pulls in torch
     except ImportError as error:
         return _skipped("seq", f"webprefetch.seqmodel unavailable ({error})")
-    path = Path(seq_path) if seq_path is not None else model_dir / SEQ_DIRNAME
+    root = Path(seq_path) if seq_path is not None else model_dir / SEQ_DIRNAME
+    try:
+        path = seq_artifact(root, split)
+    except ValueError as error:
+        return _skipped("seq", str(error))
     if not path.exists():
-        return _skipped("seq", f"no trained sequence-model artifact at {path}")
+        return _skipped("seq", f"no trained sequence-model artifact at {path} "
+                               "(python -m webprefetch.seqmodel experiment)")
+    try:
+        config = seqmodel.read_config(path)
+    except Exception as error:  # a stale or incompatible artifact is a skip, not a crash
+        return _skipped("seq", f"could not load {path}: {error}")
+    trained = [int(s) for s in config.get("train_splits", ())]
+    if split in trained:
+        return _skipped("seq", f"{path} was trained on splits {trained}, which include the "
+                               f"evaluated split {split}")
     try:
         loaded = seqmodel.SequenceScorer.load(path)
         if hasattr(loaded, "precompute"):
@@ -243,8 +295,9 @@ def _seq_scorer(views: pd.DataFrame, split: int, model_dir: Path,
             return _skipped("seq", "SequenceScorer has neither precompute() nor score()")
     except Exception as error:  # a stale or incompatible artifact is a skip, not a crash
         return _skipped("seq", f"could not load {path}: {error}")
-    train_range = getattr(loaded, "train_range", "see the artifact's config")
-    return ScorerSpec("seq", "ok", scorer, None, "session", str(train_range))
+    train_range = (f"{path.name} ({config.get('protocol')} protocol, seed {config.get('seed')}): "
+                   f"{config.get('train_range', 'see the artifact config')}; {SEQ_NOTE}")
+    return ScorerSpec("seq", "ok", scorer, None, "session", train_range)
 
 
 # ------------------------------------------------------------------ P2(b)

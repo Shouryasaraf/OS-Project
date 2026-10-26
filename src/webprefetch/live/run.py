@@ -24,6 +24,19 @@ The plan directory is named by a digest of the plan parameters and of the
 size and mtime of its inputs (views, and the ranker for ``logistic``), so a
 changed input builds a new plan rather than reusing a stale one.
 
+Policies named ``validated_<family>`` are replaced, before anything else, by
+the policy E4 selected on validation at ``--capacity`` and
+``--selection-cost`` (:mod:`.selection`, from ``--selection``, default
+``results/web/comparisons.csv``); a missing selection stops the run. The
+resolution is recorded in the run's ``live_config.json`` entry.
+
+Every pass records ``foreign_io_frac``: the share of the store device's
+sectors read during the pass (``/proc/diskstats``) that the origin did not
+read itself. The SSD store shares the root disk with other tenants, so its
+rows are only citable together with that column. A store or work directory at
+any path under ``/mnt`` outside sdb's ``os-project-prefetch/`` is refused (lead
+decision L2).
+
 Raw per-view and per-fetch records go to ``<work-dir>/raw/`` as ``.csv.gz``
 and are not committed.
 """
@@ -45,7 +58,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from ..paths import MODELS, OUTPUTS, PROCESSED
-from . import analyze, client, objects, plan as plan_module
+from . import analyze, client, objects, plan as plan_module, selection as selection_module
 from .client import ClientConfig
 from .origin import origin_stats
 from .timing import CLOCK
@@ -60,6 +73,13 @@ EXPERIMENTS = ("headline", "fifo", "hint", "sensitivity", "smoke")
 ROW_KEY = ("experiment", "store", "config", "link", "rep", "policy")
 EXIT_REFUSED = 2
 EXIT_PARITY = 1
+#: Lead decision L2: the stores live on the SSD (repository or scratch
+#: paths) or on the sdb HDD under ``HDD_ROOT``, the directory the project
+#: already writes to; every other path under /mnt (sdd and sde among them,
+#: and the rest of sdb) is refused.
+HDD_MOUNT = Path("/mnt/b18edc65-4395-4a85-976a-bed3428c073b")
+HDD_ROOT = HDD_MOUNT / "os-project-prefetch"
+HDD_STORE = HDD_ROOT / "web-store"
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
@@ -67,8 +87,13 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     g.add_argument("--views", type=Path, default=PROCESSED / "views.csv.gz")
     g.add_argument("--models", type=Path, default=MODELS)
     g.add_argument("--policies", default=",".join(plan_module.HEADLINE_POLICIES),
-                   help="comma list; 'hint:<policy>' sends that policy's candidates to /hint")
+                   help="comma list; 'hint:<policy>' sends that policy's candidates to /hint; "
+                        "'validated_<family>[@scorer]' is E4's validated choice")
     g.add_argument("--baseline", default=plan_module.BASELINE)
+    g.add_argument("--selection", type=Path, default=selection_module.DEFAULT_SOURCE,
+                   help="E4's comparisons.csv, read for validated_* policies")
+    g.add_argument("--selection-cost", type=float, default=selection_module.DEFAULT_COST,
+                   help="the cost whose validated controllers are replayed")
     g.add_argument("--sessions", type=int, default=plan_module.DEFAULT_SESSIONS)
     g.add_argument("--min-views", type=int, default=plan_module.DEFAULT_MIN_VIEWS)
     g.add_argument("--seed", type=int, default=plan_module.DEFAULT_SEED)
@@ -146,6 +171,37 @@ def resolve_policies(names: str, baseline: str) -> tuple[list[str], list[str]]:
     return labels, base_names
 
 
+def resolve_validated(args) -> dict | None:
+    """Replace ``validated_*`` in ``args.policies`` and ``args.baseline``.
+
+    Returns the selection record (None when no placeholder was used).
+    Raises :class:`~webprefetch.live.selection.SelectionError` when E4's
+    selection is missing or lacks a requested policy.
+    """
+    options = {"source": args.selection, "capacity": args.capacity, "cost": args.selection_cost}
+    policies, record = selection_module.resolve([n for n in args.policies.split(",") if n],
+                                                **options)
+    (baseline,), base_record = selection_module.resolve([args.baseline], **options)
+    if base_record is not None:
+        record = record or {**base_record, "resolved": {}}
+        record["resolved"].update(base_record["resolved"])
+    if record is not None:
+        args.policies, args.baseline = ",".join(policies), baseline
+        print(f"[live] validated policies from {record['source']} (capacity "
+              f"{record['capacity']}, cost {record['cost']:g}): {record['resolved']}", flush=True)
+    return record
+
+
+def check_store_dir(path) -> None:
+    """Refuse a store on a disk the project may not write to (L2)."""
+    if path is None:
+        return
+    resolved = Path(path).resolve()
+    if resolved.is_relative_to("/mnt") and not resolved.is_relative_to(HDD_ROOT):
+        raise SystemExit(f"refused: {path} is on a disk the project may not write to "
+                         f"(lead decision L2: only the SSD and sdb under {HDD_ROOT})")
+
+
 def _session_gap_ms() -> int:
     from ..data import SESSION_GAP_MS
     return SESSION_GAP_MS
@@ -166,9 +222,12 @@ def plan_inputs(args, base_names: list[str]) -> dict:
     or a retrained ranker builds a new plan instead of reusing a stale one.
     """
     inputs = {"views": _fingerprint(args.views)}
-    if any(p.scorer == "logistic" for p in plan_module.parse_policies(base_names)):
+    used = {p.scorer for p in plan_module.parse_policies(base_names)}
+    if used & {"logistic", "logistic_novel"}:
         for name in ("candidate_index.joblib", "ranker.joblib"):
             inputs[name] = _fingerprint(Path(args.models) / name)
+    if "logistic_novel" in used:
+        inputs["ranker_novel.joblib"] = _fingerprint(Path(args.models) / "ranker_novel.joblib")
     return inputs
 
 
@@ -349,6 +408,12 @@ def run(args, argv) -> int:
     invocation = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     if args.reps < 1 or args.shards < 1:
         raise SystemExit("--reps and --shards must be positive")
+    for directory in (args.store_dir, args.work_dir):
+        check_store_dir(directory)
+    try:
+        selected = resolve_validated(args)
+    except selection_module.SelectionError as error:
+        raise SystemExit(f"[live] refused: {error}") from None
     labels, base_names = resolve_policies(args.policies, args.baseline)
     plan_dir, plan, sim = ensure_plan(args, base_names)
     store_dir = Path(args.store_dir) if args.store_dir else Path(args.work_dir) / "store"
@@ -480,6 +545,7 @@ def run(args, argv) -> int:
                  "sessions": plan["sessions_selected"], "views": plan["views"],
                  "objects": len(plan["items"])},
         "assumptions": assumptions(args, store_meta, device),
+        "selection": selected,
         "reps": args.reps, "shards": args.shards, "policies": labels,
         "passes": kept + passes, "superseded": superseded,
         "aborted": [a for a in previous.get("aborted", [])
