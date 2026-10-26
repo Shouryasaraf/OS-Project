@@ -700,13 +700,23 @@ def _next_use_numpy(np, lbas, sizes):
     blocks = np.repeat(lba - (np.cumsum(size) - size), size)
     blocks += np.arange(total, dtype=np.int64)
     order = np.argsort(blocks, kind="stable")
-    ordered = blocks[order]
-    same = ordered[1:] == ordered[:-1]
-    del ordered
+    blocks.sort()  # the sorted values in place, not a third 8-byte array
+    same = blocks[1:] == blocks[:-1]
+    del blocks
+    # MIN only compares blocks for equality, so dense ids (a bijection) give
+    # the same count; 4-byte ids and next uses halve what the long
+    # replacement pass keeps resident. Positions fit int32 up to 2**31 blocks.
+    index = np.int32 if total + 1 < 2 ** 31 else np.int64
+    ids = np.empty(total, dtype=index)
+    ids[order[1:]] = np.cumsum(~same, dtype=index)
+    ids[order[:1]] = 0
     dead = total + 1
-    next_use = np.full(total, dead, dtype=np.int64)
-    next_use[order[:-1][same]] = order[1:][same]
-    return blocks, next_use, dead
+    next_use = np.full(total, dead, dtype=index)
+    step = 1 << 22  # bounds the fancy-indexing temporaries
+    for start in range(0, max(total - 1, 0), step):
+        repeat = np.flatnonzero(same[start:start + step]) + start
+        next_use[order[repeat]] = order[repeat + 1]
+    return ids, next_use, dead
 
 
 def belady_hit_ratio(lbas, sizes, capacity: int, *, use_numpy: bool | None = None,
@@ -722,10 +732,12 @@ def belady_hit_ratio(lbas, sizes, capacity: int, *, use_numpy: bool | None = Non
     Two shortcuts keep it fast on large slices without changing the count. A
     block never read again is never inserted (it would be the first victim
     and can never hit), and the heap is rebuilt from the resident set when
-    stale entries outnumber live ones. Memory with numpy is about 40 bytes
-    per block of the slice: the largest C1 slice (alibabaBlock_6, 143M
-    blocks) peaked at 5.7 GB RSS and took 155 s together with its ``none``
-    replay. A reference, **not** a bound on prefetching.
+    stale entries outnumber live ones. With numpy the next-use pass peaks at
+    about 24 bytes per block of the slice and the replacement pass keeps 8
+    (dense 4-byte block ids and next uses). The largest C1 slice
+    (alibabaBlock_6, 143M blocks) peaked at 2.85 GB max RSS and took 162 s
+    together with its ``none`` replay (host load ~60); with 8-byte arrays it
+    had peaked at 5.7 GB. A reference, **not** a bound on prefetching.
     """
     if capacity < 1:
         raise ValueError("cache capacity must be positive")

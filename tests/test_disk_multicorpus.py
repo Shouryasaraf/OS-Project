@@ -185,11 +185,14 @@ class PlanningTests(FixtureCase):
         target = self.paths["msr_fix_0"]
         saved = target.read_bytes()
         try:
-            target.write_bytes(saved[: RECORD.size * 1600])
+            # Shorter than the 1500-request slice, so a stale cache hit
+            # would still say 1500.
+            target.write_bytes(saved[: RECORD.size * 1000])
             again = run_survey(specs, cache_dir=cache)
             key = multicorpus.survey_key(next(s for s in specs if s.trace == "msr_fix_0"))
-            self.assertEqual(again[key]["requests"], 1500)
             self.assertEqual(first[key]["requests"], 1500)
+            self.assertEqual(again[key]["requests"], 1000)
+            self.assertEqual(multicorpus.load_survey(cache)[key]["requests"], 1000)
         finally:
             target.write_bytes(saved)
 
@@ -267,6 +270,13 @@ class BeladyTests(unittest.TestCase):
                     self.assertAlmostEqual(
                         belady_hit_ratio(lbas, sizes, capacity, use_numpy=use_numpy),
                         expected, places=12, msg=(trial, capacity, use_numpy))
+
+    def test_empty_and_single_block_streams(self):
+        backends = [False] + ([True] if importlib.util.find_spec("numpy") else [])
+        for use_numpy in backends:
+            self.assertEqual(belady_hit_ratio([], [], 4, use_numpy=use_numpy), 0.0)
+            self.assertEqual(belady_hit_ratio([5], [1], 1, use_numpy=use_numpy), 0.0)
+            self.assertEqual(belady_hit_ratio([5, 5], [1, 1], 1, use_numpy=use_numpy), 0.5)
 
     def test_heap_compaction_keeps_the_count(self):
         rng = random.Random(3)
