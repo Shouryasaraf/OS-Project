@@ -2,113 +2,21 @@
 
 from __future__ import annotations
 
-from collections import Counter, OrderedDict, defaultdict
-from dataclasses import dataclass, field
+import heapq
+from collections import defaultdict
 
 import numpy as np
 import pandas as pd
 
+# Policy, Counters and Cache live in the numpy-free cachecore; they are
+# re-exported here so existing imports keep working.
+from .cachecore import (DEPTHS, UTILITY_PREFETCH_COST, Cache, Counters,  # noqa: F401
+                        FeedbackGate, GateTracker, Policy)
+from .data import SESSION_GAP_MS
 from .model import CandidateIndex, FastScorer
 
-DEPTHS = (0, 1, 2, 4, 8)
-UTILITY_PREFETCH_COST = 0.25  # Sensitivity parameter, not a measured network cost.
-
-
-@dataclass(frozen=True)
-class Policy:
-    name: str
-    kind: str
-    parameter: float = 0.0
-
-    def depth(self, ranked: list[tuple[int, float]]) -> int:
-        if self.kind == "fixed":
-            return int(self.parameter)
-        if not ranked:
-            return 0
-        if self.kind == "gate":
-            return 2 if ranked[0][1] >= self.parameter else 0
-        if self.kind == "adaptive":
-            probabilities = [prob for _, prob in ranked[:8]]
-            prefix = []
-            running = 0.0
-            for probability in probabilities:
-                running += probability
-                prefix.append(running)
-            values = [0.0] + [min(1.0, prefix[min(k, len(prefix)) - 1])
-                              - self.parameter * min(k, len(prefix))
-                              for k in DEPTHS[1:]]
-            return DEPTHS[max(range(len(values)), key=values.__getitem__)]
-        raise ValueError(f"unknown policy kind {self.kind}")
-
-
-@dataclass
-class Counters:
-    views: int = 0
-    hits: int = 0
-    prefetch_hits: int = 0
-    issued: int = 0
-    useful: int = 0
-    evicted_unused: int = 0
-    demand_evicted_by_prefetch: int = 0
-    depth_counts: Counter = field(default_factory=Counter)
-
-    def row(self, name: str, capacity: int) -> dict:
-        return {
-            "policy": name, "capacity": capacity, "views": self.views,
-            "hits": self.hits, "hit_ratio": self.hits / self.views if self.views else 0.0,
-            "prefetch_hits": self.prefetch_hits, "issued": self.issued,
-            "useful": self.useful,
-            "precision": self.useful / self.issued if self.issued else 0.0,
-            "unused": self.issued - self.useful,
-            "evicted_unused": self.evicted_unused,
-            "demand_evicted_by_prefetch": self.demand_evicted_by_prefetch,
-            "issued_per_view": self.issued / self.views if self.views else 0.0,
-            "utility_per_view": (self.hits - UTILITY_PREFETCH_COST * self.issued) / self.views
-            if self.views else 0.0,
-            "depth_counts": dict(self.depth_counts),
-        }
-
-
-class Cache:
-    def __init__(self, capacity: int, counters: Counters):
-        if capacity <= 0:
-            raise ValueError("cache capacity must be positive")
-        self.capacity = capacity
-        self.counters = counters
-        self.blocks: OrderedDict[int, bool] = OrderedDict()
-
-    def _insert(self, item: int, prefetched: bool) -> None:
-        if len(self.blocks) >= self.capacity:
-            # Speculative objects are the first victims for every policy.
-            victim = next((key for key, speculative in self.blocks.items() if speculative), None)
-            if victim is None:
-                victim, was_prefetched = self.blocks.popitem(last=False)
-            else:
-                was_prefetched = self.blocks.pop(victim)
-            if was_prefetched:
-                self.counters.evicted_unused += 1
-            elif prefetched:
-                self.counters.demand_evicted_by_prefetch += 1
-        self.blocks[item] = prefetched
-
-    def demand(self, item: int) -> bool:
-        self.counters.views += 1
-        if item in self.blocks:
-            self.counters.hits += 1
-            if self.blocks[item]:
-                self.counters.useful += 1
-                self.counters.prefetch_hits += 1
-            self.blocks[item] = False
-            self.blocks.move_to_end(item)
-            return True
-        self._insert(item, False)
-        return False
-
-    def prefetch(self, item: int) -> None:
-        if item in self.blocks:
-            return
-        self._insert(item, True)
-        self.counters.issued += 1
+ORDERS = ("session", "global")
+CACHE_SCOPES = ("session", "visitor")
 
 
 def complete_views(views: pd.DataFrame, max_views: int) -> pd.DataFrame:
@@ -131,120 +39,239 @@ class TransitionScorer:
         return [(item, count / support if support else 0.0) for item, count in candidates]
 
 
-def replay(views: pd.DataFrame, index: CandidateIndex, model,
-           policies: list[Policy], capacity: int, max_views: int = 50000,
-           with_sessions: bool = False, scorer=None) -> tuple[list[dict], dict, list[dict]]:
+def check_replay(views: pd.DataFrame, index, policies: list[Policy],
+                 order: str, cache_scope: str) -> None:
+    """The one parameter validator shared by the serial and parallel replays."""
     if len({policy.name for policy in policies}) != len(policies):
         raise ValueError("policy names must be unique")
-    if max_views < 0:
-        raise ValueError("max_views must be non-negative")
-    selected = complete_views(views, max_views)
-    scorer = scorer if scorer is not None else FastScorer(model)
-    totals = {p.name: Counters() for p in policies}
-    sessions = defaultdict(lambda: defaultdict(lambda: [0, 0, 0, 0])) if with_sessions else None
-    calibration = [[0, 0.0, 0] for _ in range(10)]
-    oracle_covered = 0
-    oracle_eligible = 0
-    oracle_top1 = 0
-    oracle_reciprocal_rank = 0.0
-    demo: list[dict] = []
-    # Each visitor session has its own browser cache. Cross-visitor cache sharing
-    # would model a proxy cache, not client-side page prefetching.
-    for session_id, session_views in selected.groupby("session_id", sort=False):
-        states = {p.name: (Cache(capacity, totals[p.name]), p) for p in policies}
-        for row in session_views.itertuples(index=False):
-            ranked = scorer.score(row, index)
-            for item, probability in ranked:
-                bucket = min(9, int(probability * 10))
-                calibration[bucket][0] += 1
-                calibration[bucket][1] += probability
-                calibration[bucket][2] += int(bool(row.eligible) and item == row.next_item)
-            if bool(row.eligible):
-                oracle_eligible += 1
-                actual_rank = next((n for n, (item, _) in enumerate(ranked[:8], 1)
-                                    if item == row.next_item), None)
-                if actual_rank is not None:
-                    oracle_covered += 1
-                    oracle_top1 += int(actual_rank == 1)
-                    oracle_reciprocal_rank += 1 / actual_rank
-                if len(demo) < 8:
-                    demo.append({"timestamp": int(row.timestamp), "session_id": int(row.session_id),
-                                 "current_item": int(row.itemid), "actual_next_item": int(row.next_item),
-                                 "top_candidates": [[item, round(prob, 4)] for item, prob in ranked[:8]]})
-            for name, (cache, policy) in states.items():
-                prior_hits = cache.counters.hits
-                prior_issued = cache.counters.issued
-                prior_useful = cache.counters.useful
-                cache.demand(int(row.itemid))
-                depth = policy.depth(ranked)
-                cache.counters.depth_counts[depth] += 1
-                for item, _ in ranked[:depth]:
-                    cache.prefetch(item)
-                if sessions is not None:
-                    record = sessions[name][int(session_id)]
-                    record[0] += cache.counters.hits - prior_hits
-                    record[1] += cache.counters.issued - prior_issued
-                    record[2] += 1
-                    record[3] += cache.counters.useful - prior_useful
-    rows = [totals[p.name].row(p.name, capacity) for p in policies]
-    extra = {"oracle_candidate_coverage_at_8": oracle_covered / oracle_eligible
-             if oracle_eligible else 0.0, "oracle_eligible_pairs": oracle_eligible,
-             "ranking_hit_at_1": oracle_top1 / oracle_eligible if oracle_eligible else 0.0,
-             "ranking_mrr_at_8": oracle_reciprocal_rank / oracle_eligible if oracle_eligible else 0.0,
-             "sessions": sessions, "replayed_views": len(selected), "calibration_bins": calibration}
-    return rows, extra, demo
+    if order not in ORDERS:
+        raise ValueError(f"order must be one of {ORDERS}")
+    if cache_scope not in CACHE_SCOPES:
+        raise ValueError(f"cache_scope must be one of {CACHE_SCOPES}")
+    if order != "global":
+        # Session order visits a later session's early views after an earlier
+        # session's late ones, so shared state would see the future.
+        stateful = [policy.name for policy in policies if policy.stateful]
+        if stateful:
+            raise ValueError(f"{stateful} share state across sessions and need order='global'")
+        if getattr(index, "online", False):
+            raise ValueError("an online index needs order='global'")
+    if cache_scope == "visitor" and "visitorid" not in views:
+        raise ValueError("cache_scope='visitor' needs a visitorid column")
 
 
-def replay_capacities(views: pd.DataFrame, index: CandidateIndex, model,
-                      policies: list[Policy], capacities: tuple[int, ...],
-                      max_views: int = 0) -> dict[int, tuple[list[dict], dict]]:
-    """Score each request once, applying identical decisions to several caches."""
-    selected = complete_views(views, max_views)
-    scorer = FastScorer(model)
+def _ordered(selected: pd.DataFrame, order: str) -> pd.DataFrame:
+    if order == "session":
+        # Sessions in first-appearance order, each in its own row order:
+        # exactly the iteration order of groupby("session_id", sort=False).
+        codes, _ = pd.factorize(selected.session_id)
+        return selected.iloc[np.argsort(codes, kind="mergesort")]
+    keys = ["timestamp", "source_row"] if "source_row" in selected else ["timestamp"]
+    return selected.sort_values(keys, kind="mergesort")
+
+
+def replay_partial(selected: pd.DataFrame, index, scorer, policies: list[Policy],
+                   capacities: tuple[int, ...], *, order: str = "session",
+                   cache_scope: str = "session", sessions_for=(), demo_limit: int = 0,
+                   session_gap_ms: int = SESSION_GAP_MS, count_stats: bool = True) -> dict:
+    """Replay ``selected`` and return raw, additive totals (see :func:`finalize`).
+
+    Every field is a sum or a disjoint per-session map, so totals from shards
+    of distinct sessions (or visitors) add up to the serial replay exactly.
+    ``count_stats=False`` skips the scorer-level ranking statistics, for a
+    shard that re-scores rows another shard already counted.
+    """
+    frame = _ordered(selected, order)
+    if getattr(index, "online", False):
+        index = index.fresh()
+    advance = getattr(index, "advance", None)
+    sessions_for = set(sessions_for)
     totals = {cap: {p.name: Counters() for p in policies} for cap in capacities}
-    sessions = {cap: defaultdict(lambda: defaultdict(lambda: [0, 0, 0, 0])) for cap in capacities}
-    covered = eligible = top1 = 0
-    reciprocal = 0.0
+    gates = {(cap, p.name): FeedbackGate.for_policy(p)
+             for cap in capacities for p in policies if p.stateful}
+    sessions = {cap: {name: {} for name in sessions_for} for cap in capacities}
+    session_visitors: dict[int, int] = {}
+    keep_visitors = bool(sessions_for) and "visitorid" in frame
     calibration = [[0, 0.0, 0] for _ in range(10)]
-    for session_id, session_views in selected.groupby("session_id", sort=False):
-        states = {cap: {p.name: Cache(cap, totals[cap][p.name]) for p in policies}
-                  for cap in capacities}
-        for row in session_views.itertuples(index=False):
-            ranked = scorer.score(row, index)
-            for item, probability in ranked:
+    covered = eligible = top1 = 0
+    novel_eligible = novel_top1 = novel_covered = 0
+    reciprocal = 0.0
+    demo: list[dict] = []
+    caches: dict[int, list] = {}
+    history: dict[int, set] = {}
+    expiries: list = []
+    sequence = 0
+    session_ids = frame.session_id.to_numpy()
+    scope_ids = frame.visitorid.to_numpy() if cache_scope == "visitor" else session_ids
+    last_session = ~pd.Series(session_ids).duplicated(keep="last").to_numpy()
+    last_scope = ~pd.Series(scope_ids).duplicated(keep="last").to_numpy()
+    for position, row in enumerate(frame.itertuples(index=False)):
+        if order == "global":
+            now = int(row.timestamp)
+            while expiries and expiries[0][0] <= now:
+                _, _, expired, trackers = heapq.heappop(expiries)
+                for tracker in trackers:
+                    tracker.retire(expired)
+            if advance is not None:
+                advance(now)
+        ranked = scorer.score(row, index)
+        session_id = int(session_ids[position])
+        item = int(row.itemid)
+        if count_stats:
+            is_eligible = bool(row.eligible)
+            for candidate, probability in ranked:
                 bucket = min(9, int(probability * 10))
                 calibration[bucket][0] += 1
                 calibration[bucket][1] += probability
-                calibration[bucket][2] += int(bool(row.eligible) and item == row.next_item)
-            if bool(row.eligible):
+                calibration[bucket][2] += int(is_eligible and candidate == row.next_item)
+            seen = history.setdefault(session_id, set())
+            seen.add(item)
+            if is_eligible:
                 eligible += 1
-                actual_rank = next((n for n, (item, _) in enumerate(ranked[:8], 1)
-                                    if item == row.next_item), None)
+                actual_rank = next((n for n, (candidate, _) in enumerate(ranked[:8], 1)
+                                    if candidate == row.next_item), None)
                 if actual_rank is not None:
                     covered += 1
                     top1 += int(actual_rank == 1)
                     reciprocal += 1 / actual_rank
-            depths = {p.name: p.depth(ranked) for p in policies}
+                # Novel: the next item is not among this session's views so
+                # far, so a session cache could not already hold it.
+                if int(row.next_item) not in seen:
+                    novel_eligible += 1
+                    if actual_rank is not None:
+                        novel_covered += 1
+                        novel_top1 += int(actual_rank == 1)
+                if len(demo) < demo_limit:
+                    demo.append({"timestamp": int(row.timestamp), "session_id": session_id,
+                                 "current_item": item, "actual_next_item": int(row.next_item),
+                                 "top_candidates": [[c, round(p, 4)] for c, p in ranked[:8]]})
+        if keep_visitors:
+            session_visitors[session_id] = int(row.visitorid)
+        scope = int(scope_ids[position])
+        states = caches.get(scope)
+        if states is None:
+            states = []
             for cap in capacities:
-                for p in policies:
-                    cache = states[cap][p.name]
-                    before = (cache.counters.hits, cache.counters.issued, cache.counters.useful)
-                    cache.demand(int(row.itemid))
-                    depth = depths[p.name]
-                    cache.counters.depth_counts[depth] += 1
-                    for item, _ in ranked[:depth]:
-                        cache.prefetch(item)
-                    record = sessions[cap][p.name][int(session_id)]
-                    record[0] += cache.counters.hits - before[0]
-                    record[1] += cache.counters.issued - before[1]
-                    record[2] += 1
-                    record[3] += cache.counters.useful - before[2]
-    extra = {"oracle_candidate_coverage_at_8": covered / eligible if eligible else 0.0,
-             "oracle_eligible_pairs": eligible, "ranking_hit_at_1": top1 / eligible if eligible else 0.0,
-             "ranking_mrr_at_8": reciprocal / eligible if eligible else 0.0,
-             "replayed_views": len(selected), "calibration_bins": calibration}
-    return {cap: ([totals[cap][p.name].row(p.name, cap) for p in policies],
-                  {**extra, "sessions": sessions[cap]}) for cap in capacities}
+                for policy in policies:
+                    tracker = GateTracker(gates[(cap, policy.name)]) if policy.stateful else None
+                    cache = Cache(cap, totals[cap][policy.name],
+                                  on_evict=tracker.on_evict if tracker is not None else None)
+                    states.append((cap, policy, cache, tracker))
+            caches[scope] = states
+        chosen: dict[str, tuple[int, list]] = {}
+        for cap, policy, cache, tracker in states:
+            counters = cache.counters
+            before = (counters.hits, counters.issued, counters.useful)
+            if tracker is not None:
+                tracker.demand(cache, item)
+                depth = tracker.prefetch(cache, ranked, session_id)
+            else:
+                cache.demand(item)
+                if policy.cache_aware:
+                    depth, nominal = policy.choose(ranked, cache.blocks)
+                else:
+                    # Residency-blind decisions are the same for every capacity.
+                    if policy.name not in chosen:
+                        chosen[policy.name] = policy.choose(ranked, ())
+                    depth, nominal = chosen[policy.name]
+                for candidate, _ in nominal:
+                    cache.prefetch(candidate)
+            counters.depth_counts[depth] += 1
+            if policy.name in sessions_for:
+                record = sessions[cap][policy.name].setdefault(session_id, [0, 0, 0, 0])
+                record[0] += counters.hits - before[0]
+                record[1] += counters.issued - before[1]
+                record[2] += 1
+                record[3] += counters.useful - before[2]
+        if last_session[position]:
+            history.pop(session_id, None)
+            trackers = [state[3] for state in states if state[3] is not None]
+            if trackers:
+                # Unused prefetches are credited once the session has been
+                # idle for the session gap, which is when a live system
+                # would know it had ended.
+                heapq.heappush(expiries, (int(row.timestamp) + session_gap_ms, sequence,
+                                          session_id, trackers))
+                sequence += 1
+        if last_scope[position]:
+            del caches[scope]
+    return {"totals": totals, "sessions": sessions, "session_visitors": session_visitors,
+            "stats": {"covered": covered, "eligible": eligible, "top1": top1,
+                      "reciprocal": reciprocal, "novel_eligible": novel_eligible,
+                      "novel_top1": novel_top1, "novel_covered": novel_covered,
+                      "replayed_views": len(frame), "calibration_bins": calibration},
+            "demo": demo}
+
+
+def finalize(partial: dict, policies: list[Policy],
+             capacities: tuple[int, ...]) -> dict[int, tuple[list[dict], dict]]:
+    """Turn raw totals into the per-capacity (rows, extra) pairs callers read."""
+    stats = partial["stats"]
+    eligible, novel = stats["eligible"], stats["novel_eligible"]
+    extra = {"oracle_candidate_coverage_at_8": stats["covered"] / eligible if eligible else 0.0,
+             "oracle_eligible_pairs": eligible,
+             "ranking_hit_at_1": stats["top1"] / eligible if eligible else 0.0,
+             "ranking_mrr_at_8": stats["reciprocal"] / eligible if eligible else 0.0,
+             "novel_eligible_pairs": novel,
+             "novel_hit_at_1": stats["novel_top1"] / novel if novel else 0.0,
+             "novel_coverage_at_8": stats["novel_covered"] / novel if novel else 0.0,
+             "replayed_views": stats["replayed_views"],
+             "calibration_bins": stats["calibration_bins"]}
+    if partial["session_visitors"]:
+        extra["session_visitors"] = partial["session_visitors"]
+    out = {}
+    for cap in capacities:
+        sessions = defaultdict(lambda: defaultdict(lambda: [0, 0, 0, 0]))
+        for name, records in partial["sessions"][cap].items():
+            sessions[name].update(records)
+        rows = [partial["totals"][cap][p.name].row(p.name, cap) for p in policies]
+        out[cap] = (rows, {**extra, "sessions": sessions})
+    return out
+
+
+def replay(views: pd.DataFrame, index: CandidateIndex, model,
+           policies: list[Policy], capacity: int, max_views: int = 50000,
+           with_sessions: bool = False, scorer=None, *, order: str = "session",
+           cache_scope: str = "session",
+           session_gap_ms: int = SESSION_GAP_MS) -> tuple[list[dict], dict, list[dict]]:
+    """Replay complete sessions through one cache size.
+
+    By default each visitor session has its own browser cache (cross-visitor
+    sharing would model a proxy, not client-side page prefetching), and
+    sessions are replayed one after another. ``cache_scope="visitor"`` keeps
+    one cache across a visitor's sessions. ``order="global"`` interleaves
+    sessions by timestamp; it is required by the feedback gate and the online
+    index, whose state is shared across sessions.
+    """
+    if max_views < 0:
+        raise ValueError("max_views must be non-negative")
+    check_replay(views, index, policies, order, cache_scope)
+    selected = complete_views(views, max_views)
+    scorer = scorer if scorer is not None else FastScorer(model)
+    names = [p.name for p in policies] if with_sessions else ()
+    partial = replay_partial(selected, index, scorer, policies, (capacity,), order=order,
+                             cache_scope=cache_scope, sessions_for=names, demo_limit=8,
+                             session_gap_ms=session_gap_ms)
+    rows, extra = finalize(partial, policies, (capacity,))[capacity]
+    if not with_sessions:
+        extra["sessions"] = None
+    return rows, extra, partial["demo"]
+
+
+def replay_capacities(views: pd.DataFrame, index: CandidateIndex, model,
+                      policies: list[Policy], capacities: tuple[int, ...],
+                      max_views: int = 0, scorer=None, *, order: str = "session",
+                      cache_scope: str = "session", with_sessions: bool = True,
+                      session_gap_ms: int = SESSION_GAP_MS) -> dict[int, tuple[list[dict], dict]]:
+    """Score each request once, applying identical decisions to several caches."""
+    check_replay(views, index, policies, order, cache_scope)
+    selected = complete_views(views, max_views)
+    scorer = scorer if scorer is not None else FastScorer(model)
+    names = [p.name for p in policies] if with_sessions else ()
+    partial = replay_partial(selected, index, scorer, policies, tuple(capacities), order=order,
+                             cache_scope=cache_scope, sessions_for=names,
+                             session_gap_ms=session_gap_ms)
+    return finalize(partial, policies, tuple(capacities))
 
 
 def expected_calibration_error(bins: list[list[float]]) -> float:
@@ -254,6 +281,16 @@ def expected_calibration_error(bins: list[list[float]]) -> float:
 
 def break_even_waste(sessions: dict, adaptive: str, baseline: str,
                      repetitions: int = 500, seed: int = 42) -> dict:
+    """Waste cost at which ``adaptive`` and ``baseline`` tie, with a paired CI.
+
+    ``direction`` reads: ``wins_below`` (adaptive gains hits but wastes more,
+    so it wins below the threshold), ``wins_above`` (it loses hits but wastes
+    less), ``dominates`` (no fewer hits and less waste: it wins at every
+    non-negative cost, including equal waste with more hits), ``dominated``
+    (the mirror case) or ``constant`` (equal hits and equal waste). Bootstrap
+    draws whose waste difference is 0 have no threshold; ``dropped_draws``
+    counts them instead of hiding them.
+    """
     left, right = sessions[adaptive], sessions[baseline]
     keys = sorted(set(left) | set(right))
     hits = np.asarray([left[k][0] - right[k][0] for k in keys], dtype=float)
@@ -269,10 +306,18 @@ def break_even_waste(sessions: dict, adaptive: str, baseline: str,
         if denominator:
             draws.append(float(hits[ix].sum() / denominator))
     interval = [float(x) for x in np.quantile(draws, [0.025, 0.975])] if draws else [None, None]
+    if delta_w > 0:
+        direction = "wins_below" if delta_h > 0 else "dominated"
+    elif delta_w < 0:
+        direction = "dominates" if delta_h >= 0 else "wins_above"
+    elif delta_h:
+        direction = "dominates" if delta_h > 0 else "dominated"
+    else:
+        direction = "constant"
     return {"delta_hits": int(delta_h), "delta_waste": int(delta_w),
             "threshold": threshold, "paired_95pct_low": interval[0],
-            "paired_95pct_high": interval[1],
-            "direction": "wins_below" if delta_w > 0 else "wins_above" if delta_w < 0 else "constant"}
+            "paired_95pct_high": interval[1], "direction": direction,
+            "dropped_draws": repetitions - len(draws)}
 
 
 def paired_bootstrap(sessions: dict, adaptive: str, baseline: str,

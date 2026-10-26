@@ -70,15 +70,19 @@ def partition_sessions(views: pd.DataFrame, cuts) -> pd.DataFrame:
     return ordered.sort_values(["timestamp", "source_row"], kind="mergesort")
 
 
-def prepare(raw: str | Path, output_dir: str | Path, session_gap_minutes: int = 30) -> dict:
-    """Prepare all real view events; never synthesize missing rows or labels."""
+def build_views(raw: str | Path, session_gap_minutes: int = 30,
+                verify_source: bool = True) -> tuple[pd.DataFrame, dict]:
+    """Validate an events file and return (causal view records, profile).
+
+    ``verify_source=False`` skips only the pinned SHA-256 and row-count checks,
+    so the synthetic test fixture can use the same code path; its profile is
+    marked ``source_verified: False`` and is never research data.
+    """
     raw = Path(raw)
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
     if not raw.is_file():
         raise FileNotFoundError(f"RetailRocket events file missing: {raw}")
     raw_digest = sha256(raw)
-    if raw_digest != EXPECTED_CSV_SHA256:
+    if verify_source and raw_digest != EXPECTED_CSV_SHA256:
         raise ValueError("raw CSV SHA-256 differs from validated Kaggle version 2")
 
     frame = pd.read_csv(raw, dtype={"timestamp": "int64", "visitorid": "int32",
@@ -99,13 +103,13 @@ def prepare(raw: str | Path, output_dir: str | Path, session_gap_minutes: int = 
         raise ValueError(f"{int(unexpected_ids.sum())} non-transaction events contain transaction IDs")
 
     raw_rows = len(frame)
-    if raw_rows != EXPECTED_ROWS:
+    if verify_source and raw_rows != EXPECTED_ROWS:
         raise ValueError(f"expected {EXPECTED_ROWS:,} source rows; found {raw_rows:,}")
     duplicates = int(frame.duplicated(subset=EXPECTED).sum())
     frame = frame.drop_duplicates(subset=EXPECTED, keep="first").copy()
     frame["source_row"] = frame.index.astype("int32")
     event_counts = {str(k): int(v) for k, v in frame.event.value_counts().items()}
-    frame.sort_values(["visitorid", "timestamp", "source_row"], kind="mergesort", inplace=True)
+    frame = frame.sort_values(["visitorid", "timestamp", "source_row"], kind="mergesort")
     gap = frame.groupby("visitorid", sort=False).timestamp.diff()
     if session_gap_minutes <= 0:
         raise ValueError("session gap must be positive")
@@ -116,18 +120,17 @@ def prepare(raw: str | Path, output_dir: str | Path, session_gap_minutes: int = 
 
     views = frame.loc[frame.event.eq("view"),
                       ["timestamp", "visitorid", "itemid", "session_id", "source_row", "cart_count"]].copy()
-    views.sort_values(["timestamp", "source_row"], kind="mergesort", inplace=True)
+    views = views.sort_values(["timestamp", "source_row"], kind="mergesort")
     cuts = np.quantile(views.timestamp.to_numpy(), [0.4, 0.6, 0.8]).astype("int64")
     if len(set(cuts)) != 3:
         raise ValueError("time split boundaries are not distinct")
     views = partition_sessions(views, cuts)
 
-    path = output_dir / "views.csv.gz"
-    views.to_csv(path, index=False, compression="gzip")
     lengths = views.groupby("session_id", sort=False).size()
     profile = {
         "source": "https://www.kaggle.com/datasets/retailrocket/ecommerce-dataset",
         "dataset_version": 2,
+        "source_verified": bool(verify_source),
         "session_gap_minutes": session_gap_minutes,
         "raw_sha256": raw_digest,
         "raw_rows": raw_rows,
@@ -144,8 +147,19 @@ def prepare(raw: str | Path, output_dir: str | Path, session_gap_minutes: int = 
         "split_cutoffs_ms": [int(x) for x in cuts],
         "views_by_split": {str(k): int(v) for k, v in views.split.value_counts().sort_index().items()},
         "eligible_pairs_by_split": {str(k): int(v) for k, v in views.loc[views.eligible, "split"].value_counts().sort_index().items()},
-        "prepared_path": str(path),
     }
+    return views, profile
+
+
+def prepare(raw: str | Path, output_dir: str | Path, session_gap_minutes: int = 30,
+            verify_source: bool = True) -> dict:
+    """Prepare all real view events; never synthesize missing rows or labels."""
+    output_dir = Path(output_dir)
+    views, profile = build_views(raw, session_gap_minutes, verify_source)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / "views.csv.gz"
+    views.to_csv(path, index=False, compression="gzip")
+    profile["prepared_path"] = str(path)
     (output_dir / "profile.json").write_text(json.dumps(profile, indent=2), encoding="utf-8")
     return profile
 
