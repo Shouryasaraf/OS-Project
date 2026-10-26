@@ -8,8 +8,11 @@
 
 Streams each file in bounded chunks, so memory stays flat regardless of file
 size. ``--trace-dir`` may also hold ``.oracleGeneral.zst`` block traces; those
-carry no service times, so they always run under the explicit assumed cost
-model. Per-trace rows go to outputs/msrc_sweep.csv and outputs/msrc_sweep.md.
+carry no service times, so they never calibrate the cost model. The model is
+measured from the first ``.revised`` trace when there is one and is then applied
+to every trace, oracle ones included; with no ``.revised`` trace (or with
+``--no-cost-model``) every trace runs under the explicit assumed 5/100/50 model.
+Per-trace rows go to outputs/msrc_sweep.csv and outputs/msrc_sweep.md.
 """
 
 from __future__ import annotations
@@ -205,12 +208,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {label:<34}: {mode}{note}")
 
     ranked = [row for row in summary if row["scored"]]
-    slowest = min(ranked, key=lambda r: r["mean_us"])
-    best_hit = max(ranked, key=lambda r: r["mean_hit"])
     print()
-    if best_hit["mode"] == slowest["mode"]:
+    if not ranked:
+        # Every requested mode was skipped (e.g. `--modes lstm` with no
+        # artifact): there is nothing to rank, but the rows still get written.
+        print("  No mode produced a result, so nothing is ranked.")
+    elif (max(ranked, key=lambda r: r["mean_hit"])["mode"]
+          == min(ranked, key=lambda r: r["mean_us"])["mode"]):
         print("  The same policy wins on hit ratio and on cost - the clean case.")
     else:
+        best_hit = max(ranked, key=lambda r: r["mean_hit"])
+        slowest = min(ranked, key=lambda r: r["mean_us"])
         print(f"  NOTE: {best_hit['mode']} wins on hit ratio but "
               f"{slowest['mode']} is cheaper.")
         print("  Prefetching has to be paid for; report both, never one alone.")

@@ -320,7 +320,9 @@ class LinuxReadaheadTests(unittest.TestCase):
                 run = run + 1 if last is not None and block == last + 1 else 1
                 longest = max(longest, run)
                 last = block
-            self.assertLessEqual(longest, max_blocks)
+            # A scan ramps all the way up, so the ceiling is reached, not
+            # just respected (a run of zero would pass a bare <=).
+            self.assertEqual(longest, max_blocks)
         with self.assertRaises(ValueError):
             replay(scan, mode="linux_ra", linux_ra_max_blocks=0)
 
@@ -481,6 +483,24 @@ class SweepFixTests(unittest.TestCase):
             self.assertIn("lstm", text)
             self.assertIn("skipped: no trained artifact", text)
             self.assertIn("observed_precision", text.splitlines()[0])
+
+    def test_sweep_modes_with_every_mode_skipped_exits_zero(self):
+        """Nothing to rank must not crash the summary after the rows exist."""
+        module = self._sweep_modes()
+        with tempfile.TemporaryDirectory() as directory:
+            traces = Path(directory) / "traces"
+            traces.mkdir()
+            self._revised(traces, lines=400)
+            out = Path(directory) / "out"
+            with mock.patch.object(sweep, "LSTM_ARTIFACT",
+                                   Path(directory) / "absent.pt"), \
+                    mock.patch("sys.stdout"):
+                status = module.main(["--trace-dir", str(traces),
+                                      "--output-dir", str(out),
+                                      "--modes", "lstm"])
+            self.assertEqual(status, 0)
+            self.assertIn("skipped: no trained artifact",
+                          (out / "msrc_sweep.csv").read_text())
 
     def test_missing_lstm_artifact_is_a_skipped_row(self):
         with tempfile.TemporaryDirectory() as directory, \
