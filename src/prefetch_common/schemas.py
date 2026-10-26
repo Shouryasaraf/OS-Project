@@ -189,6 +189,19 @@ _DISK_DELTAS = (
     _c("reps", "int"), _c("seed", "int"),
 )
 
+_DISK_WINNERS = (
+    _c("config", "str"), _c("merge", "str"), _c("capacity", "int"),
+    _c("latency", "str", "assumed only: every competing policy under one cost model"),
+    _c("corpus", "str", "'all' or one corpus"),
+    _c("metric", "str", "hit_ratio (highest wins) | device_ios (fewest wins)"),
+    _c("policy", "str"),
+    _c("traces_won", "int", "traces where this policy is best; a tie counts for every tied policy"),
+    _c("n_traces", "int", "traces this policy ran on"),
+    _c("mean_value", "float?", "mean hit ratio, or mean device_ios ratio to none"),
+    _c("rank_by_mean", "int?", "1 = best mean"),
+    _c("note", "str?"),
+)
+
 _DISK_KAPPA = (
     _c("config", "str"), _c("merge", "str"), _c("capacity", "int"),
     _c("trace", "str"), _c("corpus", "str"), _c("policy", "str"),
@@ -411,6 +424,8 @@ SCHEMAS: dict[str, Schema] = {s.name: s for s in (
             "T2 per-corpus sub-columns; same columns as table_main", _DISK_TABLE),
     _schema("disk/deltas.csv", "csv", "WP10 analysis (E1)",
             "every headline delta with paired and cluster CIs", _DISK_DELTAS),
+    _schema("disk/winners.csv", "csv", "WP10 analysis (E1)",
+            "per-trace winner counts by hit ratio and device I/Os", _DISK_WINNERS),
     _schema("disk/kappa.csv", "csv", "WP10 analysis (E1)",
             "kappa* per (trace, policy); F4", _DISK_KAPPA),
     _schema("disk/corpus_profile.csv", "csv", "WP10 (E1)",

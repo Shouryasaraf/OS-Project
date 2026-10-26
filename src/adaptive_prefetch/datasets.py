@@ -9,7 +9,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from .simulator import DEFAULT_CAPACITY
-from .trace import Request, load_csv, transition_trace
+# One tuple of loader profiles for every entry point (oracle included); a
+# second copy here had already drifted from the loader's.
+from .trace import FORMATS, Request, iter_csv_chunks, load_csv, transition_trace
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -25,7 +27,6 @@ LSTM_ARTIFACT = REPO / "models" / "lstm_delta.pt"
 #: an artifact trained on the benchmark traces can never be silently reused.
 LSTM_TRAINING_RECORD = LSTM_ARTIFACT.with_suffix(".training.json")
 OUTPUT_DIR = REPO / "outputs"
-FORMATS = ("auto", "normalized", "msr", "iotta8", "alibaba", "revised")
 
 #: MSRC traces used for the default run. The full directory holds 32 files up
 #: to 2.6 GB each and ``load_csv`` materialises a whole file, so the default
@@ -38,6 +39,13 @@ QUICK_MSRC = ("hm_1.revised", "mds_0.revised", "stg_0.revised",
 #: Requests kept per real trace. These files are large; a full load dominates
 #: runtime and adds nothing to a per-dataset hit-ratio comparison.
 REAL_TRACE_LIMIT = 40000
+#: The same under ``main.py --quick``, which must finish in about 30 s.
+#: MSRC-trace-003 is absent on the development machine, so this was measured
+#: with five stand-in ``.revised`` files cut from oracle traces (host load
+#: ~50): at 40k requests each a quick run took 133 s, dominated by the
+#: 13-mode benchmark and the EDA profile; the Belady pass is only 1-2 s per
+#: trace, so skipping it alone could not meet the budget. At 5k it took 24 s.
+QUICK_REAL_TRACE_LIMIT = 5000
 
 #: Name prefixes that mark a dataset as generated rather than measured.
 SYNTHETIC_PREFIXES = ("synthetic", "demo")
@@ -78,9 +86,26 @@ def synthetic_datasets(window_size: int = 32) -> list[tuple[str, list]]:
     return datasets
 
 
+def trace_head(path: str | Path, limit: int, format: str = "revised") -> list[Request]:
+    """The first ``limit`` requests of a trace, read by streaming.
+
+    ``load_csv`` parses the whole file before it can be cut, which for a
+    2.6 GB ``.revised`` file is minutes of work for 40k kept requests. The
+    head is the same requests ``load_csv(...)[:limit]`` returns; only the
+    time-order check stops at the head.
+    """
+    head: list[Request] = []
+    for chunk in iter_csv_chunks(path, format, max(1000, min(limit, 250_000))):
+        head.extend(chunk[:limit - len(head)])
+        if len(head) >= limit:
+            break
+    return head
+
+
 def default_datasets(window_size: int = 32,
                      capacity: int = DEFAULT_CAPACITY, *,
-                     msrc_dir: str | Path | None = None) -> list[tuple[str, list]]:
+                     msrc_dir: str | Path | None = None,
+                     real_trace_limit: int = REAL_TRACE_LIMIT) -> list[tuple[str, list]]:
     """The dataset set used when running non-interactively.
 
     ``data/samples/demo.csv`` is deliberately not in it. It is one more
@@ -88,6 +113,7 @@ def default_datasets(window_size: int = 32,
     seeded synthetic traces only double-counts the generator, and the copy
     committed before the generator fix (D10) carried the largest "gain" of
     any dataset. The interactive picker can still load it as a custom file.
+    ``real_trace_limit`` is the number of requests kept per MSRC trace.
     """
     datasets = synthetic_datasets(window_size)
     for number in ("1", "2"):
@@ -99,10 +125,8 @@ def default_datasets(window_size: int = 32,
         for name in QUICK_MSRC:
             path = trace_dir / name
             if path.is_file():
-                requests = load_csv(path, "revised")
-                if len(requests) > REAL_TRACE_LIMIT:
-                    requests = requests[:REAL_TRACE_LIMIT]
-                datasets.append((f"msrc_{path.stem}", requests))
+                datasets.append((f"msrc_{path.stem}",
+                                 trace_head(path, real_trace_limit)))
     return datasets
 
 
