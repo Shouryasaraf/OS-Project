@@ -55,9 +55,11 @@ def dataset_overview(datasets: list[tuple[str, list]], capacity: int) -> str:
                      f"{100 * fraction:>6.1f}% {oracle:>8}")
     lines.append("")
     lines.append("  oracle = hit ratio with PERFECT one-request lookahead: every read")
-    lines.append("           is prefetched just before it is issued. A reference,")
-    lines.append("           near 100% by construction; eda.md has the LRU and")
-    lines.append("           Belady MIN demand-cache references.")
+    lines.append("           after the first window is prefetched just before it is")
+    lines.append("           issued, so it falls short of 100% only through that")
+    lines.append("           unprefetched window and requests larger than the cache.")
+    lines.append("           A reference; eda.md has the LRU and Belady MIN")
+    lines.append("           demand-cache references.")
     lines.append("  read% = 0.0 means no read blocks at all, so every cache metric")
     lines.append("  is 0/0 and no policy can be credited with an improvement.")
     lines.append("")
@@ -122,7 +124,10 @@ def classifier_section(accuracy: float, correct: int, total: int,
         lines.append("")
         widest = transfer_rows[-1]
         gnb, qda = float(widest["gnb"]), float(widest["qda"])
-        if gnb > qda:
+        if gnb == qda:
+            lines.append(f"  -> at the widest shift ({widest['label']}) both models score")
+            lines.append(f"     {100 * gnb:.2f}%, so this run does not separate them.")
+        elif gnb > qda:
             lines.append(f"  -> at the widest shift ({widest['label']}) the diagonal model")
             lines.append(f"     keeps {100 * gnb:.2f}% and the full covariance {100 * qda:.2f}%.")
             lines.append("     This is the measurement behind the Naive Bayes default.")
@@ -464,7 +469,8 @@ def real_world_section(rows: list[dict], capacity: int,
     total = len(scored)
     wins: dict[str, int] = {}
     for group in scored.values():
-        best = max((r for r in group if r["status"] == "ok" and r["mode"] != "none"),
+        # 'none' competes here: on some real traces no prefetcher beats it.
+        best = max((r for r in group if r["status"] == "ok"),
                    key=lambda r: float(r["hit_ratio"]))
         wins[str(best["mode"])] = wins.get(str(best["mode"]), 0) + 1
     lines.append("  Highest hit ratio per real dataset: " + ", ".join(

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -156,6 +157,18 @@ def _training_record() -> dict | None:
         return None
 
 
+def _artifact_digest() -> str | None:
+    """SHA-256 of the LSTM artifact, binding the training record to it.
+
+    ``train-lstm`` saves to the same path by default, so a record that only
+    described the selection would vouch for whatever artifact replaced it.
+    """
+    try:
+        return hashlib.sha256(LSTM_ARTIFACT.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
 def resolve_lstm(datasets: list[tuple[str, list]], interactive: bool,
                  quick: bool, epochs: int,
                  window_size: int = 32) -> tuple[str | None, str]:
@@ -164,8 +177,9 @@ def resolve_lstm(datasets: list[tuple[str, list]], interactive: bool,
     The LSTM is trained on :func:`lstm_training_set`, generated traces whose
     seeds are disjoint from every benchmark dataset. It used to be trained on
     the benchmark traces themselves and then scored on them. A cached
-    artifact is reused only when its training record matches that selection,
-    so an artifact of unknown or in-sample provenance is retrained.
+    artifact is reused only when its training record matches that selection
+    and the artifact's own digest, so an artifact of unknown or in-sample
+    provenance (e.g. one ``train-lstm`` saved over it) is retrained.
     """
     if quick:
         return None, "skipped (--quick)"
@@ -177,7 +191,7 @@ def resolve_lstm(datasets: list[tuple[str, list]], interactive: bool,
 
     if LSTM_ARTIFACT.is_file():
         from adaptive_prefetch.lstm import load_predictor
-        if _training_record() != record:
+        if _training_record() != {**record, "artifact_sha256": _artifact_digest()}:
             print("  cached LSTM artifact has no matching training record "
                   "(unknown or in-sample provenance); retraining")
         else:
@@ -197,12 +211,15 @@ def resolve_lstm(datasets: list[tuple[str, list]], interactive: bool,
     from adaptive_prefetch.lstm import train_lstm
     print(f"  training LSTM on {provenance} / {record['requests']:,} requests "
           f"for {epochs} epochs...")
+    # The old record no longer describes the artifact once training starts.
+    LSTM_TRAINING_RECORD.unlink(missing_ok=True)
     try:
         LSTM_ARTIFACT.parent.mkdir(parents=True, exist_ok=True)
         result = train_lstm(LSTM_ARTIFACT, traces=[r for _, r in training],
                             epochs=epochs)
     except (RuntimeError, ValueError) as exc:
         return None, f"unavailable: {exc}"
+    record["artifact_sha256"] = _artifact_digest()
     LSTM_TRAINING_RECORD.write_text(json.dumps(record, indent=2) + "\n",
                                     encoding="utf-8")
     return str(LSTM_ARTIFACT), (f"trained on {provenance}, "

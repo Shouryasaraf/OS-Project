@@ -234,6 +234,16 @@ class ReportTests(unittest.TestCase):
         for literal in ("+0.4 points", "4.10", "18.99", "web_3", "49%"):
             self.assertNotIn(literal, text)
 
+    def test_none_can_have_the_highest_hit_ratio(self):
+        # On some real traces no prefetcher beats 'none'; the per-dataset
+        # winner count must say so rather than credit the best prefetcher.
+        rows = [dict(r) for r in self.rows]
+        for row in rows:
+            if row["dataset"] == "real_a" and row["mode"] == "none":
+                row["hit_ratio"] = 1.0
+        text = real_world_section(rows, 2048)
+        self.assertIn("none 1/2", text)
+
     def test_break_even_sentence_follows_the_cost_model(self):
         degenerate = real_world_section(self.rows, 2048, LatencyModel(1, 100, 100))
         self.assertIn("break-even precision is 1.0101", degenerate)
@@ -340,9 +350,19 @@ def _signature(requests):
     return tuple((r.lba, r.size_blocks, r.operation) for r in requests)
 
 
+def _benchmark_datasets():
+    """The default benchmark set without the (gitignored) MSRC traces.
+
+    ``default_datasets`` would otherwise load each local MSRC file in full,
+    which takes minutes and gigabytes on a machine that has the collection.
+    """
+    with tempfile.TemporaryDirectory() as empty:
+        return default_datasets(32, msrc_dir=empty)
+
+
 class LstmTrainingSetTests(unittest.TestCase):
     def test_training_set_is_disjoint_from_the_benchmark(self):
-        benchmark = default_datasets(32)
+        benchmark = _benchmark_datasets()
         training, record = lstm_training_set(benchmark, 32)
         self.assertTrue(set(LSTM_TRAINING_SEEDS).isdisjoint(BENCHMARK_SEEDS))
         self.assertEqual(record["seeds"], list(LSTM_TRAINING_SEEDS))
@@ -358,7 +378,7 @@ class LstmTrainingSetTests(unittest.TestCase):
 
     def test_resolve_lstm_trains_on_the_disjoint_set_and_records_it(self):
         main = _load_main()
-        benchmark = default_datasets(32)
+        benchmark = _benchmark_datasets()
         seen = []
 
         def fake_train(path, traces=None, epochs=60, **_):
@@ -390,6 +410,11 @@ class LstmTrainingSetTests(unittest.TestCase):
             main.LSTM_TRAINING_RECORD.unlink()
             main.resolve_lstm(benchmark, False, False, 2, 32)
             self.assertEqual(len(seen), 2)
+            # So is one saved over the recorded artifact (``train-lstm`` uses
+            # the same default path), even though the record still exists.
+            main.LSTM_ARTIFACT.write_bytes(b"trained on something else")
+            main.resolve_lstm(benchmark, False, False, 2, 32)
+            self.assertEqual(len(seen), 3)
 
 
 if __name__ == "__main__":
