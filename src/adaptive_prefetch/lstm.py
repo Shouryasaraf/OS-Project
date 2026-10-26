@@ -247,10 +247,12 @@ class LSTMPrefetcher:
 
 
 def load_predictor(path: str | Path) -> LSTMPrefetcher:
-    torch = _torch()
+    # Check the file before importing torch, so a missing artifact reports
+    # itself the same way with or without the [lstm] extra installed.
     source = Path(path)
     if not source.is_file():
         raise FileNotFoundError(f"LSTM artifact not found: {source}")
+    torch = _torch()
 
     artifact = torch.load(source, map_location="cpu", weights_only=True)
     if artifact.get("artifact_version") != ARTIFACT_VERSION:

@@ -3,17 +3,32 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "adaptive-disk-prefetch"
-version = "0.1.0"
-description = "Review 2 prototype for workload-aware disk I/O prefetching"
+name = "os-prefetch-studies"
+version = "0.2.0"
+description = "Two prefetching studies: adaptive disk I/O block prefetching and adaptive web product-page prefetching"
 requires-python = ">=3.10"
+# The disk core (adaptive_prefetch) is stdlib-only by design; everything else
+# is an extra.
 dependencies = []
 
 [project.optional-dependencies]
+traces = ["zstandard>=0.22"]
+web = ["numpy>=1.24", "pandas>=2.0", "scikit-learn>=1.3", "joblib>=1.3"]
+gpu = ["torch>=2.2"]
+# Kept so `pip install -e .[lstm]`, which lstm.py's error message names, still works.
 lstm = ["torch>=2.2"]
+paper = ["matplotlib>=3.7", "scipy>=1.10"]
+all = [
+    "zstandard>=0.22",
+    "numpy>=1.24", "pandas>=2.0", "scikit-learn>=1.3", "joblib>=1.3",
+    "torch>=2.2",
+    "matplotlib>=3.7", "scipy>=1.10",
+]
 
 [project.scripts]
 adaptive-prefetch = "adaptive_prefetch.cli:main"
+webprefetch = "webprefetch.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["adaptive_prefetch*", "webprefetch*", "prefetch_common*"]

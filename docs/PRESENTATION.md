@@ -1,11 +1,34 @@
-# Project Review 2 guide
+# Presentation outline and viva preparation
+
+**Status: stub (WP0).** This file replaces `docs/REVIEW2.md` and the two
+`presentation/*.pptx` decks, which were removed from `master` because their
+numbers were stale (old LSTM rows, the "7.3x faster inference" claim). Both
+remain in git history, last present at commit `66226bb`. No `.pptx` can be
+generated in this environment (`python-pptx` is not installed), so the final
+deliverable is this outline plus a Beamer deck, `presentation/slides.tex`,
+that reuses `paper/figures/*.pdf` (plan lead decision L5, owned by WP15).
+
+What WP15 will put here: a slide-by-slide outline covering **both** studies
+(disk I/O block prefetching and web product-page prefetching) and viva
+questions and answers, with every number generated from `results/`. Until
+then, the only content is the disk study's Review 2 guide below.
+
+## Review 2 guide (disk study, carried over from `docs/REVIEW2.md`)
+
+This section is the former `docs/REVIEW2.md`, unchanged except for heading
+levels. It describes the disk study as it stood at Review 2, before the web
+study joined `master`: "131 unit tests" was the disk suite then, and the
+collection-wide figures are the MSRC-trace-003 sweep (D17 in
+`docs/DECISIONS.md`). Its numbers are from that run and must be regenerated
+before they are presented; they are not comparable with the oracleGeneral
+results the paper will use.
 
 Read `docs/DECISIONS.md` D11-D17 before the review. Those are the entries
 that explain why the headline result is what it is, and a reviewer who reads
 one of them and asks a follow-up is much easier to defend against than one
 who only saw a table.
 
-## Review rubric coverage
+### Review rubric coverage
 
 | Criterion | Evidence to show |
 | --- | --- |
@@ -14,7 +37,7 @@ who only saw a table.
 | Module completion (4) | Live `demo`, **12-mode** `benchmark`, `replay`, `sweep_modes`, and 131 unit tests. |
 | Presentation and discussion (4) | Slide outline, scripted demonstration, and viva answers below. |
 
-## System design and data flow
+### System design and data flow
 
 ```text
 CSV or generated I/O requests
@@ -50,7 +73,7 @@ policy for the following requests. This avoids using future information.
 For controlled synthetic streams, a known window label can update the online
 model *after* prediction. No online update is made on unlabelled real traces.
 
-## Modules and status
+### Modules and status
 
 | Module | Input | Output | Status |
 | --- | --- | --- | --- |
@@ -69,7 +92,7 @@ model *after* prediction. No online update is made on unlabelled real traces.
 | Benchmark + cost model | Same trace/cache for each mode | Hit, waste, oracle recall, modelled cost, compute timing | Implemented; **cost column degenerate by default** |
 | Kernel I/O integration | Live OS requests | Live prefetch actions | Outside current user-space prototype |
 
-## The result, stated honestly before you are asked for it
+### The result, stated honestly before you are asked for it
 
 Say this first; do not let a reviewer discover it in a table.
 
@@ -90,7 +113,7 @@ Then give the two things that make it honest:
    help" -- has been **retracted**. It was an artefact of every mode
    prefetching 2 blocks (D13, D16).
 
-## Prepared live demonstration
+### Prepared live demonstration
 
 1. State the result above, including the retraction. Two minutes, and it
    frames everything that follows.
@@ -119,7 +142,7 @@ Then give the two things that make it honest:
    At the default the break-even is above 100%, so a correct gate *stays
    shut*; that is the model working, not the model failing.
 
-## Suggested slide sequence
+### Suggested slide sequence
 
 1. Title and objective.
 2. **Result first**: fixed depth-8 read-ahead wins 29/31; the classifier is
@@ -137,7 +160,7 @@ Then give the two things that make it honest:
 11. Limitations, the honest caveats, and what would come next (per-window
     depth selection, not a better classifier).
 
-## Discussion preparation
+### Discussion preparation
 
 - **Why classify a window?** One request alone has no access pattern. Multiple
   recent requests reveal deltas, locality, and timing.
@@ -189,7 +212,7 @@ Then give the two things that make it honest:
   capacities, and validating the latency model against real device
   observations.
 
-## Verification record
+### Verification record
 
 Run the commands in README immediately before the review and paste the actual
 results into slides. Do not use the expected outcomes from Review 1 as if they

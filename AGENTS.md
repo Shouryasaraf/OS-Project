@@ -4,6 +4,29 @@ ML-based adaptive disk I/O prefetching — a **user-space simulation** (replay o
 recorded I/O against a modelled LRU cache). It does not touch the OS or a real
 device. Read this before changing claims, numbers, or docs.
 
+## Master branch: two studies in one repository
+
+`master` carries two studies for one paper. Everything below this section is
+the **disk study** (`src/adaptive_prefetch`), carried over from `main`
+unchanged. The **web study** (`src/webprefetch`, RetailRocket product-page
+prefetching) came from `pivot/retailrocket-adaptive-prefetch`; its audit log is
+`audit/GRILL.md`, its docs are under `docs/web/`, and that branch's committed
+outputs are kept verbatim in `results/pivot_original/` (never edit them). The
+binding work plan is `docs/MASTER_PLAN.md`.
+
+- The disk core stays **stdlib-only**. The web study needs the `web` extra
+  (numpy, pandas, scikit-learn, joblib); the repository venv `.venv/` has
+  every extra. Web tests (`tests/test_web_*.py`) skip, not error, without
+  them, so system `python3` still runs the disk suite.
+- The disk study owns `outputs/` and `models/`. The web study writes
+  `outputs/web/` and `models/web/` (`webprefetch/paths.py`) so neither
+  overwrites the other; both are gitignored. `results/` is **tracked** and
+  holds the small aggregates the paper reads.
+- `python reproduce.py <study>` dispatches to `repro/<study>.py`, one module
+  per study, each owned by one work package (`repro/__init__.py`).
+- Large data is gitignored by name (`data/block-traces`, `data/raw`,
+  `data/processed`, `data/MSRC-trace-003`); `data/samples/` is tracked.
+
 ## Commands
 
 The package lives in `src/` and is **not installed** in this environment. From
@@ -13,7 +36,7 @@ the repo root, `python -m adaptive_prefetch ...` fails with
 
 ```powershell
 $env:PYTHONPATH='src'
-python -m unittest discover -s tests -v     # 131 tests, ~15s
+python -m unittest discover -s tests -v     # whole suite (131 disk + web), ~15s
 python main.py                              # full research run, no prompts, ~6 min
 python main.py --quick                      # skip LSTM + regime sweep
 python main.py --interactive                # guided dataset/LSTM picker
@@ -248,22 +271,23 @@ slide deck, preserve:
 - LSTM predicts address **deltas**, not workload classes — compare cache metrics
   and inference cost, never its "accuracy".
 - Oracle re-access recall can look high while hit ratio is low; report both.
-- `docs/STAGE2_RESULTS.md`, `docs/REVIEW2.md`, and `presentation/README.md` all
-  state that stored numbers are from an earlier run and must be regenerated from
+- Stored numbers in docs are from earlier runs and must be regenerated from
   a fresh benchmark before presenting. Re-run the benchmark; do not hand-edit
-  numbers into docs or `.pptx`.
-- `presentation/Review2_Adaptive_Disk_IO_Prefetching_v5.pptx` is an outdated
-  draft — do not update it.
+  numbers into docs or slides.
+- The stale `docs/STAGE2_RESULTS.md`, `docs/REVIEW2.md` and both Review 2
+  `.pptx` decks were removed from `master` (git history keeps them, last at
+  `66226bb`). The Review 2 guide survives as the carried-over section of
+  `docs/PRESENTATION.md`; its numbers are still the old run's.
 
 ## Known current state (fix or preserve deliberately)
 
-- **`docs/STAGE2_RESULTS.md` and both `presentation/*.pptx` decks are stale.**
-  They carry pre-fix numbers including the old LSTM rows (~7% hit ratio) and
-  the old "7.3x faster inference" claim (the real gap is ~640x per request).
-  They must be regenerated from a fresh `python main.py` before presenting.
-  `docs/CLASSIFIER_EVAL.md`, `docs/PIPELINE.md`, `docs/REVIEW2.md`,
-  `docs/architecture.md`, `docs/MSR_SAMPLE_TRAINING.md` and
-  `docs/DECISIONS.md` are current.
+- **The removed `docs/STAGE2_RESULTS.md` and `.pptx` decks were stale.**
+  They carried pre-fix numbers including the old LSTM rows (~7% hit ratio)
+  and the old "7.3x faster inference" claim (the real gap is ~640x per
+  request); do not restore them from history.
+  `docs/CLASSIFIER_EVAL.md`, `docs/PIPELINE.md`, `docs/architecture.md`,
+  `docs/MSR_SAMPLE_TRAINING.md` and `docs/DECISIONS.md` are current for the
+  disk study.
 - **The drift report demonstrates nothing.** All eight rows are lag 0,
   accuracy 1.000 — frozen and online are identical because the task is
   saturated. The console prints that warning, but a reviewer skimming the
@@ -313,7 +337,7 @@ tried, what the measurement said, and why the default stayed Naive Bayes.
 `docs/architecture.md` is the best module map, data-flow, and per-metric limits
 reference. `docs/CLASSIFIER_EVAL.md` holds the detailed classifier comparison,
 the LSTM rework, the full bug list, and the measured limits of the available
-data. `docs/PIPELINE.md` is the short pipeline/12-mode summary, `docs/REVIEW2.md`
+data. `docs/PIPELINE.md` is the short pipeline/12-mode summary, `docs/PRESENTATION.md`
 the demo/viva script, `docs/implementation-stage2.md` and
 `implementation-stage3.md` the executed work plans, `docs/MSR_SAMPLE_TRAINING.md`
 the weak-supervision record. `README.md` is the user-facing command reference.
