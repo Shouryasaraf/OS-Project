@@ -1,0 +1,41 @@
+{
+  "format": "prefetch_common.provenance/1",
+  "study": "web",
+  "command": [
+    "python",
+    "tests/fixtures/make_results_fixtures.py"
+  ],
+  "git_sha": "0000000000000000000000000000000000000000",
+  "git_dirty": false,
+  "created_utc": "2026-01-01T00:00:00+00:00",
+  "host": {
+    "hostname": "fixture-host",
+    "platform": "Linux-fixture",
+    "kernel": "6.14.0",
+    "python": "3.12.0",
+    "cpu_count": 128
+  },
+  "load_avg": {
+    "start": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "end": [
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "wall_s": 0.0,
+  "gpu": null,
+  "inputs": {},
+  "outputs": {
+    "comparisons.csv": "a89f99ead885fc2e5326aa35003f96fcd9b5e03bf89046a4e289e7202b0c7270",
+    "decomposition.csv": "4cedf32e92e8d823fb20880bb8df2c48116742bc67a0f48839c80ba2278aee3b",
+    "freshness.csv": "4c1881cb6cc177e0ba95ccb1cfc946ed8b432d944e0983d6e385aa7dd4f51437",
+    "policy_metrics.csv": "b7b4c6eff7eaa54e4f44778d918802eac325d51d1fe609c7c763293810c9ec2d",
+    "seq_metrics.csv": "f4131a366ac22c33a7391a5f3f65dd06521ddc5d223e19d1ef441b6410773ee0"
+  },
+  "notes": "FIXTURE: synthetic values from tests/fixtures/make_results_fixtures.py; not a result, never quote"
+}

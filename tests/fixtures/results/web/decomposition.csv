@@ -1,0 +1,9 @@
+lever,policy,baseline,scorer,baseline_scorer,split,capacity,cache_scope,metric,cost,estimate,ci_lo,ci_hi,sessions,reps,seed,note
+ranker,trans_s0_k1,logistic_k1,trans_s0,logistic,test,8,session,hit_ratio,0.0,0.012048,0.011248,0.012848,120000,200,42,
+freshness,fixed4,fixed4,trans_online,logistic,test,8,session,hit_ratio,0.0,0.010223,0.009422999999999999,0.011023,120000,200,42,
+depth,fixed4,fixed1,logistic,logistic,test,8,session,hit_ratio,0.0,0.009661,0.008860999999999999,0.010461,120000,200,42,
+controller,adaptive_0.01,fixed2,logistic,logistic,test,8,session,utility_per_view,0.01,0.019467,0.018667000000000003,0.020267,120000,200,42,
+controller,adaptive_0.01,fixed4,logistic,logistic,test,32,session,utility_per_view,0.01,0.01666,0.015860000000000003,0.01746,120000,200,42,
+feedback,feedback_0.01,adaptive_0.01,logistic,logistic,test,8,session,utility_per_view,0.01,0.016871,0.016071000000000002,0.017671,120000,200,42,
+cache_scope,fixed4,fixed4,logistic,logistic,test,,visitor,hit_ratio,0.0,0.010969,0.010169,0.011769,120000,200,42,
+sequence_model,fixed4,fixed4,seq,trans_online,test,8,session,hit_ratio,0.0,0.003716,0.002916,0.004516,120000,200,42,fixture

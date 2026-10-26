@@ -1,0 +1,40 @@
+{
+  "format": "prefetch_common.provenance/1",
+  "study": "realio",
+  "command": [
+    "python",
+    "tests/fixtures/make_results_fixtures.py"
+  ],
+  "git_sha": "0000000000000000000000000000000000000000",
+  "git_dirty": false,
+  "created_utc": "2026-01-01T00:00:00+00:00",
+  "host": {
+    "hostname": "fixture-host",
+    "platform": "Linux-fixture",
+    "kernel": "6.14.0",
+    "python": "3.12.0",
+    "cpu_count": 128
+  },
+  "load_avg": {
+    "start": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "end": [
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "wall_s": 0.0,
+  "gpu": null,
+  "inputs": {},
+  "outputs": {
+    "device_sdb.json": "ef430fec4c193efad92adde4e4d2c88949c3cd76568f15b20e5886bde755052f",
+    "device_ssd.json": "7a56566c3d3866e411e41ce4bfbaf51d30eff135d7b33fa8234ee1f3b5dc7b0d",
+    "realio.csv": "b43f9106dd61dd5022c62edac3dc7267176254137b6893cfee103cb69cd1cffb",
+    "realio_summary.csv": "caf9d29039d02696714309bded39cd5ffd23d59d2a3f35991ed97faac3505e5f"
+  },
+  "notes": "FIXTURE: synthetic values from tests/fixtures/make_results_fixtures.py; not a result, never quote"
+}

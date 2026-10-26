@@ -1,0 +1,7 @@
+model,protocol,seed,status,split,train_range,epochs,hit_at_1,mrr_at_8,novel_hit_at_1,novel_recall_at_8,capacity,policy,cost,hit_ratio,issued_per_view,utility,train_s,infer_us_per_request,device,gpu_contention
+gru,validation,0,ok,split2,split 0 + 90% of split 1,20,0.042424,0.058211,0.03578,0.148881,8,fixed4,0.0,0.137937,3.9,0.131861,260.0,4.0,cuda,fixture: no GPU was used
+gru,validation,1,ok,split2,split 0 + 90% of split 1,20,0.032632,0.067628,0.032365,0.128313,8,fixed4,0.0,0.148724,3.9,0.137626,260.0,4.0,cuda,fixture: no GPU was used
+gru,validation,2,ok,split2,split 0 + 90% of split 1,20,0.041914,0.064586,0.037065,0.12176,8,fixed4,0.0,0.144288,3.9,0.142644,260.0,4.0,cuda,fixture: no GPU was used
+gru,final,0,ok,test,splits 0-2,20,0.036014,0.051336,0.024265,0.131765,8,fixed4,0.0,0.138488,3.9,0.135625,260.0,4.0,cuda,fixture: no GPU was used
+gru,final,1,ok,test,splits 0-2,20,0.04565,0.067287,0.028016,0.147704,8,fixed4,0.0,0.148549,3.9,0.139918,260.0,4.0,cuda,fixture: no GPU was used
+gru,final,2,ok,test,splits 0-2,20,0.044334,0.053822,0.031604,0.149053,8,fixed4,0.0,0.134591,3.9,0.142885,260.0,4.0,cuda,fixture: no GPU was used

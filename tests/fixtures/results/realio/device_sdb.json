@@ -1,0 +1,24 @@
+{
+  "device": "sdb",
+  "path": "/fixture/sdb/backing.bin",
+  "model": "FIXTURE-HDD",
+  "rotational": true,
+  "read_ahead_kb": 128,
+  "max_sectors_kb": 256,
+  "rand4k_p50_us": 5900.0,
+  "rand4k_mean_us": 6195.0,
+  "seq4k_p50_us": 30.0,
+  "seq64k_p50_us": 230.0,
+  "seq1m_MBps": 250.0,
+  "t_pos_us": 5900.0,
+  "t_xfer_us_per_block": 2.0,
+  "kappa": 2950.0,
+  "samples": 2000,
+  "foreign_io_frac": 0.0,
+  "load_avg": [
+    3.0,
+    3.0,
+    3.0
+  ],
+  "created_utc": "2026-01-01T00:00:00+00:00"
+}

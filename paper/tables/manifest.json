@@ -1,0 +1,101 @@
+{
+  "generator_format": "paper.genlib/1",
+  "results_root": "results",
+  "fixture": false,
+  "outputs": {
+    "tables/t1_datasets.tex": {
+      "inputs": {},
+      "missing": [
+        "disk/corpus_profile.csv",
+        "web/dataset_profile.json"
+      ],
+      "fixture": false
+    },
+    "tables/t1b_hardware.tex": {
+      "inputs": {},
+      "missing": [
+        "realio/device_*.json"
+      ],
+      "fixture": false
+    },
+    "tables/t2_disk_main.tex": {
+      "inputs": {},
+      "missing": [
+        "disk/table_main.csv"
+      ],
+      "fixture": false
+    },
+    "tables/t2b_disk_by_corpus.tex": {
+      "inputs": {},
+      "missing": [
+        "disk/table_by_corpus.csv"
+      ],
+      "fixture": false
+    },
+    "tables/t2c_learned_depth.tex": {
+      "inputs": {},
+      "missing": [
+        "gpu/disk_learned_depth.csv"
+      ],
+      "fixture": false
+    },
+    "tables/t3_realio.tex": {
+      "inputs": {},
+      "missing": [
+        "realio/realio_summary.csv"
+      ],
+      "fixture": false
+    },
+    "tables/t3b_realio_summary.tex": {
+      "inputs": {},
+      "missing": [
+        "realio/realio_summary.csv"
+      ],
+      "fixture": false
+    },
+    "tables/t4_web_dataset.tex": {
+      "inputs": {},
+      "missing": [
+        "web/dataset_profile.json"
+      ],
+      "fixture": false
+    },
+    "tables/t5_web_decomposition.tex": {
+      "inputs": {},
+      "missing": [
+        "web/decomposition.csv"
+      ],
+      "fixture": false
+    },
+    "tables/t6_web_comparisons.tex": {
+      "inputs": {},
+      "missing": [
+        "web/comparisons.csv"
+      ],
+      "fixture": false
+    },
+    "tables/t7_live.tex": {
+      "inputs": {},
+      "missing": [
+        "live/live_metrics.csv"
+      ],
+      "fixture": false
+    },
+    "tables/t7b_live_ablation.tex": {
+      "inputs": {},
+      "missing": [
+        "live/live_metrics.csv"
+      ],
+      "fixture": false
+    },
+    "tables/t8_cross_domain.tex": {
+      "inputs": {},
+      "missing": [
+        "disk/table_main.csv",
+        "live/live_metrics.csv",
+        "web/comparisons.csv"
+      ],
+      "fixture": false
+    }
+  }
+}
