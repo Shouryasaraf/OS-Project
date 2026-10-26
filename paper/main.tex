@@ -1,0 +1,76 @@
+% main.tex -- IEEE conference paper covering both prefetching studies in
+% this repository (disk blocks: src/adaptive_prefetch; product pages:
+% src/webprefetch). Compile on Overleaf with pdfLaTeX + BibTeX; no local
+% LaTeX toolchain is available (MASTER_PLAN L6). `python paper/check.py`
+% is the local gate. See paper/README.md.
+%
+% Rules for everything under sections/ (enforced by check.py):
+%   - Every number quoted in prose is a macro from numbers.tex, which
+%     paper/numbers.py writes from results/. Nothing is typed by hand.
+%   - Tables come from tables/*.tex (paper/tables/make_tables.py) and
+%     figures from figures/*.pdf (paper/figures/make_figures.py). Both read
+%     only results/**.
+%   - Every \cite key exists in refs.bib.
+
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{xcolor}
+
+% Generated: one \newcommand per quoted number (WP13 writes it).
+\input{numbers}
+
+% Skeleton marker for unwritten text. `check.py --final` fails while any
+% \todo remains, so none can reach the submitted paper.
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+
+\begin{document}
+
+% Working title from MASTER_PLAN section 5. It states a hypothesis that the
+% preregistered comparisons (results/*/PREREGISTERED.md) may contradict;
+% WP14 rewrites the title and abstract from whichever way they come out.
+\title{Depth, Freshness and Feedback, Not Prediction:\\
+What Makes Prefetching Pay, from Disk Blocks to Product Pages}
+
+% Students only; no supervisor or other author is listed.
+\author{%
+\IEEEauthorblockN{Ashvik Mishra}
+\IEEEauthorblockA{Vellore Institute of Technology (VIT)\\
+\todo{school, campus and e-mail}}
+\and
+\IEEEauthorblockN{Shourya Saraf}
+\IEEEauthorblockA{Vellore Institute of Technology (VIT)\\
+\todo{school, campus and e-mail}}
+}
+
+\maketitle
+
+\input{sections/abstract}
+
+\input{sections/introduction}
+\input{sections/background}
+\input{sections/model}
+\input{sections/systems}
+\input{sections/methodology}
+\input{sections/disk_results}
+\input{sections/realio_results}
+\input{sections/web_results}
+\input{sections/live_results}
+\input{sections/discussion}
+\input{sections/threats}
+\input{sections/conclusion}
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+% MASTER_PLAN L4: the target is 8 pages including figures, references
+% extra. Material that does not fit goes after the references; the
+% students may cut it.
+\appendices
+\input{sections/appendix}
+
+\end{document}

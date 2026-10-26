@@ -1,0 +1,34 @@
+% VI. Disk results (simulated). Every number is labelled simulated and uses
+% the canonical request reconstruction (constraints 1 and 13); hit ratios
+% on oracle traces include writes replayed as reads and are never compared
+% numerically with the MSRC-trace-003 D17 numbers (constraint 5).
+% Feeds from: results/disk/table_main.csv, table_by_corpus.csv, deltas.csv,
+% winners.csv, kappa.csv (E1) and results/gpu/disk_learned_depth.csv,
+% disk_lstm.csv (E2).
+% Generated: table T2; figures F2, F3, F4.
+
+\section{Disk Results}\label{sec:disk}
+
+\todo{Table T2: policy by mean hit ratio, delta versus none and versus
+sequential with CIs, precision, waste, device-I/O ratio and blocks-moved
+ratio, at 1 MiB and 64 MiB, pooled and per corpus, from
+results/disk/table\_main.csv and results/disk/table\_by\_corpus.csv.}
+
+\todo{Fig. F2: hit ratio versus read-ahead depth per cache size and corpus,
+from results/disk/table\_main.csv.}
+
+\todo{Fig. F3: device-I/O ratio versus hit gain, showing that hit ratio is
+not device work, from results/disk/deltas.csv.}
+
+\todo{Fig. F4: CDF of kappa* with the measured HDD and SSD kappa lines,
+from results/disk/kappa.csv and results/realio/device\_*.json.}
+
+\todo{The classifier negative result (adaptive versus sequential), the gate
+as a waste limiter, and the merge-sensitivity row, from
+results/disk/deltas.csv and results/disk/winners.csv. Classification
+accuracy is on synthetic windows only (constraint 2).}
+
+\todo{learned\_depth against the strongest fair baseline (VCF), over seeds
+with CIs, and the LSTM compared on cache metrics and inference cost only,
+never on accuracy (constraint 3), from results/gpu/disk\_learned\_depth.csv
+and results/gpu/disk\_lstm.csv. Name each artifact's training range.}

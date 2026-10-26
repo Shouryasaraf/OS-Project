@@ -1,0 +1,21 @@
+% III. A common model of prefetching. Definitions only; no measured
+% numbers. The derivation of the disk break-even must say it is a property
+% of the per-block, no-merge cost model, not of hardware (constraint 6).
+% Feeds from: docs/METRICS.md, src/prefetch_common/utility.py.
+% Figure F1 (schematic) comes from paper/figures/make_figures.py.
+% If space is short, fold this section into Sections IV-A and IV-C.
+
+\section{A Common Model of Prefetching}\label{sec:model}
+
+\todo{The cache abstraction shared by both domains: a demand stream, a
+bounded LRU cache, and a policy that issues speculative fetches.}
+
+\todo{Definitions from docs/METRICS.md: block hit ratio per 512-byte block,
+device I/Os, prefetch precision, wasted prefetches and cache pollution.}
+
+\todo{The utility U(c) = (hits - c * issued) / requests, the derivation of
+the disk cost model as U at c = p m / (m - h), the per-policy break-even
+c*, and kappa* (from src/prefetch\_common/utility.py). Quote the disk
+break-even only through its numbers.tex macro.}
+
+\todo{Fig. F1: the schematic of the shared abstraction.}
