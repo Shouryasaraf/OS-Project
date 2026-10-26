@@ -286,9 +286,10 @@ def break_even_waste(sessions: dict, adaptive: str, baseline: str,
     ``direction`` reads: ``wins_below`` (adaptive gains hits but wastes more,
     so it wins below the threshold), ``wins_above`` (it loses hits but wastes
     less), ``dominates`` (no fewer hits and less waste: it wins at every
-    non-negative cost), ``dominated`` (no more hits and more waste) or
-    ``constant`` (equal waste). Bootstrap draws whose waste difference is 0
-    have no threshold; ``dropped_draws`` counts them instead of hiding them.
+    non-negative cost, including equal waste with more hits), ``dominated``
+    (the mirror case) or ``constant`` (equal hits and equal waste). Bootstrap
+    draws whose waste difference is 0 have no threshold; ``dropped_draws``
+    counts them instead of hiding them.
     """
     left, right = sessions[adaptive], sessions[baseline]
     keys = sorted(set(left) | set(right))
@@ -309,6 +310,8 @@ def break_even_waste(sessions: dict, adaptive: str, baseline: str,
         direction = "wins_below" if delta_h > 0 else "dominated"
     elif delta_w < 0:
         direction = "dominates" if delta_h >= 0 else "wins_above"
+    elif delta_h:
+        direction = "dominates" if delta_h > 0 else "dominated"
     else:
         direction = "constant"
     return {"delta_hits": int(delta_h), "delta_waste": int(delta_w),

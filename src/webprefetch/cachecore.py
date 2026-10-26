@@ -1,7 +1,8 @@
 """The one browser-cache model: policies, counters and the speculative-first LRU.
 
-Stdlib only, so the replay simulator, the demo and the live HTTP client all
-wrap this same class instead of keeping hand copies that can drift apart.
+Stdlib only, so the replay simulator and any live client can wrap this same
+class instead of keeping hand copies that can drift apart. (The demo server
+still has its own cache loop; the replay simulator is the only user so far.)
 """
 
 from __future__ import annotations

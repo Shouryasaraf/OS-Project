@@ -63,6 +63,27 @@ def view_frame(rows):
     return ordered.sort_values(["timestamp", "source_row"], kind="mergesort")
 
 
+def interleaved_views(seed=3, visitors=8, sessions_each=3, length=6):
+    """Sessions of different visitors that overlap in time.
+
+    The committed fixture's sessions never overlap, so on it session order
+    and global order visit rows in the same order and cannot disagree. Each
+    visitor's sessions are more than 30 minutes apart, as prepare() makes them.
+    """
+    rng = random.Random(seed)
+    rows = []
+    for visitor in range(visitors):
+        for n in range(sessions_each):
+            start = n * 3_600_000 + rng.randrange(0, 60_000)
+            item = rng.randrange(10)
+            for k in range(length):
+                rows.append((visitor * sessions_each + n, 100 + visitor,
+                             start + k * rng.randrange(1_000, 9_000), item))
+                item = (item + rng.choice((1, 1, 2, 5))) % 12
+    rng.shuffle(rows)  # source_row order must not decide the replay order
+    return view_frame(rows)
+
+
 def assert_same_replay(case, left, right, capacities):
     for cap in capacities:
         case.assertEqual(left[cap][0], right[cap][0], cap)
@@ -239,6 +260,24 @@ class ReplayTests(unittest.TestCase):
                                         order="global")
             assert_same_replay(self, session, global_, CAPS)
 
+    def test_orders_agree_when_sessions_overlap_in_time(self):
+        views = interleaved_views()
+        by_time = views.sort_values(["timestamp", "source_row"], kind="mergesort").session_id
+        # Non-vacuous: the two orders really visit the rows differently.
+        self.assertGreater(int(by_time.ne(by_time.shift()).sum()), views.session_id.nunique())
+        index = fit_index(views)
+        for scope in ("session", "visitor"):
+            session = replay_capacities(views, index, None, STATELESS, CAPS,
+                                        scorer=TransitionScorer(), cache_scope=scope)
+            global_ = replay_capacities(views, index, None, STATELESS, CAPS,
+                                        scorer=TransitionScorer(), cache_scope=scope,
+                                        order="global")
+            assert_same_replay(self, session, global_, CAPS)
+            self.assertGreater(session[2][0][2]["issued"], 0)
+            parallel = replay_parallel(views, index, TransitionScorer(), STATELESS, CAPS,
+                                       workers=3, order="global", cache_scope=scope)
+            assert_same_replay(self, session, parallel, CAPS)
+
     def test_visitor_scope_persists_across_a_visitors_sessions(self):
         views = view_frame([(1, 50, 0, 7), (1, 50, 1, 8), (2, 50, 9_000_000, 7),
                             (3, 60, 10, 7), (4, 61, 20, 7)])
@@ -279,6 +318,10 @@ class ReplayTests(unittest.TestCase):
         same = {"a": {1: [1, 1, 1, 0]}, "b": {1: [1, 1, 1, 0]}}
         result = break_even_waste(same, "a", "b", repetitions=10)
         self.assertEqual((result["direction"], result["dropped_draws"]), ("constant", 10))
+        # Equal waste but more hits still wins at every cost.
+        more = {"a": {1: [2, 1, 1, 0]}, "b": {1: [1, 1, 1, 0]}}
+        self.assertEqual(break_even_waste(more, "a", "b", repetitions=10)["direction"],
+                         "dominates")
 
 
 @unittest.skipUnless(HAVE_WEB, "web study needs numpy, pandas, scikit-learn and joblib")
@@ -311,6 +354,17 @@ class FeedbackGateTests(unittest.TestCase):
         self.assertEqual(sum(gate.used.values()), 1)
         self.assertEqual(tracker.tags, {})
 
+    def test_unused_prefetches_are_credited_only_after_the_session_gap(self):
+        # One unused credit closes the bucket (1/3 < 0.4). Session 1's unused
+        # prefetch must not count before it has been idle for 30 minutes, so
+        # session 2 (10 min later) still issues and session 3 (45 min) does not.
+        minute = 60_000
+        views = view_frame([(1, 10, 0, 1), (2, 20, 10 * minute, 1), (3, 30, 45 * minute, 1)])
+        index = index_module.CandidateIndex({1: ((2, 1),)}, {1: 1}, {1: 3}, ())
+        row = replay(views, index, None, [Policy("fb", "feedback", 0.4)], 4, 0,
+                     scorer=TransitionScorer(), order="global")[0][0]
+        self.assertEqual(row["issued"], 2)
+
     def test_feedback_replay_is_deterministic_and_parallel_exact(self):
         views = fixture_views()
         test = views.loc[views.split.ge(1)]
@@ -324,8 +378,9 @@ class FeedbackGateTests(unittest.TestCase):
         parallel = replay_parallel(test, fit_index(views), TransitionScorer(), policies, CAPS,
                                    workers=3, order="global")
         assert_same_replay(self, serial, parallel, CAPS)
-        closed = {row["policy"]: row for row in serial[8][0]}["fb_closed"]
-        self.assertEqual(closed["issued"], 0)
+        rows = {row["policy"]: row for row in serial[8][0]}
+        self.assertGreater(rows["fb"]["issued"], 0)
+        self.assertEqual(rows["fb_closed"]["issued"], 0)
 
 
 @unittest.skipUnless(HAVE_WEB, "web study needs numpy, pandas, scikit-learn and joblib")
@@ -386,6 +441,9 @@ class RealPrefixTests(unittest.TestCase):
                                    workers=8, max_views=20000)
         assert_same_replay(self, serial, parallel, CAPS)
         self.assertGreater(serial[8][1]["replayed_views"], 15000)
+        global_ = replay_capacities(test, index, None, STATELESS, CAPS, max_views=20000,
+                                    scorer=TransitionScorer(), order="global")
+        assert_same_replay(self, serial, global_, CAPS)
 
     def test_online_index_parallel_equals_serial_on_a_20k_test_prefix(self):
         test = self.views.loc[self.views.split.eq(3)]
