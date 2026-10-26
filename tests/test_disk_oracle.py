@@ -327,6 +327,9 @@ class OracleLoaderTests(unittest.TestCase):
         requests = flatten(iter_oracle_chunks(CHEETAH, max_requests=20_000))
         self.assertEqual(len(requests), 20_000)
         self.assertGreaterEqual(median(r.size_blocks for r in requests), 8)
+        # Cheetah stores one 8-sector page per record, so the median bound alone
+        # would hold without any merging; some request must span pages.
+        self.assertGreater(max(r.size_blocks for r in requests), 8)
         self.assertLessEqual(max(r.size_blocks for r in requests), 1024)
 
 

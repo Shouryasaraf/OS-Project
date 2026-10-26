@@ -374,8 +374,8 @@ ORACLE_RECORD = struct.Struct("<IQIq")
 ORACLE_TAG_MASK = (1 << 40) - 1
 SECTOR_BYTES = 512
 #: Largest re-assembled request, in 512-B sectors (512 KiB): Linux's default
-#: ``max_sectors_kb`` of the FIU era. A longer contiguous same-second run must
-#: have been more than one request, so it is split rather than fused.
+#: ``max_sectors_kb`` of the FIU era. A longer contiguous same-second run is
+#: taken to have been more than one request, so it is split rather than fused.
 DEFAULT_MAX_MERGE_SECTORS = 1024
 #: Records examined to choose and check the size unit.
 ORACLE_PROBE = 4096

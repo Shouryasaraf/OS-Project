@@ -55,12 +55,13 @@ def CORPUS_OF(stem: str) -> str:
                      f"prefix in {[p for p, _ in _PREFIXES]}")
 
 
-#: Near-duplicate traces. Members of a group have the same record count and
-#: total size to within a fraction of a percent (blocktrace-scout
-#: ``totals.jsonl``): tencent 1162/1591/1911 are 3.05M records of exactly
-#: 128 sectors each, and alibaba 13/16/18/20/22 all average 72.2-72.9 sectors
-#: per record. A collection-wide statistic that counts each member as an
-#: independent workload overweights them, so analyses should cluster on these.
+#: Near-duplicate traces. Members of a group have record counts within about
+#: 5% of each other and near-equal mean request sizes (blocktrace-scout
+#: ``totals.jsonl``): tencent 1162/1591/1911 are 3.047-3.049M records
+#: averaging 127.99 sectors, and alibaba 13/16/18/20/22 are 14.1-14.9M records
+#: averaging 72.2-72.9 sectors. A collection-wide statistic that counts each
+#: member as an independent workload overweights them, so analyses should
+#: cluster on these.
 TWIN_GROUPS: tuple[frozenset[str], ...] = (
     frozenset(f"alibabaBlock_{n}" for n in (13, 16, 18, 20, 22)),
     frozenset(f"alibabaBlock_{n}" for n in (11, 15)),
@@ -80,7 +81,8 @@ def twin_group(stem: str) -> frozenset[str] | None:
 
 
 #: Traces chosen by the blocktrace-scout for diversity in sequentiality,
-#: in the order of plan §2.1. ``alibabaBlock_3`` is the drift case: its
+#: in the order of plan §2.1. The plan calls the subset 21 traces but names
+#: only these 20; no 21st is guessed here. ``alibabaBlock_3`` is the drift case: its
 #: next-record contiguity is 0.027 over the first 18 h but 0.51 over the
 #: whole 744 h file (blocktrace-scout ``stats_all.jsonl``), so a prefix does
 #: not represent it. FIU entries are replayed as canonical (page-merged)
