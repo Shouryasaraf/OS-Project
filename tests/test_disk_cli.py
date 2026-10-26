@@ -381,8 +381,9 @@ class LstmTrainingSetTests(unittest.TestCase):
         benchmark = _benchmark_datasets()
         seen = []
 
-        def fake_train(path, traces=None, epochs=60, **_):
+        def fake_train(path, traces=None, epochs=60, **kwargs):
             seen.append(traces)
+            self.assertEqual(kwargs, main.LSTM_TRAIN_KW)
             Path(path).write_bytes(b"artifact")
             return {"examples": 10, "classes": 3}
 
@@ -415,6 +416,20 @@ class LstmTrainingSetTests(unittest.TestCase):
             main.LSTM_ARTIFACT.write_bytes(b"trained on something else")
             main.resolve_lstm(benchmark, False, False, 2, 32)
             self.assertEqual(len(seen), 3)
+            # A record from before the validation hold-out (no training
+            # procedure, i.e. trained on 100% and kept the last epoch) is
+            # stale even with the same selection and digest.
+            record = json.loads(main.LSTM_TRAINING_RECORD.read_text())
+            self.assertEqual(record["training"]["val_fraction"], 0.2)
+            del record["training"]
+            main.LSTM_TRAINING_RECORD.write_text(json.dumps(record))
+            main.resolve_lstm(benchmark, False, False, 2, 32)
+            self.assertEqual(len(seen), 4)
+            record = json.loads(main.LSTM_TRAINING_RECORD.read_text())
+            record["training"]["val_fraction"] = 0.0
+            main.LSTM_TRAINING_RECORD.write_text(json.dumps(record))
+            main.resolve_lstm(benchmark, False, False, 2, 32)
+            self.assertEqual(len(seen), 5)
 
 
 if __name__ == "__main__":

@@ -15,12 +15,22 @@ Three formats:
 * ``csv`` -- a header equal to :func:`columns` in that order. ``None`` is
   written as an empty field, ``bool`` as ``True``/``False``, a ``json``
   column as compact JSON text, a float with ``repr`` (round-trips exactly,
-  ``inf``/``nan`` included).
+  ``inf``/``nan`` included). An optional column (``required=False``) may be
+  left out of the header altogether, so a column can be added to a file a
+  running experiment is already writing without invalidating its output;
+  when present it stays in schema order.
 * ``jsonl`` -- one object per line with exactly the schema's keys. Appending
   is supported, because the disk sweep is resumable. Non-finite floats are
   refused (strict JSON).
 * ``json`` -- one object; required keys must be present and optional keys
   may be. Values may nest.
+
+Some files are written by code that does not go through :func:`write_rows`
+(pandas ``to_csv``, ``json.dumps``); their schemas are derived from those
+writers, and :func:`validate_tree` checks them after the run.
+``results/pivot_original/`` is the pivot branch's output copied verbatim
+(never edited, never a schema'd study), so :func:`validate_tree` checks only
+its ``provenance.json``.
 
 Dtypes: ``str``, ``int``, ``float``, ``bool``, ``json`` (anything JSON can
 hold). A trailing ``?`` means ``None`` is allowed. Skipped rows
@@ -49,6 +59,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 RESULTS_ROOT = REPO_ROOT / "results"
 FORMATS = ("csv", "jsonl", "json")
 DTYPES = ("str", "int", "float", "bool", "json")
+#: Directories under ``results/`` copied verbatim from elsewhere; only their
+#: ``provenance.json`` is held to a schema.
+VERBATIM_DIRS = ("pivot_original",)
 
 
 class SchemaError(ValueError):
@@ -60,7 +73,7 @@ class Column:
     name: str
     dtype: str
     note: str = ""
-    required: bool = True  # only json objects may have optional keys
+    required: bool = True  # json: key may be absent; csv: column may be absent
 
     @property
     def base(self) -> str:
@@ -250,6 +263,50 @@ _DISK_LEARNED_DEPTH = (
     _c("device", "str", "cuda|cpu"),
     _c("train_s", "float?"), _c("infer_us_per_decision", "float?"),
     _c("gpu_contention", "str?", "nvidia-smi note; GPU timings are never quoted as costs without it"),
+    _c("linux_ra_hit_ratio", "float?",
+       "linux_ra on the same test segment (the baseline the paper must show); "
+       "optional: E2 as first run does not write it, and disk_depth_baselines.csv "
+       "(segment=test, mode=linux_ra) holds the same replay", required=False),
+)
+
+_DISK_LSTM = (
+    _c("trace", "str"), _c("corpus", "str"), _c("seed", "int"),
+    _c("status", "str", "ok | skipped: <reason>; a skipped row has None metrics"),
+    _c("n_requests", "int?", "canonical requests in the prefix"),
+    _c("train_start", "int?", "request index; ranges are half-open"),
+    _c("train_end", "int?"), _c("val_start", "int?"), _c("val_end", "int?"),
+    _c("test_start", "int?"), _c("test_end", "int?"),
+    _c("epochs_run", "int?"), _c("best_epoch", "int?"),
+    _c("val_loss", "json?", "per-epoch validation loss list"),
+    _c("test_bucket_top1", "float?",
+       "next-delta bucket accuracy on the test slice; LSTM predicts deltas, not classes"),
+    _c("test_majority_top1", "float?", "majority-bucket reference"),
+    _c("test_repeat_top1", "float?", "repeat-last-delta reference"),
+    _c("lstm_hit_ratio", "float?"), _c("lstm_precision", "float?"), _c("lstm_issued", "int?"),
+    _c("none_hit_ratio", "float?"), _c("sequential_hit_ratio", "float?"),
+    _c("deep8_hit_ratio", "float?"), _c("linux_ra_hit_ratio", "float?"),
+    _c("infer_us_per_request", "float?", "replay inference time per request"),
+    _c("device", "str?", "cuda|cpu"), _c("train_s", "float?"),
+    _c("gpu_contention", "str?", "nvidia-smi note"),
+)
+
+_DISK_DEPTH_BASELINES = (
+    _c("trace", "str"), _c("corpus", "str"),
+    _c("segment", "str", "val | test"),
+    _c("start", "int", "request index; half-open"), _c("end", "int"),
+    _c("action_cap", "int?", "None for the cap-independent test references"),
+    _c("mode", "str", "none|sequential|deep|linux_ra|vcf|relsize|oracle_same_actions"),
+    _c("param", "float?", "depth (deep, vcf) or k (relsize); None otherwise"),
+    _c("chosen", "bool?", "the validation choice; None for references"),
+    _c("hit_ratio", "float"), _c("precision", "float"),
+    _c("issued", "int"), _c("useful", "int"), _c("device_ios", "int"),
+)
+
+_GPU_ENV = (
+    _c("device_requested", "str"), _c("torch", "str?"), _c("cuda_device", "str?"),
+    _c("jobs", "json", "one entry per GPU job: device, train_s, OOM retries, nvidia-smi samples"),
+    _c("note", "str"), _c("missing_traces", "json"),
+    _c("config", "json", "repro/gpu_disk.Config without its paths"),
 )
 
 # ------------------------------------------------------------------- realio
@@ -286,6 +343,9 @@ _REALIO_SUMMARY = (
     _c("lat_p50_us", "float", "mean over repeats"), _c("lat_p99_us", "float", "mean over repeats"),
     _c("late_hits", "float", "mean over repeats"), _c("device_MiB", "float", "mean over repeats"),
     _c("pred_mean_us", "float?"), _c("pred_err", "float?"), _c("k_eff", "float?"),
+    *_ci("delta_vs_none_us", "float?",
+         "lat_mean_us minus the same repeat's none run, mean and 95% t interval over "
+         "repeats paired by repeat; None for none and for modes without a none run"),
     _c("spearman_device_time", "float?",
        "rank correlation across modes of sim_device_time_us vs lat_mean_us; one "
        "value per (device, backend, think, trace), repeated on its rows"),
@@ -370,6 +430,61 @@ _WEB_SEQ = (
     _c("device", "str"), _c("gpu_contention", "str?"),
 )
 
+_WEB_CALIBRATION = (
+    _c("split", "str", "validation | test"), _c("scorer", "str"),
+    _c("bin", "int", "width-0.1 probability bin, 0..9"),
+    _c("p_low", "float"), _c("p_high", "float"), _c("count", "int", "ranked candidates"),
+    _c("mean_probability", "float?", "None for an empty bin"),
+    _c("observed_frequency", "float?"), _c("gap", "float?"),
+    _c("reported", "bool", "bin is in the reliability table (lower edge >= 0.1, non-empty)"),
+    _c("brier", "float?", "per (split, scorer), repeated on its rows"),
+    _c("brier_reference", "float?", "Brier score of always forecasting the base rate"),
+    _c("brier_skill_score", "float?"), _c("ece", "float?", "secondary only"),
+)
+
+_WEB_LEARNING_CURVE = (
+    _c("training_decisions", "int"), _c("candidate_rows", "int"),
+    _c("positive_candidates", "int"), _c("selected_C", "float"),
+    _c("validation_coverage_at_8", "float"), _c("validation_hit_at_1", "float"),
+    _c("validation_mrr_at_8", "float"), _c("validation_views", "int"),
+    _c("capacity", "int"), _c("policy", "str"), _c("cost", "float"),
+    _c("validation_hit_ratio", "float"), _c("validation_issued_per_view", "float"),
+    _c("validation_utility", "float"), _c("train_s", "float"),
+)
+
+#: ``data.build_views``'s profile (absent when ``profile.json`` is missing),
+#: then the two keys the benchmark adds.
+_WEB_PROFILE_KEYS = (
+    ("source", "str"), ("dataset_version", "int"), ("source_verified", "bool"),
+    ("session_gap_minutes", "int"), ("raw_sha256", "str"), ("raw_rows", "int"),
+    ("duplicate_rows_removed", "int"), ("event_counts_after_dedup", "json"),
+    ("views", "int"), ("visitors", "int"), ("sessions", "int"),
+    ("sessions_with_2plus_views", "int"), ("sessions_with_3plus_views", "int"),
+    ("sessions_with_5plus_views", "int"), ("eligible_next_view_pairs", "int"),
+    ("session_length_quantiles", "json"), ("split_cutoffs_ms", "json"),
+    ("views_by_split", "json"), ("eligible_pairs_by_split", "json"),
+    ("prepared_path", "str"))
+_WEB_DATASET_PROFILE = tuple(_c(name, dtype, required=False)
+                             for name, dtype in _WEB_PROFILE_KEYS) + (
+    _c("replayed_views", "json", "views replayed per split label"),
+    _c("pair_kinds", "json", "eligible next views by kind: self_repeat, earlier_in_session, novel"),
+)
+
+_WEB_THINK_TIME = (
+    _c("validation", "json", "eligible pairs, gap quantiles (s), share below thresholds"),
+    _c("test", "json"),
+)
+
+_WEB_SESSION_PARITY = (
+    _c("format", "str", "webprefetch.session_parity/2"),
+    _c("selection_rule", "str"),
+    _c("benchmark_json_sha256", "str", "the run whose validation selection the cases use; "
+       "byte-identical only at a fixed --workers"),
+    _c("capacity", "int"), _c("costs", "json"), _c("policy", "str"),
+    _c("cases", "json", "per (session, cost): batch counters and match"),
+    _c("mismatches", "int", "must be 0"),
+)
+
 # --------------------------------------------------------------------- live
 
 _LIVE_METRICS = (
@@ -404,6 +519,23 @@ _LIVE_PARITY = (
     _c("mismatched_sessions", "int", "must be 0"),
 )
 
+_LIVE_CONFIG = (
+    _c("format", "str", "webprefetch.live.config/1"),
+    _c("runs", "json", "run tag -> command, invocations, plan, assumptions (tagged "
+       "ASSUMED/MEASURED), passes, superseded and aborted passes"),
+)
+
+_LIVE_DISK_PROBE = (
+    _c("label", "str", "store label, e.g. ssd, hdd"), _c("store", "str", "object store file"),
+    _c("device", "json", "objects.device_of: dev, name, disk, rotational, queue limits"),
+    _c("objects", "int", "objects sampled"), _c("load_avg", "json"),
+    _c("tag", "str", "MEASURED"),
+    _c("resident_after_drop", "float"), _c("resident_after_read", "float"),
+    _c("cold", "json", "mean/p50/p99 us and n"), _c("warm", "json"),
+    _c("hinted", "json", "lead ms -> resident fraction and latency summary"),
+    _c("load_avg_end", "json"),
+)
+
 # --------------------------------------------------------------- provenance
 
 _PROVENANCE = tuple(_c(key, "json?" if key not in ("format", "study") else "str")
@@ -432,6 +564,13 @@ SCHEMAS: dict[str, Schema] = {s.name: s for s in (
             "datasets table, one row per trace", _DISK_CORPUS),
     _schema("gpu/disk_learned_depth.csv", "csv", "WP9 (E2)",
             "learned_depth vs VCF per (trace, seed, action_cap)", _DISK_LEARNED_DEPTH),
+    _schema("gpu/disk_lstm.csv", "csv", "WP9 (E2; repro/gpu_disk.LSTM_COLUMNS)",
+            "honest-split LSTM per trace: delta accuracy and cache metrics", _DISK_LSTM),
+    _schema("gpu/disk_depth_baselines.csv", "csv", "WP9 (E2; repro/gpu_disk.BASELINE_COLUMNS)",
+            "every seed-free baseline replay: validation grids and test references",
+            _DISK_DEPTH_BASELINES),
+    _schema("gpu/gpu_env.json", "json", "WP9 (E2)",
+            "torch/CUDA versions, per-job GPU contention samples, run config", _GPU_ENV),
     _schema("realio/realio.csv", "csv", "WP8 (E3)",
             "one row per (device, backend, mode, think, repeat)", _REALIO),
     _schema("realio/realio_summary.csv", "csv", "WP8 (E3)",
@@ -448,10 +587,28 @@ SCHEMAS: dict[str, Schema] = {s.name: s for s in (
             "F6: coverage@k vs index freshness", _WEB_FRESHNESS),
     _schema("web/seq_metrics.csv", "csv", "WP11 (E5)",
             "GPU sequence model per (model, protocol, seed, capacity)", _WEB_SEQ),
+    _schema("web/calibration.csv", "csv", "WP6 (E4; pandas, diagnostics.CALIBRATION_COLUMNS)",
+            "candidate-level reliability bins and Brier skill per (split, scorer)",
+            _WEB_CALIBRATION),
+    _schema("web/learning_curve.csv", "csv",
+            "WP6 (E4; pandas, diagnostics.LEARNING_CURVE_COLUMNS)",
+            "P13: ranker retrained at larger training samples, validation only",
+            _WEB_LEARNING_CURVE),
+    _schema("web/dataset_profile.json", "json", "WP6 (E4)",
+            "prepare's profile plus replayed views and pair kinds; T4", _WEB_DATASET_PROFILE),
+    _schema("web/think_time.json", "json", "WP6 (E4)",
+            "time to the session's next view per split", _WEB_THINK_TIME),
+    _schema("web/session_parity.json", "json", "WP6 (E4; demo_server.run_parity)",
+            "demo step loop vs batch replay on held-out sessions", _WEB_SESSION_PARITY),
     _schema("live/live_metrics.csv", "csv", "WP12 (E6)",
             "T7/F7: one row per pass and policy", _LIVE_METRICS),
     _schema("live/live_parity.csv", "csv", "WP12 (E6)",
             "live vs simulator counters per pass and policy", _LIVE_PARITY),
+    _schema("live/live_config.json", "json", "WP12 (E6)",
+            "every run's command, plan, assumptions and passes", _LIVE_CONFIG),
+    _schema("live/disk_probe_*.json", "json", "WP12 (E6)",
+            "MEASURED cold/warm/hinted page-cache reads of one object store",
+            _LIVE_DISK_PROBE),
     _schema("*/provenance.json", "json", "prefetch_common.provenance",
             "provenance.write_provenance output", _PROVENANCE),
 )}
@@ -576,6 +733,19 @@ def _json_text(row: Mapping, schema: Schema) -> str:
         raise SchemaError(f"{schema.name}: non-finite float in a JSON row ({error})") from None
 
 
+def _csv_columns(schema: Schema, rows: list[Mapping]) -> list[Column]:
+    """Columns a csv file is written with: every required one, plus each
+    optional one that at least one row carries (the rest of the rows get
+    ``None`` there, so an optional csv column must be nullable)."""
+    present = [c for c in schema.columns
+               if c.required or any(c.name in row for row in rows)]
+    for column in present:
+        if not column.required and not column.nullable:
+            raise SchemaError(f"{schema.name}: optional csv column {column.name!r} "
+                              "must be nullable")
+    return present
+
+
 def default_path(name: str) -> Path:
     if "*" in name:
         raise SchemaError(f"{name!r} is a pattern; pass a concrete path")
@@ -612,11 +782,12 @@ def write_rows(name: str, rows: Iterable[Mapping], path: str | Path | None = Non
         except ValueError as error:
             raise SchemaError(f"{schema.name}: non-finite float ({error})") from None
     else:
+        present = _csv_columns(schema, rows)
         buffer = io.StringIO()
         writer = csv.writer(buffer, lineterminator="\n")
-        writer.writerow(schema.names)
+        writer.writerow(c.name for c in present)
         for row in rows:
-            writer.writerow(_csv_cell(c, row[c.name]) for c in schema.columns)
+            writer.writerow(_csv_cell(c, row.get(c.name)) for c in present)
         text = buffer.getvalue()
     tmp = target.with_name(target.name + ".tmp")
     tmp.write_text(text, encoding="utf-8")
@@ -660,17 +831,20 @@ def read_rows(name: str, path: str | Path | None = None) -> list[dict]:
         header = next(reader, None)
         if header is None:
             raise SchemaError(f"{source}: empty file, expected a header")
-        if tuple(header) != schema.names:
-            unknown = [h for h in header if h not in schema.names]
-            missing = [n for n in schema.names if n not in header]
+        by_name = {c.name: c for c in schema.columns}
+        expected = [c.name for c in schema.columns if c.required or c.name in header]
+        if header != expected:
+            unknown = [h for h in header if h not in by_name]
+            missing = [n for n in expected if n not in header]
             raise SchemaError(f"{source}: header does not match {schema.name} "
                               f"(unknown {unknown}, missing {missing}, or out of order)")
+        present = [by_name[name] for name in header]
         rows = []
         for line, record in enumerate(reader, start=2):
             if len(record) != len(header):
                 raise SchemaError(f"{source}:{line}: {len(record)} fields, expected {len(header)}")
             rows.append({c.name: _parse_cell(c, cell, f"{source}:{line}")
-                         for c, cell in zip(schema.columns, record)})
+                         for c, cell in zip(present, record)})
     elif schema.fmt == "jsonl":
         rows = [json.loads(line) for line in text.splitlines() if line.strip()]
     else:
@@ -697,13 +871,17 @@ def _key_from_path(path: Path) -> str:
 def validate_tree(root: str | Path) -> dict[str, str]:
     """Check every ``.csv``/``.json``/``.jsonl`` under ``root`` (laid out like
     ``results/``). Returns ``{relative path: problem}``; empty means all pass.
-    Other files (a README) are ignored."""
+    Other files (a README, ``PREREGISTERED.md``) are ignored, and so is
+    everything under a :data:`VERBATIM_DIRS` directory except its
+    ``provenance.json``."""
     root = Path(root)
     problems = {}
     for path in sorted(root.rglob("*")):
         if not path.is_file() or path.suffix not in (".csv", ".json", ".jsonl"):
             continue
         relative = path.relative_to(root).as_posix()
+        if relative.split("/")[0] in VERBATIM_DIRS and path.name != "provenance.json":
+            continue
         try:
             read_rows(relative, path)
         except (SchemaError, ValueError, OSError) as error:

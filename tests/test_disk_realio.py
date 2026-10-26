@@ -482,6 +482,141 @@ class ResumeTests(unittest.TestCase):
             self.assertNotIn(runner.job_key(job), runner.existing_keys(results))
 
 
+class SummaryDeltaTests(unittest.TestCase):
+    def test_delta_vs_none_is_paired_by_repeat(self):
+        rows = []
+        for repeat, (none, deep) in enumerate(((600.0, 630.0), (610.0, 650.0),
+                                               (590.0, 640.0)), 1):
+            for mode, lat in (("none", none), ("deep", deep)):
+                rows.append({"device": "sdb", "backend": "odirect", "mode": mode,
+                             "think": "closed", "trace": "msr_t", "requests": 100,
+                             "repeat": repeat, "lat_mean_us": lat, "sim_hit_ratio": 0.3,
+                             "sim_device_ios": None, "real_hit_ratio": 0.3,
+                             "full_hit_request_frac": 0.2, "lat_p50_us": 1.0,
+                             "lat_p99_us": 2.0, "late_hits": 0, "device_MiB": 1.0,
+                             "pred_mean_us": None, "pred_err": None, "k_eff": None,
+                             "foreign_io_frac": None, "load_avg": 1.0})
+        # A deep run whose repeat has no none run is left out of the pairing.
+        rows.append({**rows[-1], "repeat": 4, "lat_mean_us": 9999.0})
+        summary = {r["mode"]: r for r in report.summarize(rows)}
+        schemas.validate_rows("realio/realio_summary.csv", list(summary.values()))
+        mean, lo, hi = report.t_interval([30.0, 40.0, 50.0])
+        deep = summary["deep"]
+        self.assertEqual((deep["delta_vs_none_us"], deep["delta_vs_none_us_lo"],
+                          deep["delta_vs_none_us_hi"]), (mean, lo, hi))
+        self.assertIsNone(summary["none"]["delta_vs_none_us"])
+
+
+class BudgetTests(unittest.TestCase):
+    """The budgeted E3 grids of results/realio/PREREGISTERED.md (amendment A1)."""
+
+    def test_budgeted_grids_fit_lead_decision_l3(self):
+        from adaptive_prefetch.realio import runner
+        total = runner.estimate_seconds("hdd", 3) + runner.estimate_seconds("ssd", 3)
+        self.assertLess(total, 4 * 3600)
+        self.assertGreater(runner.estimate_seconds("full", 3), total)
+        for name in runner.E3_PLANS:
+            for part in runner.plan_parts(name):
+                self.assertNotIn("learned_depth", part["modes"])
+                for mode in part["modes"]:
+                    runner.validate_mode(mode)
+        closed, spread = runner.plan_parts("hdd")
+        self.assertEqual((closed["traces"], closed["modes"], closed["thinks"]),
+                         (runner.GRID_TRACES, runner.GRID_MODES, ("closed",)))
+        self.assertEqual((spread["traces"], spread["thinks"]),
+                         (("msr/msr_hm_0",), ("spread:1:5000",)))
+        (ssd,) = runner.plan_parts("ssd", traces=["msr/msr_hm_0"])
+        self.assertEqual((ssd["traces"], ssd["thinks"]), (("msr/msr_hm_0",), ("closed",)))
+        with self.assertRaises(SystemExit):
+            runner.plan_parts("nope")
+
+    def test_spread_think_constants_match_the_clock(self):
+        # E3_SPREAD_THINK_S was computed with clock.gaps_us; its bound holds.
+        from adaptive_prefetch.realio import runner
+        for seconds in runner.E3_SPREAD_THINK_S.values():
+            self.assertLessEqual(seconds, 20_000 * 5000 / 1e6)
+        requests = [Request(float(i // 4) * 1000, i * 8, 8) for i in range(40)]
+        self.assertAlmostEqual(sum(gaps_us(requests, "spread:1:5000")) / 1e6,
+                               min(0.25, 0.005) * 30 + 0.005 * 9, places=9)
+
+    def test_load_wait_waits_then_runs_and_is_bounded(self):
+        from adaptive_prefetch.realio import runner
+        clock = [0.0]
+        loads = iter([40.0, 40.0, 10.0])
+        logged = []
+
+        def sleep(seconds):
+            clock[0] += seconds
+
+        with mock.patch.object(runner.os, "getloadavg", lambda: (next(loads), 0, 0)), \
+                mock.patch.object(runner.time, "sleep", sleep), \
+                mock.patch.object(runner.time, "monotonic", lambda: clock[0]):
+            quiet, load, waited = runner.wait_for_load(32, 3600, poll_s=30, log=logged.append)
+        self.assertEqual((quiet, load, waited), (True, 10.0, 60.0))
+        self.assertEqual(len(logged), 1)
+        self.assertIn("waiting: load average 40.0", logged[0])
+        clock[0] = 0.0
+        with mock.patch.object(runner.os, "getloadavg", lambda: (99.0, 0, 0)), \
+                mock.patch.object(runner.time, "sleep", sleep), \
+                mock.patch.object(runner.time, "monotonic", lambda: clock[0]):
+            quiet, load, waited = runner.wait_for_load(32, 700, poll_s=30, log=logged.append)
+        self.assertEqual((quiet, load), (False, 99.0))
+        self.assertEqual(waited, 700)
+        self.assertEqual(len(logged), 1 + 3)  # at 0, 300 and 600 s
+
+    @unittest.skipUnless(SUPPORTED, WHY)
+    def test_grid_waits_out_a_load_spike_instead_of_stopping(self):
+        from adaptive_prefetch.realio import runner
+        fill = {"str": "x", "int": 0, "float": 0.0}
+        row = {c.name: (None if c.dtype.endswith("?") else fill[c.dtype])
+               for c in schemas.schema_for("realio/realio.csv").columns}
+        row.update(device="sdb", backend="odirect", mode="none", think="closed", repeat=1,
+                   trace="msr_t", requests=10, lat_mean_us=500.0)
+        jobs = [{"device": "sdb", "backing": "b", "mode": "none"},
+                {"device": "sdb", "backing": "b", "mode": "deep"}]
+        outcomes = iter([{"row": row, "detail": {}},
+                         {"row": dict(row, mode="deep", lat_mean_us=600.0), "detail": {}}])
+        clock = [0.0]
+        # os is patched for everyone, so provenance's snapshot reads it too.
+        loads = iter([10.0, 50.0, 50.0])
+        with tempfile.TemporaryDirectory() as tmp:
+            args = runner.build_parser().parse_args(
+                ["grid", "--device-dir", tmp, "--results-dir", tmp,
+                 "--details", str(Path(tmp) / "runs.jsonl"), "--no-provenance"])
+            self.assertEqual((args.max_load, args.max_load_wait),
+                             (32.0, runner.DEFAULT_LOAD_WAIT_S))
+            out = io.StringIO()
+            with mock.patch.object(runner, "plan_jobs", return_value=jobs), \
+                    mock.patch.object(runner, "spawn", lambda job: next(outcomes)), \
+                    mock.patch.object(runner.os, "getloadavg",
+                                      lambda: (next(loads, 12.0), 0, 0)), \
+                    mock.patch.object(runner.time, "sleep",
+                                      lambda s: clock.__setitem__(0, clock[0] + s)), \
+                    mock.patch.object(runner.time, "monotonic", lambda: clock[0]), \
+                    contextlib.redirect_stdout(out):
+                status = runner.execute(args, [Path("msr_t")], ["none", "deep"], ["closed"])
+            self.assertEqual(status, 0, out.getvalue())
+            self.assertIn("waiting: load average 50.0", out.getvalue())
+            self.assertNotIn("stopped", out.getvalue())
+            self.assertEqual(len(schemas.read_rows("realio/realio.csv",
+                                                   Path(tmp) / "realio.csv")), 2)
+
+    def test_provenance_keeps_earlier_invocations(self):
+        from adaptive_prefetch.realio import runner
+        from prefetch_common.provenance import read_provenance, snapshot
+        with tempfile.TemporaryDirectory() as tmp:
+            results = Path(tmp)
+            (results / "device_sdb.json").write_text("{}\n")
+            runner.write_provenance(results, ["calibrate"], [], snapshot(), "calibrate sdb")
+            runner.write_provenance(results, ["calibrate"], [], snapshot(), "calibrate ssd")
+            runner.write_provenance(results, ["grid"], [], snapshot(), "grid")
+            record = read_provenance(results)
+            self.assertEqual(record["notes"], "grid")
+            earlier = record["extra"]["earlier_invocations"]
+            self.assertEqual([e["notes"] for e in earlier], ["calibrate sdb", "calibrate ssd"])
+            schemas.validate_file(results / "provenance.json", "realio/provenance.json")
+
+
 class ReproTests(unittest.TestCase):
     def test_repro_realio_without_a_device_is_unavailable(self):
         sys.path.insert(0, str(ROOT))
@@ -498,6 +633,39 @@ class ReproTests(unittest.TestCase):
             status = repro_realio.run(args)
         self.assertEqual(status, repro.EXIT_UNAVAILABLE)
         self.assertIn("--device", out.getvalue())
+        # Without a device the estimate names both budgeted grids.
+        self.assertIn("hdd grid", repro_realio.estimate(args))
+        self.assertIn("ssd subset", repro_realio.estimate(args))
+
+    @unittest.skipUnless(SUPPORTED, WHY)
+    def test_repro_realio_picks_the_grid_and_reuses_the_calibration(self):
+        sys.path.insert(0, str(ROOT))
+        from repro import realio as repro_realio
+        from adaptive_prefetch.realio import runner
+        import argparse
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--quick", action="store_true")
+        repro_realio.add_arguments(parser)
+        calls = []
+        with tempfile.TemporaryDirectory() as tmp:
+            results = Path(tmp)
+            (results / "device_sdb.json").write_text("{}\n")
+            for rotational, label, expected in ((True, "sdb", "hdd"), (False, "ssd", "ssd")):
+                device = {"label": label, "disk": label, "rotational": rotational,
+                          "backing": "b"}
+                args = parser.parse_args(["--device", tmp])
+                with mock.patch.object(runner, "describe_device", return_value=device), \
+                        mock.patch.object(runner, "DEFAULT_RESULTS", results), \
+                        mock.patch.object(runner, "main",
+                                          lambda argv: calls.append(argv) or 0), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertIn(f"the {expected} grid", repro_realio.estimate(args))
+                    self.assertEqual(repro_realio.run(args), 0)
+                grid = calls[-1]
+                self.assertEqual(grid[:3], ["grid", "--plan", expected])
+                self.assertNotIn("learned_depth", " ".join(grid))
+        # sdb was calibrated already (E0), the ssd label had no file yet.
+        self.assertEqual([c[0] for c in calls], ["grid", "calibrate", "grid"])
 
 
 if __name__ == "__main__":

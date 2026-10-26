@@ -31,11 +31,16 @@
   "gpu": null,
   "inputs": {},
   "outputs": {
+    "calibration.csv": "aa668674a18f6c998ee945e95b9abc8c5182180682b3a3a02cf415f78e4e7d89",
     "comparisons.csv": "a89f99ead885fc2e5326aa35003f96fcd9b5e03bf89046a4e289e7202b0c7270",
+    "dataset_profile.json": "8d2cb4e3049c03b7c4e75be3143ca99d5a2df9be8cafc05711161a50a020983f",
     "decomposition.csv": "4cedf32e92e8d823fb20880bb8df2c48116742bc67a0f48839c80ba2278aee3b",
     "freshness.csv": "4c1881cb6cc177e0ba95ccb1cfc946ed8b432d944e0983d6e385aa7dd4f51437",
+    "learning_curve.csv": "0f10ecccb6d42d1dfe1d15d14e1098c6ce82f986071543e2bdfa6d81a341d24f",
     "policy_metrics.csv": "b7b4c6eff7eaa54e4f44778d918802eac325d51d1fe609c7c763293810c9ec2d",
-    "seq_metrics.csv": "f4131a366ac22c33a7391a5f3f65dd06521ddc5d223e19d1ef441b6410773ee0"
+    "seq_metrics.csv": "f4131a366ac22c33a7391a5f3f65dd06521ddc5d223e19d1ef441b6410773ee0",
+    "session_parity.json": "294e151d00be53fbb453429a51075573aa01396229c19beb854985be1248a89d",
+    "think_time.json": "cf4227aa882aff2c023d1e15ce843c3cb2fb266fc894755fc396b080d2e75092"
   },
   "notes": "FIXTURE: synthetic values from tests/fixtures/make_results_fixtures.py; not a result, never quote"
 }

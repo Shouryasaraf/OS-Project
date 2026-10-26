@@ -38,12 +38,56 @@ DEFAULT_RESULTS = REPO_ROOT / "results" / "realio"
 DEFAULT_DETAILS = REPO_ROOT / "outputs" / "realio" / "runs.jsonl"
 RESULT_MARK = "REALIO_RESULT "
 BACKENDS = ("odirect", "pagecache")
-#: E3's mode set (plan section 2.6); learned_depth joins when an artifact exists.
+#: E3's mode set (plan section 2.6). ``learned_depth`` is not in it: lead
+#: decision L3 (runtime budget), stated as a limitation in PREREGISTERED.md.
 GRID_MODES = ("none", "sequential", "deep", "deep@64", "linux_ra", "guard",
               "adaptive_evidence", "kernel_ra", "kernel_seq", "online-guard")
 GRID_TRACES = ("msr/msr_hm_0", "msr/msr_web_2", "msr/msr_prn_0",
                "alibaba/alibabaBlock_17", "fiu/fiu_homes-110108-112108")
 GRID_THINK = ("closed", "spread:1:5000")
+#: The E3 grids, each a sequence of parts (traces x modes x think models,
+#: repeats from ``--repeats``). ``full`` is plan section 2.6 as written
+#: (about 10 h on sdb by :func:`estimate_seconds`). ``hdd`` and ``ssd`` are
+#: the cut to lead decision L3's ~4 h budget, fixed before any E3 run in
+#: ``results/realio/PREREGISTERED.md`` (amendment A1, "runtime budget"):
+#: every trace and mode closed loop on the HDD, the spread think model on
+#: msr_hm_0 only, and the SSD closed loop on two traces and five modes.
+E3_PLANS = {
+    "full": ({"traces": GRID_TRACES, "modes": GRID_MODES, "thinks": GRID_THINK},),
+    "hdd": ({"traces": GRID_TRACES, "modes": GRID_MODES, "thinks": ("closed",)},
+            {"traces": ("msr/msr_hm_0",), "modes": GRID_MODES,
+             "thinks": ("spread:1:5000",)}),
+    "ssd": ({"traces": ("msr/msr_hm_0", "msr/msr_web_2"),
+             "modes": ("none", "deep", "linux_ra", "guard", "kernel_ra"),
+             "thinks": ("closed",)},),
+}
+#: Planning constants for :func:`estimate_seconds` (2026-10-26). Per device
+#: class: ``flush_s``, the 1 GiB drive flush before every run (WP8 smoke:
+#: 9.6-10.5 s on sdb, 2.6-2.7 s on the SSD); ``closed_s``, the replay wall of
+#: one 20k-request closed-loop run, four times the 5k-request Backend B
+#: none/deep@64 runs measured on sdb (load average ~120) and on the SSD (WP8
+#: smoke; msr_web_2 from a 20k run), multiplied by ``margin``.
+#: ``E3_OVERHEAD_S``: child start, trace load and simulator plan (0.5-1.7 s
+#: at 20k requests; msr_web_2's plans take 4-9 s). ``E3_SPREAD_THINK_S``:
+#: total think time of spread:1:5000 over the first 20k requests, computed
+#: from each trace with ``clock.gaps_us``; it can never exceed 20k x 5 ms =
+#: 100 s, the fallback for any other trace. Budget numbers, never results.
+E3_TIMING = {
+    "hdd": {"flush_s": 10.5, "margin": 1.5,
+            "closed_s": {"msr_hm_0": 14.6, "msr_web_2": 11.6, "msr_prn_0": 5.0,
+                         "alibabaBlock_17": 4.6, "fiu_homes-110108-112108": 5.4},
+            "closed_default_s": 15.0},
+    "ssd": {"flush_s": 2.7, "margin": 1.5,
+            "closed_s": {"msr_hm_0": 2.1, "msr_web_2": 11.9},
+            "closed_default_s": 12.0},
+}
+E3_OVERHEAD_S = {"msr_web_2": 6.0}
+E3_OVERHEAD_DEFAULT_S = 2.0
+E3_SPREAD_THINK_S = {"msr_hm_0": 53.1, "msr_web_2": 100.0, "msr_prn_0": 96.5,
+                     "alibabaBlock_17": 100.0, "fiu_homes-110108-112108": 92.7}
+#: How long ``grid`` waits for the load average to drop before one run.
+DEFAULT_LOAD_WAIT_S = 3600.0
+LOAD_POLL_S = 30.0
 
 
 # ------------------------------------------------------------------ inputs
@@ -89,6 +133,91 @@ def validate_mode(mode: str) -> None:
         online_mode(mode)
         return
     parse_mode(mode)
+
+
+def plan_parts(name: str, traces=None, modes=None, thinks=None) -> list[dict]:
+    """The parts of an :data:`E3_PLANS` grid; ``traces``/``modes``/``thinks``
+    replace that field in every part when given."""
+    if name not in E3_PLANS:
+        raise SystemExit(f"unknown grid plan {name!r}; expected {', '.join(E3_PLANS)}")
+    out = []
+    for part in E3_PLANS[name]:
+        out.append({"traces": tuple(traces or part["traces"]),
+                    "modes": tuple(modes or part["modes"]),
+                    "thinks": tuple(thinks or part["thinks"])})
+    return out
+
+
+def estimate_seconds(name: str, repeats: int, device_class: str | None = None,
+                     traces=None, requests: int = 20_000) -> float:
+    """Planned wall time of a grid from :data:`E3_TIMING`; a planning number
+    for the budget, never a result. ``device_class`` defaults to the plan's
+    own (``hdd`` for ``full``)."""
+    timing = E3_TIMING[device_class or ("ssd" if name == "ssd" else "hdd")]
+    scale = requests / 20_000
+    total = 0.0
+    for part in plan_parts(name, traces):
+        runs = sum(len(backend_for(m, BACKENDS)) for m in part["modes"])
+        for trace in part["traces"]:
+            stem = Path(trace).name.split(".")[0]
+            run_s = (timing["flush_s"] + E3_OVERHEAD_S.get(stem, E3_OVERHEAD_DEFAULT_S)
+                     + timing["margin"] * scale
+                     * timing["closed_s"].get(stem, timing["closed_default_s"]))
+            for think in part["thinks"]:
+                think_s = (0.0 if think == "closed"
+                           else scale * E3_SPREAD_THINK_S.get(stem, 100.0))
+                total += repeats * runs * (run_s + think_s)
+    return total
+
+
+def _say(text: str) -> None:
+    print(text, flush=True)
+
+
+def wait_for_load(max_load: float, max_wait_s: float, *, poll_s: float = LOAD_POLL_S,
+                  log=_say) -> tuple[bool, float, float]:
+    """Wait until the 1-min load average is at most ``max_load``, for at most
+    ``max_wait_s``. Returns ``(quiet, load, waited_s)``. A transient spike
+    therefore delays the next run instead of ending the grid; a host that
+    stays busy past the bound still stops it (rerun to resume)."""
+    start = time.monotonic()
+    load = os.getloadavg()[0]
+    next_log = 0.0
+    while load > max_load:
+        waited = time.monotonic() - start
+        if waited >= max_wait_s:
+            return False, load, waited
+        if waited >= next_log:
+            log(f"waiting: load average {load:.1f} exceeds --max-load {max_load:g}; "
+                f"rechecking every {poll_s:g} s for up to {max_wait_s - waited:.0f} s")
+            next_log = waited + 300.0
+        time.sleep(min(poll_s, max_wait_s - waited))
+        load = os.getloadavg()[0]
+    return True, load, time.monotonic() - start
+
+
+def write_provenance(results_dir: Path, argv, inputs, start, notes: str) -> Path:
+    """``provenance.json`` for this invocation, keeping the earlier ones.
+
+    Calibration and every grid part write the same ``results/realio``
+    directory, so each record carries the ones it replaces in
+    ``extra.earlier_invocations`` (command, time, git state, load, notes)
+    rather than overwriting them.
+    """
+    from prefetch_common.provenance import read_provenance
+    from prefetch_common.provenance import write_provenance as write
+    earlier = []
+    try:
+        previous = read_provenance(results_dir)
+    except (OSError, ValueError):
+        previous = None
+    if previous is not None:
+        earlier = list((previous.get("extra") or {}).get("earlier_invocations") or [])
+        earlier.append({k: previous.get(k) for k in ("command", "created_utc", "git_sha",
+                                                     "git_dirty", "wall_s", "load_avg",
+                                                     "inputs", "notes")})
+    return write(results_dir, argv, inputs, study="realio", start=start, gpu=False,
+                 notes=notes, extra={"earlier_invocations": earlier} if earlier else None)
 
 
 def parse_latency(text: str) -> LatencyModel:
@@ -316,6 +445,20 @@ def _device_label(args, backing: Path) -> tuple[str, str | None]:
     return (args.device_name or device_label(disk, device_info(disk)["rotational"]), disk)
 
 
+def describe_device(device_dir, backing: str | None = None,
+                    name: str | None = None) -> dict:
+    """``{"label", "disk", "rotational", "backing"}`` for the device under
+    ``device_dir``: the results label a run there would get, and whether
+    sysfs calls it rotational (``None`` when it does not say)."""
+    from .devstat import device_info, device_label, disk_for_path
+    from .layout import find_backing
+    path = find_backing(device_dir, backing)
+    disk = disk_for_path(path)
+    rotational = device_info(disk)["rotational"]
+    return {"label": name or device_label(disk, rotational), "disk": disk,
+            "rotational": rotational, "backing": str(path)}
+
+
 def cmd_mkfile(args) -> int:
     from .layout import make_backing_file
     path = Path(args.device_dir) / (args.backing or "backing.bin")
@@ -332,7 +475,7 @@ def cmd_mkfile(args) -> int:
 
 def cmd_calibrate(args) -> int:
     from prefetch_common import schemas
-    from prefetch_common.provenance import snapshot, write_provenance
+    from prefetch_common.provenance import snapshot
     from .calibrate import calibrate
     from .layout import check_backing, find_backing
     start = snapshot()
@@ -347,8 +490,7 @@ def cmd_calibrate(args) -> int:
     path = results / f"device_{row['device']}.json"
     schemas.write_rows(f"realio/device_{row['device']}.json", [row], path)
     if not args.no_provenance:
-        write_provenance(results, sys.argv, [], study="realio", start=start, gpu=False,
-                         notes=f"calibrate {row['device']}")
+        write_provenance(results, sys.argv, [], start, f"calibrate {row['device']}")
     print(f"{row['device']} ({row['model']}): random 4 KiB mean "
           f"{row['rand4k_mean_us']:.1f} us, p50 {row['rand4k_p50_us']:.1f} us; "
           f"sequential {row['seq1m_MBps']:.1f} MB/s")
@@ -446,7 +588,7 @@ def existing_keys(results_dir: Path, details_path: Path | None = None) -> set:
 
 
 def execute(args, traces, modes, thinks) -> int:
-    from prefetch_common.provenance import snapshot, write_provenance
+    from prefetch_common.provenance import snapshot
     from .report import conclusions, row_key
     ok, reason = supported()
     if not ok:
@@ -468,13 +610,15 @@ def execute(args, traces, modes, thinks) -> int:
     if jobs:
         print(f"{len(jobs)} runs on {jobs[0]['device']} ({jobs[0]['backing']}), "
               f"{args.requests} requests each", flush=True)
-    completed = 0
+    completed, waited_s = 0, 0.0
     for i, job in enumerate(jobs, 1):
         if args.max_load is not None:
-            load = os.getloadavg()[0]
-            if load > args.max_load:
-                print(f"stopped: load average {load:.1f} exceeds --max-load "
-                      f"{args.max_load}; {i - 1} of {len(jobs)} runs done (rerun to resume)")
+            quiet, load, waited = wait_for_load(args.max_load, args.max_load_wait)
+            waited_s += waited
+            if not quiet:
+                print(f"stopped: load average {load:.1f} still exceeds --max-load "
+                      f"{args.max_load:g} after {waited:.0f} s; {i - 1} of {len(jobs)} runs "
+                      "done (rerun to resume)")
                 break
         outcome = spawn(job)
         # Written per run, so an interrupted grid resumes where it stopped.
@@ -490,9 +634,10 @@ def execute(args, traces, modes, thinks) -> int:
     rows = finalize(results_dir, details_path)
     summary = write_summary(results_dir, rows, details_path)
     if not args.no_provenance:
-        write_provenance(results_dir, sys.argv, [Path(t) for t in traces], study="realio",
-                         start=start, gpu=False,
-                         notes=f"{completed} runs appended; details in {details_path}")
+        wait_note = (f"; {waited_s:.0f} s spent waiting for the load average"
+                     if waited_s >= 1 else "")
+        write_provenance(results_dir, sys.argv, [Path(t) for t in traces], start,
+                         f"{completed} runs appended; details in {details_path}{wait_note}")
     parity = sum(1 for r in rows if r["backend"] == "odirect")
     print()
     for line in conclusions(summary, parity):
@@ -543,10 +688,22 @@ def cmd_run(args) -> int:
 
 
 def cmd_grid(args) -> int:
-    modes = [m.strip() for m in args.modes.split(",")] if args.modes else list(GRID_MODES)
-    thinks = [t.strip() for t in args.think.split(",")] if args.think else list(GRID_THINK)
-    traces = resolve_traces(args.trace or GRID_TRACES)
-    return execute(args, traces, modes, thinks)
+    modes = [m.strip() for m in args.modes.split(",")] if args.modes else None
+    thinks = [t.strip() for t in args.think.split(",")] if args.think else None
+    parts = plan_parts(args.plan, args.trace, modes, thinks)
+    hours = estimate_seconds(args.plan, args.repeats, traces=args.trace,
+                             requests=args.requests) / 3600
+    print(f"grid plan {args.plan!r}: {len(parts)} part(s), {args.repeats} repeats; planned "
+          f"about {hours:.1f} h (E3_TIMING: a budget estimate, not a measurement)",
+          flush=True)
+    status = 0
+    for part in parts:
+        result = execute(args, resolve_traces(part["traces"]), list(part["modes"]),
+                         list(part["thinks"]))
+        status = status or result
+        if result:
+            break
+    return status
 
 
 def cmd_report(args) -> int:
@@ -602,7 +759,10 @@ def _common(parser, *, run: bool) -> None:
                         help="run Backend A without a memory cgroup (tests only: the "
                              "cache is then unbounded and the rows are not E3 evidence)")
     parser.add_argument("--max-load", type=float, default=None,
-                        help="stop before a run when the 1-min load average exceeds this")
+                        help="before each run, wait while the 1-min load average exceeds this")
+    parser.add_argument("--max-load-wait", type=float, default=0.0,
+                        help="seconds to wait for --max-load before stopping (grid: "
+                             f"{DEFAULT_LOAD_WAIT_S:g})")
     parser.add_argument("--details", default=str(DEFAULT_DETAILS))
 
 
@@ -626,7 +786,10 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--think", default="closed")
     grid = sub.add_parser("grid", help="the E3 grid (plan section 2.6) on one device")
     _common(grid, run=True)
-    grid.set_defaults(repeats=3, max_load=32.0)
+    grid.set_defaults(repeats=3, max_load=32.0, max_load_wait=DEFAULT_LOAD_WAIT_S)
+    grid.add_argument("--plan", default="full", choices=tuple(E3_PLANS),
+                      help="full: plan section 2.6 as written; hdd/ssd: the budgeted E3 "
+                           "grids of results/realio/PREREGISTERED.md")
     grid.add_argument("--trace", action="append", default=None)
     grid.add_argument("--modes", default=None)
     grid.add_argument("--think", default=None)

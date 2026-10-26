@@ -535,6 +535,9 @@ class GpuRunnerTests(unittest.TestCase):
             self.assertIn("linux_ra", baselines)
             self.assertIn(",ok,", (out / "disk_lstm.csv").read_text())
             self.assertEqual(read_provenance(out)["study"], "gpu")
+            # Every file the runner writes (three without write_rows) obeys
+            # its results schema.
+            self.assertEqual(schemas.validate_tree(root / "results"), {})
             # Resumable: a second run recomputes nothing and agrees.
             status, _ = _quiet(gpu_disk.run, config, ["test"])
             self.assertEqual(status, 0)

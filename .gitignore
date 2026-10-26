@@ -5,6 +5,9 @@ __pycache__/
 *.egg-info/
 outputs/
 .realio/
+# O_DIRECT scratch dirs the realio tests make next to tests/ (a crashed
+# run can leave one behind).
+tests/.realio-*/
 
 # Large or licensed source data stays out of Git. These are listed one by one
 # (not a blanket data/) so tracked samples and fixtures under data/samples/

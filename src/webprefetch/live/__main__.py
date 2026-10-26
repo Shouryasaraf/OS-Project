@@ -21,6 +21,11 @@ def _plan(argv) -> int:
                                      description="build (or reuse) a plan and its sim.json")
     run.add_arguments(parser)
     args = parser.parse_args(argv)
+    from .selection import SelectionError
+    try:
+        run.resolve_validated(args)
+    except SelectionError as error:
+        raise SystemExit(f"[live] refused: {error}") from None
     _, base_names = run.resolve_policies(args.policies, args.baseline)
     directory, plan, sim = run.ensure_plan(args, base_names)
     print(json.dumps({"plan_dir": str(directory), "sessions": plan["sessions_selected"],
@@ -38,6 +43,8 @@ def _store(argv) -> int:
     parser.add_argument("--size-median", type=int, default=objects.SIZE_MEDIAN)
     parser.add_argument("--size-sigma", type=float, default=objects.SIZE_SIGMA)
     args = parser.parse_args(argv)
+    from .run import check_store_dir
+    check_store_dir(args.store_dir)
     plan = json.loads((args.plan_dir / "plan.json").read_text())
     print(json.dumps(objects.build_store(plan["items"], args.store_dir, median=args.size_median,
                                          sigma=args.size_sigma), indent=1))
