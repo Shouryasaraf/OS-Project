@@ -112,16 +112,35 @@ def run_replay(args: argparse.Namespace) -> None:
             print(f"Classified {len(predictions)} complete windows")
 
 
-def _depth_skip_reason(artifact: str | None, trace: str, requests: int) -> str | None:
-    """Why ``learned_depth`` may not be scored on requests ``[0, requests)``."""
+#: Committed samples that are a prefix of a block trace an artifact may have
+#: been trained on. ``msr-cambridge1-sample.csv`` matches the first 1000
+#: ``msr_hm_0`` oracle requests row for row (MASTER_PLAN §0.1), so an
+#: ``msr_hm_0`` artifact must not be scored on it either.
+_TRACE_ALIASES = {"msr-cambridge1-sample.csv": "msr_hm_0"}
+
+
+def _depth_skip_reason(artifact: str | None, trace: str | None,
+                       requests: int) -> str | None:
+    """Why ``learned_depth`` may not be scored on requests ``[0, requests)``.
+
+    ``trace`` is the replayed file, or ``None`` for generated requests. An
+    artifact without a matching training record is refused, as in ``sweep``:
+    its training range is unknown, so no slice can be shown to be clean.
+    """
     if not artifact:
         return "no trained learned_depth artifact"
     from .corpora import trace_stem
     from .depth_model import read_training_record, scoring_conflict
     if not Path(artifact).is_file():
         return None  # the replay reports the missing file itself
-    return scoring_conflict(read_training_record(artifact), trace_stem(trace),
-                            0, requests)
+    record = read_training_record(artifact)
+    if record is None:
+        return ("learned_depth artifact has no matching training record, so "
+                "its training range is unknown")
+    if trace is None:
+        return None
+    stem = trace_stem(trace)
+    return scoring_conflict(record, _TRACE_ALIASES.get(stem, stem), 0, requests)
 
 
 def run_benchmark(args: argparse.Namespace) -> None:
@@ -131,14 +150,17 @@ def run_benchmark(args: argparse.Namespace) -> None:
             requests, _ = transition_trace(args.seed + 200000 + offset,
                                            args.windows_per_class, args.window_size)
             datasets.append((f"synthetic_seed_{args.seed + offset}", requests))
+    sources = {}  # dataset name -> replayed file, for the constraint-14 guard
     if "msr" in args.datasets:
         sample = (Path(__file__).resolve().parents[2] / "data" / "samples" /
                   "msr-cambridge1-sample.csv")
         datasets.append(("msr_format_sample", load_csv(sample, "msr")))
+        sources["msr_format_sample"] = str(sample)
     if "iotta" in args.datasets:
         if not args.trace:
             raise ValueError("--datasets iotta requires --trace and its --format")
         datasets.append(("iotta_supplied", load_csv(args.trace, args.format)))
+        sources["iotta_supplied"] = args.trace
     if args.cost_model == "measured":
         sources = [(name, reqs) for name, reqs in datasets
                    if any(getattr(r, "service_ms", None) is not None for r in reqs)]
@@ -158,14 +180,20 @@ def run_benchmark(args: argparse.Namespace) -> None:
         latency = LatencyModel(args.hit_us, args.miss_us, args.prefetch_us)
     rows = []
     for name, requests in datasets:
-        rows.extend(benchmark_dataset(name, requests, seed=args.seed,
-                                      capacity=args.cache_blocks,
-                                      window_size=args.window_size,
-                                      latency=latency,
-                                      lstm_model_path=args.lstm_model,
-                                      online_real=args.online_real and not name.startswith("synthetic"),
-                                      classifier=args.classifier,
-                                      depth_model_path=args.depth_model))
+        refused = (_depth_skip_reason(args.depth_model, sources.get(name), len(requests))
+                   if args.depth_model else None)
+        dataset_rows = benchmark_dataset(
+            name, requests, seed=args.seed, capacity=args.cache_blocks,
+            window_size=args.window_size, latency=latency,
+            lstm_model_path=args.lstm_model,
+            online_real=args.online_real and not name.startswith("synthetic"),
+            classifier=args.classifier,
+            depth_model_path=None if refused else args.depth_model)
+        if refused:
+            for row in dataset_rows:
+                if row["mode"] == "learned_depth":
+                    row["status"] = f"skipped: {refused}"
+        rows.extend(dataset_rows)
     table = markdown_table(rows)
     print(table)
     print("\nModelled latency includes configured prefetch cost; it is not measured device latency.")

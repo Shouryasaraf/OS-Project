@@ -637,6 +637,10 @@ def _fit_once(prepared, seed, epochs, batch_size, lr, weight_decay, hidden,
     if device == "cuda":
         torch.cuda.synchronize()
     train_s = time.perf_counter() - start
+    if best[1] is None:
+        # Every validation loss was NaN (e.g. a bf16 overflow): there is no
+        # epoch to keep, and keeping the last one would hide the failure.
+        raise RuntimeError(f"validation loss was never finite: {history}")
     cpu = _network(len(prepared.segments), hidden, layers)
     cpu.load_state_dict(best[1])
     cpu.eval()
@@ -708,6 +712,10 @@ class _DepthPolicy:
         self.seen = 0
         self.decisions = 0
         self.jumps = 0
+        #: Wall time inside the model alone, so a per-decision inference
+        #: cost excludes the per-request feature and read-ahead work that
+        #: ``Metrics.inference_ms`` also contains.
+        self.model_ms = 0.0
 
     def _observe(self, request: Request, index: int) -> None:
         pass
@@ -736,7 +744,9 @@ class _DepthPolicy:
         self._observe(request, index)
         jump = None
         if index >= HISTORY - 1 and (index - HISTORY + 1) % self.decide_every == 0:
+            start = time.perf_counter()
             seg_p, token, token_p = self._probabilities(index)
+            self.model_ms += (time.perf_counter() - start) * 1000
             self.decisions += 1
             self.depth, jump = self.decide(seg_p, int(token), float(token_p))
         if request.operation != "R":

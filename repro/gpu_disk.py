@@ -161,6 +161,30 @@ def _write_csv(path: Path, columns, rows) -> None:
     os.replace(tmp, path)
 
 
+#: Config fields every cached work file depends on. Resuming a ``work_dir``
+#: with other values would silently mix runs -- say, baselines scored on a
+#: 100k-request test slice next to a learned_depth score on the full one.
+WORK_KEY_FIELDS = ("n", "epochs", "batch_size", "patience", "capacity", "val_replay",
+                   "test_replay", "action_caps", "decide_every", "lstm_epochs",
+                   "lstm_batch_size", "lstm_seed")
+
+
+def _check_work_dir(config: Config) -> str | None:
+    """Bind ``work_dir`` to its configuration; the reason it cannot be reused, or None."""
+    key = json.loads(json.dumps({name: getattr(config, name) for name in WORK_KEY_FIELDS}))
+    path = config.work_dir / "config.json"
+    stored = _read_json(path)
+    if stored is None:
+        _write_json(path, key)
+        return None
+    changed = sorted(name for name in key if stored.get(name) != key[name])
+    if changed:
+        return (f"{config.work_dir} holds work for a different configuration "
+                f"({', '.join(f'{n}: {stored.get(n)} -> {key[n]}' for n in changed)}); "
+                "pass another --work-dir or delete it")
+    return None
+
+
 def _cache_path(config: Config, stem: str) -> Path:
     return config.work_dir / "prepared" / f"{stem}.pkl"
 
@@ -281,7 +305,9 @@ def _score_depth(config: Config, stem: str, seed: int, info: dict) -> str:
                             depth_model=policy)
         row["decisions"] = policy.decisions
         row["jumps"] = policy.jumps
-        row["infer_us_per_decision"] = (row["inference_ms"] * 1000 / policy.decisions
+        # Model time only: inference_ms also counts every request's
+        # feature update and read-ahead, which is not inference.
+        row["infer_us_per_decision"] = (policy.model_ms * 1000 / policy.decisions
                                         if policy.decisions else None)
         scored[str(cap)] = row
     _write_json(out, {"trace": stem, "seed": seed, "thresholds": thresholds,
@@ -431,8 +457,13 @@ def _learned_depth_rows(config: Config, stems) -> list[dict]:
                     "none_hit_ratio": base["summary"]["none"]["hit_ratio"],
                     "oracle_same_actions_hit_ratio": per_cap["oracle"]["hit_ratio"],
                 }
+                if scored is not None and scored["test_slice"] != test:
+                    scored, reason = None, (f"skipped: scored on {scored['test_slice']}, "
+                                            f"baselines on {test}")
+                else:
+                    reason = "skipped: training or scoring did not finish"
                 if scored is None:
-                    row.update(status="skipped: training or scoring did not finish",
+                    row.update(status=reason,
                                thresholds=None, test_hit_ratio=None, test_issued=None,
                                test_precision=None, device=config.device, train_s=None,
                                infer_us_per_decision=None, gpu_contention=None)
@@ -560,6 +591,10 @@ def run(config: Config, argv=None, log=print) -> int:
         return EXIT_UNAVAILABLE
     for directory in (config.work_dir, config.models_dir, config.results_dir):
         directory.mkdir(parents=True, exist_ok=True)
+    stale = _check_work_dir(config)
+    if stale:
+        log(f"refusing to resume: {stale}")
+        return 2
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     log(f"E2: {len(stems)} learned_depth traces x {len(config.seeds)} seeds, "
         f"{len(lstm_stems)} LSTM traces; missing: {sorted(missing) or 'none'}")

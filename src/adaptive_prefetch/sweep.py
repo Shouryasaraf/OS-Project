@@ -269,8 +269,7 @@ def sweep_trace(path: Path, mode: str, *,
     if mode == "learned_depth":
         if not depth_model_path:
             return _skipped_row(base, "no trained learned_depth artifact")
-        conflict = _depth_conflict(depth_model_path, trace_name(path),
-                                   requests_per_trace)
+        conflict = _depth_conflict(depth_model_path, path, requests_per_trace)
         if conflict:
             return _skipped_row(base, conflict)
     if mode == "adaptive" and model is None:
@@ -324,9 +323,15 @@ def sweep_trace(path: Path, mode: str, *,
     return row
 
 
-def _depth_conflict(artifact: str, trace: str,
+def _depth_conflict(artifact: str, path: Path,
                     requests_per_trace: int | None) -> str | None:
-    """Why ``artifact`` may not be scored on requests ``[0, cap)`` of ``trace``."""
+    """Why ``artifact`` may not be scored on requests ``[0, cap)`` of ``path``.
+
+    Training records name traces by ``corpora.trace_stem`` (what
+    ``depth_model.load_prefix`` and ``train-lstm`` write), which differs from
+    :func:`trace_name` for ``.revised`` files, so the guard uses that name.
+    """
+    from .corpora import trace_stem
     from .depth_model import read_training_record, scoring_conflict
     if not Path(artifact).is_file():
         return None  # the replay reports the missing file itself
@@ -334,7 +339,7 @@ def _depth_conflict(artifact: str, trace: str,
     if record is None:
         return ("learned_depth artifact has no matching training record, so "
                 "its training range is unknown")
-    return scoring_conflict(record, trace, 0, requests_per_trace)
+    return scoring_conflict(record, trace_stem(path), 0, requests_per_trace)
 
 
 def sweep_collection(trace_dir: Path | None = None,

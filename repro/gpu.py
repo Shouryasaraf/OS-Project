@@ -36,6 +36,6 @@ def run(study: str, args: argparse.Namespace) -> int:
         raise ValueError(f"no GPU step for study {study!r}")
     if study == "disk":
         from . import gpu_disk
-        argv = ["reproduce.py", "disk", "--gpu"] + (["--quick"] if args.quick else [])
+        argv = ["reproduce.py", "disk", "--gpu"] + (["--quick"] if getattr(args, "quick", False) else [])
         return gpu_disk.run(_disk_config(args), argv)
     return not_implemented(f"{study} --gpu", OWNERS[study])

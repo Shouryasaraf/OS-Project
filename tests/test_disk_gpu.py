@@ -14,6 +14,7 @@ import struct
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from adaptive_prefetch import sweep
@@ -121,6 +122,28 @@ class RegistrationTests(unittest.TestCase):
             row = sweep.sweep_trace(path, "learned_depth", latency_model=LatencyModel(),
                                     depth_model_path=str(artifact))
             self.assertIn("no matching training record", row["status"])
+
+    def test_guards_name_traces_as_the_training_record_does(self):
+        # Records name traces by corpora.trace_stem; sweep.trace_name differs
+        # for .revised files, which once let an in-sample artifact through.
+        from adaptive_prefetch import cli
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            artifact = root / "depth.pt"
+            artifact.write_bytes(b"weights")
+            write_training_record(artifact, {"traces": [
+                {"trace": "hm_1.csv.revised", "train": [0, 60], "val": [60, 80]},
+                {"trace": "msr_hm_0", "train": [0, 600], "val": [600, 800]}]})
+            self.assertIn("trained on hm_1.csv.revised", sweep._depth_conflict(
+                str(artifact), root / "hm_1.csv.revised", 100))
+            # The committed MSR sample is the first 1000 msr_hm_0 requests.
+            self.assertIn("trained on msr_hm_0", cli._depth_skip_reason(
+                str(artifact), "data/samples/msr-cambridge1-sample.csv", 1000))
+            self.assertIsNone(cli._depth_skip_reason(str(artifact), None, 1000))
+            # No matching record: the training range is unknown, so refuse.
+            artifact.write_bytes(b"other weights")
+            self.assertIn("no matching training record",
+                          cli._depth_skip_reason(str(artifact), None, 1000))
 
     def test_make_predictor_needs_an_artifact_or_a_policy(self):
         with self.assertRaisesRegex(RuntimeError, "no trained learned_depth artifact"):
@@ -300,6 +323,8 @@ class DepthModelTests(unittest.TestCase):
                 self.assertEqual(candidates, list(range(end, end + cap)))
         never = self.policy(1.01)
         self.assertEqual([c for c in map(never.next_candidates, requests) if c], [])
+        self.assertEqual(never.decisions, 1)
+        self.assertGreater(never.model_ms, 0.0)
 
     def test_precomputed_outputs_reproduce_the_online_policy(self):
         D = self.D
@@ -515,6 +540,10 @@ class GpuRunnerTests(unittest.TestCase):
             self.assertEqual(status, 0)
             self.assertEqual(schemas.validate_file(out / "disk_learned_depth.csv",
                                                    "gpu/disk_learned_depth.csv"), rows)
+            # Resuming with a different test slice would mix two runs' files.
+            status, log = _quiet(gpu_disk.run, replace(config, test_replay=200), ["test"])
+            self.assertEqual(status, 2)
+            self.assertIn("test_replay: 300 -> 200", log)
 
 
 if __name__ == "__main__":
