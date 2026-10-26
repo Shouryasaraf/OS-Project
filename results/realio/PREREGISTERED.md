@@ -175,8 +175,11 @@ How the cut was chosen, using run time only:
   spread model is kept on msr_hm_0 only: it is the cheapest of the five, and
   it is the trace whose prototype think-time findings plan section 2.6 lists
   for re-testing.
-- The SSD subset is the plan's own reduced SSD grid (Critic, section 2.6),
-  unchanged.
+- The SSD subset is the plan's reduced SSD grid (Critic, section 2.6:
+  msr_hm_0 and msr_web_2, closed loop, none, deep, linux_ra and guard on
+  Backend B, kernel_ra on Backend A) with one addition: the four Backend B
+  modes also run on Backend A, so that kernel_ra has a Backend A `none` of
+  the same repeat to be paired with (R1, R6). That adds 24 of the 54 runs.
 
 The planning constants (`realio.runner.E3_TIMING`) are the WP8 smoke's 1 GiB
 flush times (9.6-10.5 s on sdb, 2.6-2.7 s on the SSD) and a WPF1 timing run on

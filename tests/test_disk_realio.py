@@ -564,6 +564,7 @@ class BudgetTests(unittest.TestCase):
         self.assertEqual(waited, 700)
         self.assertEqual(len(logged), 1 + 3)  # at 0, 300 and 600 s
 
+    @unittest.skipUnless(SUPPORTED, WHY)
     def test_grid_waits_out_a_load_spike_instead_of_stopping(self):
         from adaptive_prefetch.realio import runner
         fill = {"str": "x", "int": 0, "float": 0.0}
@@ -636,6 +637,7 @@ class ReproTests(unittest.TestCase):
         self.assertIn("hdd grid", repro_realio.estimate(args))
         self.assertIn("ssd subset", repro_realio.estimate(args))
 
+    @unittest.skipUnless(SUPPORTED, WHY)
     def test_repro_realio_picks_the_grid_and_reuses_the_calibration(self):
         sys.path.insert(0, str(ROOT))
         from repro import realio as repro_realio

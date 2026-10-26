@@ -588,7 +588,6 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(schemas.validate_tree(FIXTURES), {})
 
 
-
 class ProducerOutputTests(unittest.TestCase):
     """Producers that write without ``write_rows`` emit what their schema says.
 
