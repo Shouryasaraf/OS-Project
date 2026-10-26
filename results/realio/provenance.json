@@ -1,0 +1,40 @@
+{
+  "format": "prefetch_common.provenance/1",
+  "study": "realio",
+  "command": [
+    "/home/antpc/Ashvik/OS-Project/OS-Project/src/adaptive_prefetch/realio/__main__.py",
+    "calibrate",
+    "--device-dir",
+    "outputs/realio/ssd"
+  ],
+  "git_sha": "b9baefd7a241f6dc8a9e435575776ac9c267d817",
+  "git_dirty": false,
+  "created_utc": "2026-10-26T14:42:19+00:00",
+  "host": {
+    "hostname": "antpc",
+    "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+    "kernel": "6.14.0-37-generic",
+    "python": "3.12.3",
+    "cpu_count": 128
+  },
+  "load_avg": {
+    "start": [
+      4.52,
+      6.52,
+      11.61
+    ],
+    "end": [
+      4.56,
+      6.49,
+      11.58
+    ]
+  },
+  "wall_s": 4.426,
+  "gpu": null,
+  "inputs": {},
+  "outputs": {
+    "device_sdb.json": "e6f3addd0f9504cf91813314f1bad4dd129172f436ad257a717117887120be79",
+    "device_ssd.json": "d86ae43059f766f25392b4589e35e64ce9aa7750edbe82c2daba06671786259d"
+  },
+  "notes": "calibrate ssd"
+}
