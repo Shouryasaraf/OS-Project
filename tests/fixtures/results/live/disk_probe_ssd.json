@@ -1,0 +1,45 @@
+{
+  "label": "ssd",
+  "store": "/fixture/store.bin",
+  "device": {
+    "dev": "8:34",
+    "name": "fixture",
+    "disk": "fixture",
+    "rotational": false
+  },
+  "objects": 1000,
+  "load_avg": [
+    1.0,
+    1.0,
+    1.0
+  ],
+  "tag": "MEASURED",
+  "resident_after_drop": 0.0,
+  "resident_after_read": 1.0,
+  "cold": {
+    "mean_us": 497.580073,
+    "p50_us": 305.371555,
+    "p99_us": 2129.890257,
+    "n": 1000
+  },
+  "warm": {
+    "mean_us": 12.0,
+    "p50_us": 305.371555,
+    "p99_us": 2129.890257,
+    "n": 1000
+  },
+  "hinted": {
+    "0": {
+      "resident_frac": 0.0,
+      "mean_us": 497.580073,
+      "p50_us": 305.371555,
+      "p99_us": 2129.890257,
+      "n": 1000
+    }
+  },
+  "load_avg_end": [
+    1.0,
+    1.0,
+    1.0
+  ]
+}

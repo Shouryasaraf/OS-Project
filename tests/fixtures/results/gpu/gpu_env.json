@@ -1,0 +1,39 @@
+{
+  "device_requested": "cuda",
+  "torch": "0.0-fixture",
+  "cuda_device": "FIXTURE GPU",
+  "jobs": [
+    {
+      "job": "lstm_msr_hm_0",
+      "device": "cuda",
+      "train_s": 4.0,
+      "oom_retries": 0,
+      "batch_size": 4096,
+      "gpu_contention": "fixture: no GPU was used",
+      "samples": []
+    },
+    {
+      "job": "lstm_msr_web_2",
+      "device": "cuda",
+      "train_s": 4.0,
+      "oom_retries": 0,
+      "batch_size": 4096,
+      "gpu_contention": "fixture: no GPU was used",
+      "samples": []
+    }
+  ],
+  "note": "FIXTURE: synthetic values from tests/fixtures/make_results_fixtures.py; not a result, never quote",
+  "missing_traces": [],
+  "config": {
+    "traces": [
+      "msr_hm_0",
+      "msr_web_2"
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "quick": false
+  }
+}

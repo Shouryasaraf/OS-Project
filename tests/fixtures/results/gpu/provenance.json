@@ -39,7 +39,10 @@
   ],
   "inputs": {},
   "outputs": {
-    "disk_learned_depth.csv": "c0fd194e77f57dbcc7755fba35e1a98726f3d52d94ff7ddc2681fd9027bd8b9e"
+    "disk_depth_baselines.csv": "939f847a26b2de1552adde2c9ded94d6fc7409f6147f03b8e67d1d2489330561",
+    "disk_learned_depth.csv": "c0fd194e77f57dbcc7755fba35e1a98726f3d52d94ff7ddc2681fd9027bd8b9e",
+    "disk_lstm.csv": "b4c24e4d74d3e1aaf4d61977437316ad1e529b1c13588396dd038c5db31c8cac",
+    "gpu_env.json": "c8bb53e1467c3cbaca5fb87badd250f18544d379eaa7ef64d7feceb8e5cddc66"
   },
   "notes": "FIXTURE: synthetic values from tests/fixtures/make_results_fixtures.py; not a result, never quote"
 }

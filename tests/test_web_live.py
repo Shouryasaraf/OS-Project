@@ -491,6 +491,9 @@ class EndToEndParityTests(unittest.TestCase):
             self.assertEqual(len(metrics), 4)
             self.assertEqual(sum(r["mismatched_sessions"] for r in parity), 0)
             config = json.loads((results / "live_config.json").read_text())
+            from prefetch_common.schemas import validate_file
+            validate_file(results / "live_config.json", "live/live_config.json")
+            validate_file(results / "provenance.json", "live/provenance.json")
             run = next(iter(config["runs"].values()))
             self.assertEqual(run["assumptions"]["rtt_ms"]["tag"], "ASSUMED")
             self.assertEqual(run["assumptions"]["store"]["tag"], "MEASURED")

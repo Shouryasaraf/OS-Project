@@ -1,0 +1,73 @@
+{
+  "source": "fixture",
+  "dataset_version": 2,
+  "source_verified": false,
+  "session_gap_minutes": 30,
+  "raw_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "raw_rows": 2000,
+  "duplicate_rows_removed": 0,
+  "event_counts_after_dedup": {
+    "view": 1900
+  },
+  "views": 1900,
+  "visitors": 400,
+  "sessions": 500,
+  "sessions_with_2plus_views": 200,
+  "sessions_with_3plus_views": 90,
+  "sessions_with_5plus_views": 30,
+  "eligible_next_view_pairs": 700,
+  "session_length_quantiles": {
+    "0.5": 1.0,
+    "0.9": 3.0
+  },
+  "split_cutoffs_ms": [
+    1,
+    2,
+    3
+  ],
+  "views_by_split": {
+    "0": 760,
+    "1": 380,
+    "2": 380,
+    "3": 380
+  },
+  "eligible_pairs_by_split": {
+    "0": 280,
+    "1": 140,
+    "2": 140,
+    "3": 140
+  },
+  "prepared_path": "data/processed/views.csv.gz",
+  "replayed_views": {
+    "validation": 380,
+    "test": 380
+  },
+  "pair_kinds": {
+    "validation": {
+      "eligible": 250,
+      "kinds": {
+        "novel": 167,
+        "self_repeat": 55,
+        "earlier_in_session": 28
+      },
+      "kinds_share": {
+        "novel": 0.668,
+        "self_repeat": 0.22,
+        "earlier_in_session": 0.112
+      }
+    },
+    "test": {
+      "eligible": 250,
+      "kinds": {
+        "novel": 167,
+        "self_repeat": 55,
+        "earlier_in_session": 28
+      },
+      "kinds_share": {
+        "novel": 0.668,
+        "self_repeat": 0.22,
+        "earlier_in_session": 0.112
+      }
+    }
+  }
+}

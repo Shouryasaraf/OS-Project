@@ -18,6 +18,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -283,8 +284,24 @@ class FixtureBenchmarkTests(unittest.TestCase):
     def test_schema_files_validate(self):
         for name in ("policy_metrics.csv", "comparisons.csv"):
             schemas.read_rows(f"web/{name}", self.results / name)
+        # Written with pandas / json.dumps; schemas derived from those writers.
         for name in ("calibration.csv", "dataset_profile.json", "think_time.json"):
-            self.assertTrue((self.results / name).exists(), name)
+            schemas.validate_file(self.results / name, f"web/{name}")
+
+    def test_learning_curve_file_validates(self):
+        # The fixture is too small for train_ranker's 100-positive floor, so
+        # the tiny ranker stands in; the replay and the pandas writer are real.
+        summary = {"training_decisions": 200, "candidate_rows": 900, "positive_candidates": 40,
+                   "selected_C": 1.0, "validation_coverage_at_8": 0.2,
+                   "validation_hit_at_1": 0.1, "validation_mrr_at_8": 0.15}
+        with contextlib.redirect_stdout(io.StringIO()), \
+                mock.patch("webprefetch.model.train_ranker",
+                           return_value=(self.model, summary)):
+            rows = benchmark.run_learning_curve(self.processed / "views.csv.gz", self.models,
+                                                self.results, decisions=(200,), workers=1)
+        written = schemas.validate_file(self.results / "learning_curve.csv",
+                                        "web/learning_curve.csv")
+        self.assertEqual(len(written), len(rows))
 
     def test_freshness_file_validates(self):
         rows = benchmark.run_freshness(self.processed / "views.csv.gz", self.results)
@@ -418,6 +435,7 @@ class FixtureBenchmarkTests(unittest.TestCase):
         self.assertEqual(record["mismatches"], 0)
         self.assertEqual(json.loads((self.results / "session_parity.json").read_text())["format"],
                          "webprefetch.session_parity/2")
+        schemas.validate_file(self.results / "session_parity.json", "web/session_parity.json")
 
     def test_demo_adaptive_is_the_validated_policy_not_penalty_equals_cost(self):
         data = DemoData(ROOT, models=self.models, processed=self.processed, outputs=self.outputs)

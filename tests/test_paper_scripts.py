@@ -299,10 +299,10 @@ class TablesTests(_Tmp):
         for name, text in texts.items():
             self.assertSound(name, text)
             self.assertIn("FIXTURE DATA", text, name)
-        # Only the schema-less web dataset profile is absent from the fixtures.
+        # Every input has a fixture now, the web dataset profile included.
         incomplete = sorted(o.name for o in outputs if o.missing)
-        self.assertEqual(incomplete, ["tables/t1_datasets.tex", "tables/t4_web_dataset.tex"])
-        self.assertIn("MISSING", texts["t4_web_dataset"])
+        self.assertEqual(incomplete, [])
+        self.assertNotIn("MISSING", texts["t4_web_dataset"])
         self.assertNotIn("MISSING", texts["t2_disk_main"])
 
     def test_every_table_is_a_placeholder_without_results(self):
