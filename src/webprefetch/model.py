@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from math import log1p
 from pathlib import Path
 
@@ -15,49 +14,15 @@ from sklearn.metrics import log_loss
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
+# The index lives in index.py. These names stay importable from here, and
+# pickled artifacts that name webprefetch.model.CandidateIndex still load.
+from .index import MAX_TRANSITIONS, POPULAR_FALLBACK, CandidateIndex, fit_index  # noqa: F401
 
-MAX_TRANSITIONS = 20
-POPULAR_FALLBACK = 8
 FEATURE_NAMES = (
     "log_pair_count", "pair_probability", "log_source_support",
     "log_global_popularity", "candidate_is_previous", "log_session_position",
     "log_preceding_gap_seconds", "cart_count", "retrieval_rank",
 )
-
-
-@dataclass
-class CandidateIndex:
-    transitions: dict[int, tuple[tuple[int, int], ...]]
-    source_total: dict[int, int]
-    global_count: dict[int, int]
-    popular: tuple[int, ...]
-
-    def candidates(self, current: int) -> list[tuple[int, int]]:
-        found: dict[int, int] = {}
-        for item, count in self.transitions.get(current, ()):
-            if item != current:
-                found[item] = count
-        for item in self.popular:
-            if item != current and item not in found:
-                found[item] = 0
-        return list(found.items())
-
-
-def fit_index(views: pd.DataFrame) -> CandidateIndex:
-    history = views.loc[views.split.eq(0)]
-    pairs = history.loc[history.eligible & history.next_item.ge(0), ["itemid", "next_item"]]
-    counts = pairs.groupby(["itemid", "next_item"], sort=False).size().rename("count").reset_index()
-    counts.sort_values(["itemid", "count", "next_item"], ascending=[True, False, True], inplace=True)
-    top = counts.groupby("itemid", sort=False).head(MAX_TRANSITIONS)
-    transitions: dict[int, list[tuple[int, int]]] = {}
-    for row in top.itertuples(index=False):
-        transitions.setdefault(int(row.itemid), []).append((int(row.next_item), int(row.count)))
-    source_total = {int(k): int(v) for k, v in pairs.groupby("itemid").size().items()}
-    popularity = history.itemid.value_counts().rename("count").rename_axis("itemid").reset_index()
-    popularity.sort_values(["count", "itemid"], ascending=[False, True], inplace=True)
-    global_count = {int(row.itemid): int(row.count) for row in popularity.itertuples(index=False)}
-    return CandidateIndex({k: tuple(v) for k, v in transitions.items()}, source_total,
-                          global_count, tuple(int(x) for x in popularity.itemid.iloc[:POPULAR_FALLBACK]))
 
 
 def features(row, candidate: int, pair_count: int, retrieval_rank: int,
