@@ -64,6 +64,11 @@ class UtilityTests(unittest.TestCase):
         sweep = {"mode": "deep", "hit_ratio": 0.25, "total_prefetches": 30,
                  "read_blocks": 400, "requests": 50}
         self.assertEqual(utility.row_counts(sweep), (100.0, 30.0, 400.0))
+        # A skipped sweep row keeps its per-I/O requests; it must not become
+        # the denominator in place of the missing read_blocks.
+        partial = dict(sweep, read_blocks=None)
+        with self.assertRaises(ValueError):
+            utility.row_counts(partial)
         ratios = {"views": 10, "hit_ratio": 0.5, "issued_per_view": 2.0}
         self.assertEqual(utility.row_counts(ratios), (5.0, 20.0, 10.0))
         with self.assertRaises(KeyError):
@@ -441,6 +446,11 @@ class SchemaTests(unittest.TestCase):
             self.assertFalse(target.exists(), "nothing is written when a row fails")
         schemas.write_rows("disk/kappa.csv", [good], target)
         self.assertTrue(target.exists())
+        # '' and None are one empty field in csv, so a nullable str refuses ''.
+        decomposition = self._row("web/decomposition.csv", note="")
+        with self.assertRaises(schemas.SchemaError):
+            schemas.write_rows("web/decomposition.csv", [decomposition], self.tmp / "d.csv")
+        self.assertFalse((self.tmp / "d.csv").exists())
 
     def test_csv_round_trip_is_typed(self):
         target = self.tmp / "learned.csv"

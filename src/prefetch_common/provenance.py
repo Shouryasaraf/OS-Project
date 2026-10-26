@@ -156,8 +156,9 @@ def write_provenance(directory: str | Path, cmd, inputs=(), *,
     """Write ``<directory>/provenance.json`` and return its path.
 
     ``cmd`` is the command line (a list, or one string). ``inputs`` are the
-    files the run read; their SHA-256 is taken now. ``start`` is a :func:`snapshot` taken when the run began, giving the
-    start load and the wall time. ``outputs=True`` hashes every file already
+    files the run read; their SHA-256 is taken now. ``start`` is a
+    :func:`snapshot` taken when the run began, giving the start load and the
+    wall time. ``outputs=True`` hashes every file already
     in ``directory``, so call this last. ``gpu="auto"`` queries
     ``nvidia-smi`` when it is installed; ``True`` requires it; ``False``
     skips it. ``study`` defaults to the directory name.

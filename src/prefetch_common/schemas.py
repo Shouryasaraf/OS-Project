@@ -126,9 +126,10 @@ _SWEEP = (
     _c("hit_us", "float"), _c("miss_us", "float"), _c("prefetch_us", "float"),
     _c("break_even", "float", "LatencyModel.break_even_precision() = utility.cost_to_c"),
     _c("status", "str", "ok | skipped: <reason>"),
-    _c("requests", "int", "canonical requests in the slice"),
-    _c("blocks", "int", "512-B blocks requested in the slice"),
-    _c("hours_covered", "float", "trace time spanned by the slice"),
+    _c("requests", "int?", "canonical requests in the slice; None only on a "
+       "skipped row that never loaded it"),
+    _c("blocks", "int?", "512-B blocks requested in the slice; None as requests"),
+    _c("hours_covered", "float?", "trace time spanned by the slice; None as requests"),
     _c("ops_known", "bool", "False for oracle traces: writes replay as reads"),
     _c("ts_resolution_s", "float", "1 for oracle traces"),
     _c("read_blocks", "int?", "Metrics.read_blocks"),
@@ -538,6 +539,10 @@ def _plain(value):
 def _csv_cell(column: Column, value) -> str:
     if value is None:
         return ""
+    if value == "" and column.base == "str" and column.nullable:
+        # An empty field reads back as None in a nullable column.
+        raise SchemaError(f"column {column.name!r}: write None, not '', in a nullable "
+                          "str column (csv cannot tell them apart)")
     value = _plain(value)
     if column.base == "json":
         return json.dumps(value, sort_keys=True, separators=(",", ":"))

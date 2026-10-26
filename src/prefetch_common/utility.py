@@ -96,16 +96,26 @@ def _field(row, keys: Sequence[str]):
     return None
 
 
+def _has(row, key: str) -> bool:
+    return key in row if isinstance(row, Mapping) else hasattr(row, key)
+
+
 def row_counts(row) -> tuple[float, float, float]:
     """``(hits, issued, requests)`` from a disk or web result row.
 
     Accepts a mapping or an object (a disk ``Metrics`` works). Counts are
     preferred; ``hit_ratio`` and ``issued_per_view`` / ``issued_per_request``
-    are used only when a count is absent.
+    are used only when a count is absent. The denominator is the first of
+    ``read_blocks``/``views``/``requests`` the row *has*: a disk sweep row
+    whose ``read_blocks`` is ``None`` (skipped) raises rather than falling
+    back to its per-I/O ``requests``.
     """
-    requests = _field(row, _REQUEST_KEYS)
-    if requests is None:
+    key = next((k for k in _REQUEST_KEYS if _has(row, k)), None)
+    if key is None:
         raise KeyError(f"row has none of {_REQUEST_KEYS}")
+    requests = _field(row, (key,))
+    if requests is None:
+        raise ValueError(f"row's {key} is None (a skipped row has no counts)")
     requests = float(requests)
     hits = _field(row, _HIT_KEYS)
     if hits is None:
