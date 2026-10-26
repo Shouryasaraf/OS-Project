@@ -247,6 +247,7 @@ class PageCacheBackend:
         self.useful = 0
         self.prefetch_bytes = 0
         self.hint_calls = 0
+        self.hint_errors: list[BaseException] = []
         self._buf = bytearray(1 << 20)
         self._view = memoryview(self._buf)
 
@@ -340,8 +341,18 @@ class PageCacheBackend:
         return new
 
     def _hint_job(self, ranges) -> None:
-        for offset, nbytes in ranges:
-            self.hint_calls += willneed(self.fd, offset, nbytes, self.chunk)
+        try:
+            for offset, nbytes in ranges:
+                self.hint_calls += willneed(self.fd, offset, nbytes, self.chunk)
+        except BaseException as error:      # its future is never awaited
+            self.hint_errors.append(error)
+            raise
+
+    def check_hints(self) -> None:
+        """Raise if a hint failed on the helper thread (call after shutdown)."""
+        if self.hint_errors:
+            raise OSError(f"{len(self.hint_errors)} WILLNEED hints failed; first: "
+                          f"{self.hint_errors[0]!r}")
 
     def run(self, requests, plan: list[PlanStep] | None, gaps,
             pacer: Pacer | None = None) -> dict:
@@ -355,6 +366,7 @@ class PageCacheBackend:
             if plan is not None and plan[i].prefetch_runs:
                 self.hint(plan[i].prefetch_runs)
         self.helper.shutdown(wait=True)
+        self.check_hints()
         return stats.result(self)
 
 

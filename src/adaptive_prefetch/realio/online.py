@@ -133,6 +133,7 @@ class OnlineDriver:
                 gate.decide()
             self.metrics.policy_switches = gate.switches
         backend.helper.shutdown(wait=True)
+        backend.check_hints()
         result = stats.result(backend)
         result["inference_us"] = self.inference_us
         result["gate_switches"] = gate.switches if gate is not None else None

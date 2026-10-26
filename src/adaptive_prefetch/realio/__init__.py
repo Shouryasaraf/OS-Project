@@ -40,7 +40,9 @@ BLOCK = 512
 #: Kernel page size; the page cache works in these.
 PAGE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
 #: Cache capacity used for E3, in blocks (32 MiB). A 1 MiB cache cannot be
-#: emulated in Backend A: the cgroup budget is MemoryMax minus ~7 MiB.
+#: emulated in Backend A: the prototype measured the cgroup's page-cache
+#: budget at MemoryMax minus ~7 MiB (plan section 2.6), and the offset this
+#: package uses is itself 1 MiB (``backend_pagecache.BUDGET_OFFSET``).
 DEFAULT_CAPACITY = 65_536
 
 

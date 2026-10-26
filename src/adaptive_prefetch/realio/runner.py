@@ -64,9 +64,14 @@ def load_requests(path, requests: int | None, skip: int = 0) -> list:
     return loaded[skip:skip + requests if requests is not None else None]
 
 
-def trace_label(path) -> str:
+def trace_label(path, skip: int = 0) -> str:
+    """The row's ``trace``: ``msr_hm_0``, or ``msr_hm_0+skip1600000`` for a run
+    that skipped requests. A skipped run replays a different segment (the E2
+    test segment for ``learned_depth``), so it must never share a row key, a
+    ``none`` calibration or a summary group with the trace's prefix."""
     from ..sweep import trace_name
-    return trace_name(Path(path))
+    name = trace_name(Path(path))
+    return f"{name}+skip{skip}" if skip else name
 
 
 def backend_for(mode: str, backends) -> list[str]:
@@ -172,7 +177,8 @@ def run_one(spec: dict) -> dict:
     errors = sorted(pacer.errors)
     row = {
         "device": spec["device"], "backend": backend_name, "mode": mode,
-        "think": spec["think"], "repeat": spec["repeat"], "trace": trace_label(spec["trace"]),
+        "think": spec["think"], "repeat": spec["repeat"],
+        "trace": trace_label(spec["trace"], spec["skip_requests"]),
         "requests": len(requests),
         "sim_hit_ratio": metrics.hit_ratio if metrics else None,
         "sim_precision": metrics.prefetch_precision if metrics else None,
@@ -254,6 +260,10 @@ def spawn(spec: dict, *, timeout: float = 7200.0) -> dict:
             return json.loads(line[len(RESULT_MARK):])
     if done.returncode == 3:
         raise CacheDivergence(done.stderr.strip().splitlines()[-1])
+    if done.returncode == -9 and spec["backend"] == "pagecache" and not spec["no_cgroup"]:
+        raise RuntimeError(f"run pagecache/{spec['mode']} was killed (SIGKILL), most "
+                           "likely by its memory scope's OOM killer: the child's heap "
+                           "outgrew capacity + SCOPE_HEADROOM")
     raise RuntimeError(f"run {spec['backend']}/{spec['mode']} failed "
                        f"(exit {done.returncode}): {done.stderr.strip()[-2000:]}")
 
@@ -387,7 +397,7 @@ def plan_jobs(args, traces, modes, thinks) -> list[dict]:
                         "replay_kw": parse_replay_args(args.replay_arg),
                         "order": order, "seed": args.seed,
                     })
-    done = existing_keys(Path(args.results_dir))
+    done = existing_keys(Path(args.results_dir), Path(args.details))
     if done:
         kept = [j for j in jobs if job_key(j) not in done]
         if len(kept) < len(jobs):
@@ -412,19 +422,27 @@ def parse_replay_args(items) -> dict:
 
 
 def job_key(job: dict) -> tuple:
-    """The ``report.row_key`` a job's row will have (requests may be capped
-    by the trace length, so they are matched on the requested count)."""
+    """The ``report.row_key`` a job's row will have when the trace is long
+    enough; a row records the requests actually replayed, so a capped run
+    is matched through its detail record's spec instead (``existing_keys``)."""
     return (job["device"], job["backend"], job["mode"], job["think"], job["repeat"],
-            trace_label(job["trace"]), job["requests"])
+            trace_label(job["trace"], job["skip_requests"]), job["requests"])
 
 
-def existing_keys(results_dir: Path) -> set:
+def existing_keys(results_dir: Path, details_path: Path | None = None) -> set:
+    """Keys of the runs already in ``realio.csv``: their row keys, plus the
+    job key of each one's spec, so a run capped by a short trace resumes."""
     from prefetch_common import schemas
     from .report import row_key
     path = results_dir / "realio.csv"
     if not path.exists():
         return set()
-    return {row_key(r) for r in schemas.read_rows("realio/realio.csv", path)}
+    keys = {row_key(r) for r in schemas.read_rows("realio/realio.csv", path)}
+    if details_path is not None:
+        for key, record in read_details(details_path).items():
+            if key in keys and isinstance(record.get("spec"), dict):
+                keys.add(job_key(record["spec"]))
+    return keys
 
 
 def execute(args, traces, modes, thinks) -> int:

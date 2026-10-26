@@ -71,6 +71,7 @@ class ODirectBackend:
         self.max_inflight = 0
         self.demand_bytes = 0
         self.prefetch_bytes = 0
+        self.prefetch_errors: list[BaseException] = []
 
     def close(self) -> None:
         self.pool.shutdown(wait=True)
@@ -93,6 +94,13 @@ class ODirectBackend:
                 self.max_inflight = self.inflight
         try:
             self._read(self.slabs.get(), offset, nbytes)
+        except BaseException as error:
+            # A failed prefetch that no demand waited on would otherwise
+            # vanish with its future, leaving blocks "cached" that were
+            # never read.
+            with self.lock:
+                self.prefetch_errors.append(error)
+            raise
         finally:
             with self.lock:
                 self.inflight -= 1
@@ -171,6 +179,9 @@ class ODirectBackend:
         self.pool.shutdown(wait=True)
         demand_view.release()
         demand.close()
+        if self.prefetch_errors:
+            raise OSError(f"{len(self.prefetch_errors)} prefetch reads failed; first: "
+                          f"{self.prefetch_errors[0]!r}")
         miss_requests = len(lat) - full_hits
         return {
             "latencies_us": lat,

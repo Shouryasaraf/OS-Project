@@ -80,7 +80,9 @@ class Pacer:
     def __init__(self, spin_us: float = 200.0):
         self.spin_us = spin_us
         self.slack_set = set_timer_slack(1000)
-        self.errors: list[float] = []
+        # 8 bytes a wait, not a 32-byte float object: anonymous memory grown
+        # mid-run comes out of Backend A's page-cache budget.
+        self.errors = array("d")
         self.total_us = 0.0
 
     def wait(self, us: float) -> None:

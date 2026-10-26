@@ -95,9 +95,11 @@ class PlanTests(unittest.TestCase):
             with self.subTest(mode=mode):
                 expected, _ = replay(requests, capacity=512, mode=mode,
                                      latency_model=LatencyModel(), **self._kwargs(mode))
+                # Odd segment size: the log is cut into plan steps at many
+                # boundaries that fall inside the caller's chunks.
                 metrics, plan = record_plan([requests[:1000], requests[1000:]], mode,
                                             capacity=512, latency_model=LatencyModel(),
-                                            **self._kwargs(mode))
+                                            segment=97, **self._kwargs(mode))
                 for name in COUNTERS:
                     self.assertEqual(getattr(metrics, name), getattr(expected, name), name)
                 self.assertEqual(len(plan), len(requests))
@@ -437,6 +439,40 @@ class DeviceTests(unittest.TestCase):
         self.assertEqual(outcome["row"]["sim_hit_ratio"], expected.hit_ratio)
         self.assertEqual(outcome["detail"]["sim_prefetches"], expected.prefetches)
         self.assertEqual(outcome["row"]["sim_device_ios"], expected.device_ios)
+
+
+class ResumeTests(unittest.TestCase):
+    """Row keys keep trace segments apart and let capped runs resume."""
+
+    FILL = {"str": "x", "int": 0, "float": 0.0}
+
+    def _row(self, **values):
+        row = {c.name: (None if c.dtype.endswith("?") else self.FILL[c.dtype])
+               for c in schemas.schema_for("realio/realio.csv").columns}
+        row.update(values)
+        return row
+
+    def test_skipped_segment_is_its_own_trace_and_capped_runs_resume(self):
+        from adaptive_prefetch.realio import runner
+        trace = "data/block-traces/msr/msr_hm_0.oracleGeneral.zst"
+        self.assertEqual(runner.trace_label(trace), "msr_hm_0")
+        self.assertEqual(runner.trace_label(trace, 1_600_000), "msr_hm_0+skip1600000")
+        job = {"device": "sdb", "backend": "odirect", "mode": "none", "think": "closed",
+               "repeat": 1, "trace": trace, "requests": 20_000, "skip_requests": 0}
+        segment = {**job, "skip_requests": 1_600_000}
+        self.assertNotEqual(runner.job_key(job), runner.job_key(segment))
+        with tempfile.TemporaryDirectory() as tmp:
+            results, details = Path(tmp), Path(tmp) / "runs.jsonl"
+            # The trace held only 300 requests, so the row records 300.
+            row = self._row(device="sdb", backend="odirect", mode="none", think="closed",
+                            repeat=1, trace="msr_hm_0", requests=300)
+            runner.write_results(results, [row])
+            details.write_text(json.dumps({"key": list(report.row_key(row)),
+                                           "spec": job}) + "\n")
+            done = runner.existing_keys(results, details)
+            self.assertIn(runner.job_key(job), done)
+            self.assertNotIn(runner.job_key(segment), done)
+            self.assertNotIn(runner.job_key(job), runner.existing_keys(results))
 
 
 class ReproTests(unittest.TestCase):

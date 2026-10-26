@@ -103,46 +103,9 @@ def _runs(blocks: list[int]) -> tuple[tuple[int, int], ...]:
     return tuple((first, count) for first, count in runs)
 
 
-def record_plan(chunks: Iterable, mode: str, *, capacity: int = DEFAULT_CAPACITY,
-                window_size: int = 32,
-                read_ahead_depth: int = DEFAULT_READ_AHEAD_DEPTH,
-                latency_model: LatencyModel | None = None,
-                **replay_kw) -> tuple[Metrics, list[PlanStep]]:
-    """Run the simulator once and return its metrics and per-request plan.
-
-    ``chunks`` is an iterable of request lists, as ``replay_stream`` takes;
-    pass ``[requests]`` for one list. ``mode`` is a simulator mode or a
-    ``deep@N`` / ``linux_ra@N`` label. Other keywords go to
-    ``replay_stream`` unchanged (``model`` for ``adaptive``, a trained
-    artifact path for an artifact-backed mode).
-
-    The log is segmented by construction of the replay loop: a request
-    performs exactly one cache read (or write) per block, then only
-    prefetches. Anything else raises :class:`CacheDivergence`.
-    """
-    base, extra = parse_mode(mode)
-    if "read_ahead_depth" in extra:
-        read_ahead_depth = extra.pop("read_ahead_depth")
-    replay_kw.update(extra)
-    caches: list[RecordingLRU] = []
-
-    def factory(cap: int, metrics: Metrics) -> RecordingLRU:
-        caches.append(RecordingLRU(cap, metrics))
-        return caches[-1]
-
-    requests: list = []
-
-    def tee():
-        for chunk in chunks:
-            requests.extend(chunk)
-            yield chunk
-
-    metrics = replay_stream(tee(), capacity=capacity, window_size=window_size,
-                            mode=base, latency_model=latency_model,
-                            read_ahead_depth=read_ahead_depth,
-                            cache_factory=factory, **replay_kw)
-    log = caches[0].log
-    plan: list[PlanStep] = []
+def _segment(log: list, requests: list, plan: list[PlanStep]) -> None:
+    """Append ``requests``' plan steps from ``log``, which must hold exactly
+    their cache operations, then empty ``log``."""
     i = 0
     for request in requests:
         n = request.size_blocks
@@ -158,7 +121,69 @@ def record_plan(chunks: Iterable, mode: str, *, capacity: int = DEFAULT_CAPACITY
         flags = bytes(int(hit) for _, _, hit in ops) if expected == READ else b""
         plan.append(PlanStep(flags, _runs(prefetched)))
     if i != len(log):
-        raise CacheDivergence(f"{len(log) - i} cache operations left after the last request")
+        raise CacheDivergence(f"{len(log) - i} cache operations left after request "
+                              f"{len(plan) - 1}")
+    log.clear()
+
+
+def record_plan(chunks: Iterable, mode: str, *, capacity: int = DEFAULT_CAPACITY,
+                window_size: int = 32,
+                read_ahead_depth: int = DEFAULT_READ_AHEAD_DEPTH,
+                latency_model: LatencyModel | None = None,
+                segment: int = 4096,
+                **replay_kw) -> tuple[Metrics, list[PlanStep]]:
+    """Run the simulator once and return its metrics and per-request plan.
+
+    ``chunks`` is an iterable of request lists, as ``replay_stream`` takes;
+    pass ``[requests]`` for one list. ``mode`` is a simulator mode or a
+    ``deep@N`` / ``linux_ra@N`` label. Other keywords go to
+    ``replay_stream`` unchanged (``model`` for ``adaptive``, a trained
+    artifact path for an artifact-backed mode).
+
+    The log is segmented by construction of the replay loop: a request
+    performs exactly one cache read (or write) per block, then only
+    prefetches. Anything else raises :class:`CacheDivergence`.
+
+    The stream is fed to ``replay_stream`` in pieces of at most ``segment``
+    requests, and each piece's log is turned into plan steps and dropped
+    before the next is replayed (``replay_stream`` is chunk-invariant). A
+    whole-run log costs ~100 bytes per block operation: 20k requests of
+    msr_web_2 under ``deep@64`` peaked at 386 MiB, past the page-cache
+    child's scope limit, which killed it.
+    """
+    if segment <= 0:
+        raise ValueError("segment must be positive")
+    base, extra = parse_mode(mode)
+    if "read_ahead_depth" in extra:
+        read_ahead_depth = extra.pop("read_ahead_depth")
+    replay_kw.update(extra)
+    caches: list[RecordingLRU] = []
+    plan: list[PlanStep] = []
+
+    def factory(cap: int, metrics: Metrics) -> RecordingLRU:
+        caches.append(RecordingLRU(cap, metrics))
+        return caches[-1]
+
+    def pieces():
+        # replay_stream asks for the next piece only after it has finished
+        # every request of the previous one, prefetches included.
+        previous: list = []
+        for chunk in chunks:
+            for start in range(0, len(chunk), segment):
+                if previous:
+                    _segment(caches[0].log, previous, plan)
+                previous = chunk[start:start + segment]
+                yield previous
+        if previous:
+            _segment(caches[0].log, previous, plan)
+
+    metrics = replay_stream(pieces(), capacity=capacity, window_size=window_size,
+                            mode=base, latency_model=latency_model,
+                            read_ahead_depth=read_ahead_depth,
+                            cache_factory=factory, **replay_kw)
+    if caches and caches[0].log:
+        raise CacheDivergence(f"{len(caches[0].log)} cache operations left after "
+                              "the last request")
     return metrics, plan
 
 
