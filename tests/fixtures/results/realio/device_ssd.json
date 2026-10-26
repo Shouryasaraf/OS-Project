@@ -1,0 +1,24 @@
+{
+  "device": "ssd",
+  "path": "/fixture/ssd/backing.bin",
+  "model": "FIXTURE-SSD",
+  "rotational": false,
+  "read_ahead_kb": 128,
+  "max_sectors_kb": 256,
+  "rand4k_p50_us": 120.0,
+  "rand4k_mean_us": 126.0,
+  "seq4k_p50_us": 30.0,
+  "seq64k_p50_us": 230.0,
+  "seq1m_MBps": 250.0,
+  "t_pos_us": 120.0,
+  "t_xfer_us_per_block": 1.1,
+  "kappa": 109.09090909090908,
+  "samples": 2000,
+  "foreign_io_frac": 0.0,
+  "load_avg": [
+    3.0,
+    3.0,
+    3.0
+  ],
+  "created_utc": "2026-01-01T00:00:00+00:00"
+}

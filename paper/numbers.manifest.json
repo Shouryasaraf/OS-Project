@@ -1,0 +1,29 @@
+{
+  "generator_format": "paper.genlib/1",
+  "results_root": "results",
+  "fixture": false,
+  "outputs": {
+    "numbers.tex": {
+      "inputs": {},
+      "missing": [
+        "disk/corpus_profile.csv",
+        "disk/deltas.csv",
+        "disk/kappa.csv",
+        "disk/table_by_corpus.csv",
+        "disk/table_main.csv",
+        "gpu/disk_learned_depth.csv",
+        "live/live_metrics.csv",
+        "live/live_parity.csv",
+        "realio/realio_summary.csv",
+        "web/comparisons.csv",
+        "web/dataset_profile.json",
+        "web/decomposition.csv",
+        "web/freshness.csv",
+        "web/policy_metrics.csv",
+        "web/seq_metrics.csv"
+      ],
+      "fixture": false,
+      "note": "63 macros"
+    }
+  }
+}

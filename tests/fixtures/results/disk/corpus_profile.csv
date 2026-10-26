@@ -1,0 +1,7 @@
+trace,corpus,file,size_unit,merge,max_merge_sectors,records,requests,blocks,footprint_blocks,mean_request_blocks,median_request_blocks,contiguous_fraction,hours_covered,tagged,twin_group,paper_subset
+msr_hm_0,msr,data/block-traces/msr/msr_hm_0.oracleGeneral.zst,bytes,auto,,4812244,4812244,76995904,19248976,16.0,8.0,0.163921,89.45471,False,,True
+msr_web_2,msr,data/block-traces/msr/msr_web_2.oracleGeneral.zst,bytes,auto,,4536253,4536253,72580048,18145012,16.0,8.0,0.399659,116.344447,False,,True
+fiu_homes,fiu,data/block-traces/fiu/fiu_homes.oracleGeneral.zst,sectors,auto,1024,1757353,585784,9372544,2343136,16.0,8.0,0.39193,160.20639,False,fiu-homes-family,True
+fiu_madmax,fiu,data/block-traces/fiu/fiu_madmax.oracleGeneral.zst,sectors,auto,1024,4888925,1629641,26074256,6518564,16.0,8.0,0.508075,118.313477,False,,False
+alibabaBlock_17,alibaba,data/block-traces/alibaba/alibabaBlock_17.oracleGeneral.zst,bytes,auto,,2883149,2883149,46130384,11532596,16.0,8.0,0.105194,145.078244,True,,True
+tencent_1162,tencent,data/block-traces/tencent/tencent_1162.oracleGeneral.zst,bytes,auto,,1622480,1622480,25959680,6489920,16.0,8.0,0.059505,32.080593,True,,True

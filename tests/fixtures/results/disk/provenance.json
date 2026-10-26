@@ -1,0 +1,42 @@
+{
+  "format": "prefetch_common.provenance/1",
+  "study": "disk",
+  "command": [
+    "python",
+    "tests/fixtures/make_results_fixtures.py"
+  ],
+  "git_sha": "0000000000000000000000000000000000000000",
+  "git_dirty": false,
+  "created_utc": "2026-01-01T00:00:00+00:00",
+  "host": {
+    "hostname": "fixture-host",
+    "platform": "Linux-fixture",
+    "kernel": "6.14.0",
+    "python": "3.12.0",
+    "cpu_count": 128
+  },
+  "load_avg": {
+    "start": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "end": [
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "wall_s": 0.0,
+  "gpu": null,
+  "inputs": {},
+  "outputs": {
+    "corpus_profile.csv": "584025b7402afa603a0968d9537efe486a603e943d62b9e04ebf93cc95ab476d",
+    "deltas.csv": "4f3110f0310f323908ecad9c574280c508e63367f324456070b279c4bc0654e9",
+    "kappa.csv": "abee209c7ba069a8ce3030275c39dc308222036e43008805672409aa08451647",
+    "sweep.jsonl": "7798b8d324f8950dbdcfaa766f095848a4147e9b2adcfb1bc551722e80664357",
+    "table_by_corpus.csv": "0028bb590e612e465c47eb68fc5e4a3ad6d4d89c43c9243ab1bcbea65363b60f",
+    "table_main.csv": "e6b306999b73a506ef149feec9cad97baf73c9753e5c3e828b6de95aaaf25ca3"
+  },
+  "notes": "FIXTURE: synthetic values from tests/fixtures/make_results_fixtures.py; not a result, never quote"
+}

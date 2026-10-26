@@ -1,0 +1,70 @@
+{
+  "generator_format": "paper.genlib/1",
+  "results_root": "results",
+  "fixture": false,
+  "outputs": {
+    "figures/f1_schematic.pdf": {
+      "inputs": {},
+      "missing": [],
+      "fixture": false,
+      "note": "width: column"
+    },
+    "figures/f2_hit_vs_depth.pdf": {
+      "inputs": {},
+      "missing": [
+        "disk/table_by_corpus.csv"
+      ],
+      "fixture": false,
+      "note": "width: column"
+    },
+    "figures/f3_device_io_vs_hit.pdf": {
+      "inputs": {},
+      "missing": [
+        "disk/deltas.csv"
+      ],
+      "fixture": false,
+      "note": "width: column"
+    },
+    "figures/f4_kappa_cdf.pdf": {
+      "inputs": {},
+      "missing": [
+        "disk/kappa.csv"
+      ],
+      "fixture": false,
+      "note": "width: column"
+    },
+    "figures/f5_sim_vs_measured.pdf": {
+      "inputs": {},
+      "missing": [
+        "realio/realio_summary.csv"
+      ],
+      "fixture": false,
+      "note": "width: text"
+    },
+    "figures/f6_freshness.pdf": {
+      "inputs": {},
+      "missing": [
+        "web/freshness.csv"
+      ],
+      "fixture": false,
+      "note": "width: column"
+    },
+    "figures/f7_live_saved_vs_bytes.pdf": {
+      "inputs": {},
+      "missing": [
+        "live/live_metrics.csv"
+      ],
+      "fixture": false,
+      "note": "width: column"
+    },
+    "figures/f8_utility_envelopes.pdf": {
+      "inputs": {},
+      "missing": [
+        "disk/sweep.jsonl",
+        "web/policy_metrics.csv"
+      ],
+      "fixture": false,
+      "note": "width: text"
+    }
+  }
+}
