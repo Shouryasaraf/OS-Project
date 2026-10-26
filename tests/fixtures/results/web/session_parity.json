@@ -1,0 +1,54 @@
+{
+  "format": "webprefetch.session_parity/2",
+  "selection_rule": "fixture sessions",
+  "benchmark_json_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "capacity": 8,
+  "costs": [
+    0.0,
+    0.01
+  ],
+  "policy": "adaptive (validation-selected)",
+  "cases": [
+    {
+      "session_id": 1000,
+      "policy": "adaptive",
+      "resolved_policy": "adaptive_0.01",
+      "capacity": 8,
+      "cost": 0.0,
+      "views": 3,
+      "hits": 1,
+      "match": true
+    },
+    {
+      "session_id": 1000,
+      "policy": "adaptive",
+      "resolved_policy": "adaptive_0.01",
+      "capacity": 8,
+      "cost": 0.01,
+      "views": 3,
+      "hits": 1,
+      "match": true
+    },
+    {
+      "session_id": 1001,
+      "policy": "adaptive",
+      "resolved_policy": "adaptive_0.01",
+      "capacity": 8,
+      "cost": 0.0,
+      "views": 3,
+      "hits": 1,
+      "match": true
+    },
+    {
+      "session_id": 1001,
+      "policy": "adaptive",
+      "resolved_policy": "adaptive_0.01",
+      "capacity": 8,
+      "cost": 0.01,
+      "views": 3,
+      "hits": 1,
+      "match": true
+    }
+  ],
+  "mismatches": 0
+}

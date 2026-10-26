@@ -18,6 +18,11 @@ think model, trace and repeat), never from an assumed constant:
   trace), of simulated ``IOCostModel`` device time and of simulated hit
   ratio against measured mean latency.
 
+The summary also carries each mode's measured mean latency minus ``none``'s,
+paired by repeat (both runs sit in the same shuffled cell), with a 95%
+Student-t interval over the repeats: the primary comparison of
+``results/realio/PREREGISTERED.md``.
+
 These are statements about one trace prefix on one device under one think
 model (plan honesty rule 15), never about HDDs or SSDs in general.
 """
@@ -161,10 +166,16 @@ def summarize(rows: list[dict], details: dict | None = None,
     groups: dict[tuple, list[dict]] = defaultdict(list)
     for row in rows:
         groups[tuple(row[k] for k in GROUP)].append(row)
+    paired = ("device", "backend", "think", "trace", "requests", "repeat")
+    none_lat = {tuple(r[k] for k in paired): r["lat_mean_us"] for r in rows
+                if r["mode"] == "none"}
     out = []
     for key, members in groups.items():
         first = members[0]
         mean, lo, hi = t_interval([r["lat_mean_us"] for r in members])
+        diffs = [r["lat_mean_us"] - none_lat[tuple(r[k] for k in paired)] for r in members
+                 if first["mode"] != "none" and tuple(r[k] for k in paired) in none_lat]
+        delta = t_interval(diffs) if diffs else (None, None, None)
         device_time = None
         model = (cost_models or {}).get(first["device"])
         if model is not None and first["sim_device_ios"] is not None and details:
@@ -187,6 +198,8 @@ def summarize(rows: list[dict], details: dict | None = None,
             "pred_mean_us": _mean([r["pred_mean_us"] for r in members]),
             "pred_err": _mean([r["pred_err"] for r in members]),
             "k_eff": _mean([r["k_eff"] for r in members]),
+            "delta_vs_none_us": delta[0], "delta_vs_none_us_lo": delta[1],
+            "delta_vs_none_us_hi": delta[2],
             "spearman_device_time": None, "spearman_hit_ratio": None,
             "foreign_io_frac_max": max(foreign) if foreign else None,
             "load_avg_max": max(r["load_avg"] for r in members),

@@ -31,6 +31,8 @@
   "gpu": null,
   "inputs": {},
   "outputs": {
+    "disk_probe_ssd.json": "3a438703f0afedda37d40b16081ccb80a90daf84d1163cad4222fe7d4cb8ebc2",
+    "live_config.json": "2b3017851174b34bfe6d6acd49bed26a3e6d94c72a8fb300fd55eac33c5098be",
     "live_metrics.csv": "c1f3c058b3529255c7818bf2425d8d700e68892748d0f25b9196fa85e05854b0",
     "live_parity.csv": "f9ebc386de415ca3e1330204f7c39b2aea5f4665d78afe2cb0c1413eff6f8744"
   },

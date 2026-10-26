@@ -396,15 +396,25 @@ class SchemaTests(unittest.TestCase):
                     "realio/realio_summary.csv", "realio/device_*.json",
                     "web/policy_metrics.csv", "web/comparisons.csv",
                     "web/decomposition.csv", "web/freshness.csv", "web/seq_metrics.csv",
-                    "live/live_metrics.csv", "live/live_parity.csv", "*/provenance.json"}
+                    "live/live_metrics.csv", "live/live_parity.csv", "*/provenance.json",
+                    # WPF1: files their producers write without write_rows.
+                    "gpu/disk_lstm.csv", "gpu/disk_depth_baselines.csv", "gpu/gpu_env.json",
+                    "web/calibration.csv", "web/learning_curve.csv",
+                    "web/dataset_profile.json", "web/think_time.json",
+                    "web/session_parity.json", "live/live_config.json",
+                    "live/disk_probe_*.json"}
         self.assertEqual(set(schemas.SCHEMAS), expected)
         for name, schema in schemas.SCHEMAS.items():
             self.assertIn(schema.fmt, schemas.FORMATS, name)
             self.assertEqual(len(set(schema.names)), len(schema.names), name)
             for column in schema.columns:
                 self.assertIn(column.base, schemas.DTYPES, f"{name}.{column.name}")
-                if schema.fmt != "json":
+                if schema.fmt == "jsonl":
                     self.assertTrue(column.required, f"{name}.{column.name}")
+                elif schema.fmt == "csv" and not column.required:
+                    # An absent optional csv column reads back as no key; a
+                    # present one fills the rows that lack it with None.
+                    self.assertTrue(column.nullable, f"{name}.{column.name}")
         self.assertTrue(set(schemas.SWEEP_KEY) <= set(schemas.columns("disk/sweep.jsonl")))
         self.assertEqual(schemas.columns("disk/table_main.csv"),
                          schemas.columns("disk/table_by_corpus.csv"))
@@ -533,11 +543,97 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(sorted(schemas.validate_tree(root)),
                          ["web/freshness.csv", "web/mystery.csv"])
 
+    def test_optional_csv_column_may_be_absent_or_present_in_order(self):
+        name = "gpu/disk_learned_depth.csv"
+        without = self._row(name, thresholds=None)
+        target = self.tmp / "learned.csv"
+        schemas.write_rows(name, [without], target)
+        header = target.read_text().splitlines()[0].split(",")
+        self.assertNotIn("linux_ra_hit_ratio", header)
+        self.assertNotIn("linux_ra_hit_ratio", schemas.read_rows(name, target)[0])
+        # One row carrying it puts the column in the file, None elsewhere.
+        schemas.write_rows(name, [without, dict(without, linux_ra_hit_ratio=0.25)], target)
+        header = target.read_text().splitlines()[0].split(",")
+        self.assertEqual(header, list(schemas.columns(name)))
+        back = schemas.read_rows(name, target)
+        self.assertEqual([r["linux_ra_hit_ratio"] for r in back], [None, 0.25])
+        # Present out of schema order is still refused.
+        lines = target.read_text().splitlines()
+        moved = header[:-1]
+        moved.insert(0, header[-1])
+        target.write_text(",".join(moved) + "\n")
+        with self.assertRaises(schemas.SchemaError):
+            schemas.read_rows(name, target)
+        # A required column cannot be left out.
+        target.write_text(",".join(header[1:]) + "\n" + lines[1].split(",", 1)[1] + "\n")
+        with self.assertRaises(schemas.SchemaError):
+            schemas.read_rows(name, target)
+
+    def test_validate_tree_checks_only_provenance_of_a_verbatim_copy(self):
+        root = self.tmp / "results"
+        (root / "pivot_original").mkdir(parents=True)
+        (root / "pivot_original" / "benchmark.json").write_text('{"pivot": 1}\n')
+        self.assertEqual(schemas.validate_tree(root), {})
+        (root / "pivot_original" / "provenance.json").write_text('{"format": 1}\n')
+        self.assertEqual(list(schemas.validate_tree(root)), ["pivot_original/provenance.json"])
+
+    def test_committed_results_tree_matches_its_schemas(self):
+        """results/ as committed (E0 calibration, pivot provenance) passes."""
+        self.assertEqual(schemas.validate_tree(schemas.RESULTS_ROOT), {})
+
     def test_committed_fixtures_match_their_schemas(self):
         """Every fixture WP13 builds under tests/fixtures/results/ obeys the contract."""
         if not FIXTURES.is_dir():
             self.skipTest("no results fixtures yet")
         self.assertEqual(schemas.validate_tree(FIXTURES), {})
+
+
+class ProducerOutputTests(unittest.TestCase):
+    """Producers that write without ``write_rows`` emit what their schema says.
+
+    The end-to-end writer tests (web benchmark, live run, GPU runner) validate
+    their real output files; these pin the column constants and the writers
+    that have no end-to-end test here.
+    """
+
+    def test_gpu_runner_columns_are_the_schema(self):
+        sys.path.insert(0, str(ROOT))
+        from repro import gpu_disk
+        self.assertEqual(gpu_disk.LSTM_COLUMNS, schemas.columns("gpu/disk_lstm.csv"))
+        self.assertEqual(gpu_disk.BASELINE_COLUMNS,
+                         schemas.columns("gpu/disk_depth_baselines.csv"))
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "disk_lstm.csv"
+            # A skipped row as _lstm_rows writes it, then an ok one.
+            skipped = {"trace": "msr_t", "corpus": "msr", "seed": 42,
+                       "status": "skipped: training or scoring did not finish"}
+            ok = {c: 1 for c in gpu_disk.LSTM_COLUMNS}
+            ok.update(trace="msr_u", corpus="msr", status="ok", val_loss=[1.25, 1.2],
+                      lstm_hit_ratio=0.5, device="cpu", gpu_contention=None)
+            gpu_disk._write_csv(target, gpu_disk.LSTM_COLUMNS, [skipped, ok])
+            back = schemas.validate_file(target, "gpu/disk_lstm.csv")
+            self.assertIsNone(back[0]["lstm_hit_ratio"])
+            self.assertEqual(back[1]["val_loss"], [1.25, 1.2])
+
+    @unittest.skipUnless(HAVE_WEB, "web study needs numpy, pandas, scikit-learn and joblib")
+    def test_web_diagnostics_columns_are_the_schema(self):
+        from webprefetch import diagnostics
+        self.assertEqual(diagnostics.CALIBRATION_COLUMNS, schemas.columns("web/calibration.csv"))
+        self.assertEqual(diagnostics.LEARNING_CURVE_COLUMNS,
+                         schemas.columns("web/learning_curve.csv"))
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "the probe uses posix_fadvise")
+    def test_live_disk_probe_validates(self):
+        from webprefetch.live import objects
+        with tempfile.TemporaryDirectory() as directory:
+            meta = objects.build_store(range(40), directory, median=4096, sigma=0.0)
+            probe = objects.probe(meta["store"], meta["index"], n=20, hinted_n=5,
+                                  leads_ms=(0.0, 1.0), label="ssd")
+            # Written exactly as webprefetch.live.run writes it.
+            target = Path(directory) / "live" / "disk_probe_ssd.json"
+            target.parent.mkdir()
+            target.write_text(json.dumps(probe, indent=1) + "\n")
+            self.assertEqual(schemas.validate_file(target)[0]["tag"], "MEASURED")
 
 
 if __name__ == "__main__":

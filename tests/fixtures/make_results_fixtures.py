@@ -339,7 +339,7 @@ def build_realio(rng) -> None:
             "kappa": t_pos / t_xfer, "samples": 2000, "foreign_io_frac": 0.0,
             "load_avg": [3.0, 3.0, 3.0], "created_utc": "2026-01-01T00:00:00+00:00",
         }])
-    raw, summary = [], []
+    raw, summary, none_lat = [], [], {}
     for device, (rotational, t_pos, _) in DEVICES.items():
         for trace in ("msr_hm_0", "msr_web_2"):
             for think in THINKS:
@@ -371,6 +371,7 @@ def build_realio(rng) -> None:
                             "load_avg": 4.0,
                         })
                     ci = stats.paired_bootstrap(lat, [0.0] * 3, reps=REPS)
+                    none_lat[(device, backend, think, trace, mode)] = lat
                     summary.append({
                         "device": device, "backend": backend, "mode": mode, "think": think,
                         "trace": trace, "requests": 20000, "reps": 3, "sim_hit_ratio": sim_hit,
@@ -385,6 +386,15 @@ def build_realio(rng) -> None:
                         "spearman_device_time": 0.6, "spearman_hit_ratio": -0.4,
                         "foreign_io_frac_max": 0.0 if rotational else 0.03, "load_avg_max": 4.0,
                     })
+    # Paired by repeat against the same backend's none, as report.summarize does.
+    from adaptive_prefetch.realio.report import t_interval  # noqa: PLC0415
+    for row in summary:
+        key = (row["device"], row["backend"], row["think"], row["trace"])
+        lat, base = none_lat[(*key, row["mode"])], none_lat[(*key, "none")]
+        delta = (t_interval([a - b for a, b in zip(lat, base)]) if row["mode"] != "none"
+                 else (None, None, None))
+        row.update(delta_vs_none_us=delta[0], delta_vs_none_us_lo=delta[1],
+                   delta_vs_none_us_hi=delta[2])
     _w("realio/realio.csv", raw)
     _w("realio/realio_summary.csv", summary)
 
@@ -542,6 +552,141 @@ def build_live(rng) -> None:
     _w("live/live_parity.csv", parity)
 
 
+# ------------------------------------------------- side files (WPF1 schemas)
+#
+# The files below are written by the producers without write_rows (pandas,
+# json.dumps); their schemas were derived from those writers. They draw from
+# their own generator so adding them left every earlier fixture byte-identical.
+
+def build_gpu_side(rng) -> None:
+    lstm, baselines, jobs = [], [], []
+    for trace, corpus in TRACES[:2]:
+        none_hit = _r(rng, 0.2, 0.4)
+        lstm.append({
+            "trace": trace, "corpus": corpus, "seed": 42, "status": "ok",
+            "n_requests": 2_000_000, "train_start": 0, "train_end": 1_200_000,
+            "val_start": 1_200_000, "val_end": 1_600_000, "test_start": 1_600_000,
+            "test_end": 2_000_000, "epochs_run": 8, "best_epoch": 6,
+            "val_loss": [round(1.5 - 0.03 * e, 5) for e in range(8)],
+            "test_bucket_top1": _r(rng, 0.5, 0.7), "test_majority_top1": _r(rng, 0.4, 0.6),
+            "test_repeat_top1": _r(rng, 0.4, 0.6), "lstm_hit_ratio": none_hit + 0.01,
+            "lstm_precision": _r(rng, 0.2, 0.4), "lstm_issued": 16_000,
+            "none_hit_ratio": none_hit, "sequential_hit_ratio": none_hit + 0.005,
+            "deep8_hit_ratio": none_hit + 0.02, "linux_ra_hit_ratio": none_hit + 0.03,
+            "infer_us_per_request": _r(rng, 100, 200), "device": "cuda",
+            "train_s": _r(rng, 3, 10), "gpu_contention": "fixture: no GPU was used"})
+        jobs.append({"job": f"lstm_{trace}", "device": "cuda", "train_s": 4.0,
+                     "oom_retries": 0, "batch_size": 4096,
+                     "gpu_contention": "fixture: no GPU was used", "samples": []})
+        test = (1_600_000, 2_000_000)
+        for mode, param in (("none", None), ("sequential", None), ("deep", 8.0),
+                            ("linux_ra", None)):
+            baselines.append({"trace": trace, "corpus": corpus, "segment": "test",
+                              "start": test[0], "end": test[1], "action_cap": None,
+                              "mode": mode, "param": param, "chosen": None,
+                              "hit_ratio": none_hit + (0.0 if mode == "none" else 0.02),
+                              "precision": 0.0 if mode == "none" else 0.3,
+                              "issued": 0 if mode == "none" else 50_000,
+                              "useful": 0 if mode == "none" else 15_000, "device_ios": 40_000})
+        for depth in (0, 8, 32):
+            baselines.append({"trace": trace, "corpus": corpus, "segment": "val",
+                              "start": 1_200_000, "end": 1_300_000, "action_cap": 64,
+                              "mode": "deep" if depth else "none", "param": float(depth),
+                              "chosen": depth == 8, "hit_ratio": none_hit + 0.001 * depth,
+                              "precision": 0.25 if depth else 0.0,
+                              "issued": 1000 * depth, "useful": 250 * depth,
+                              "device_ios": 9_000})
+    lstm.append({"trace": "fiu_madmax", "corpus": "fiu", "seed": 42,
+                 "status": "skipped: training or scoring did not finish",
+                 **{c: None for c in schemas.columns("gpu/disk_lstm.csv")[4:]}})
+    _w("gpu/disk_lstm.csv", lstm)
+    _w("gpu/disk_depth_baselines.csv", baselines)
+    _w("gpu/gpu_env.json", [{
+        "device_requested": "cuda", "torch": "0.0-fixture", "cuda_device": "FIXTURE GPU",
+        "jobs": jobs, "note": NOTE, "missing_traces": [],
+        "config": {"traces": [t for t, _ in TRACES[:2]], "seeds": [0, 1, 2], "quick": False}}])
+
+
+def build_web_side(rng) -> None:
+    calibration = []
+    for split in ("validation", "test"):
+        for scorer in ("logistic", "trans_online"):
+            brier = _r(rng, 0.002, 0.004)
+            reference = brier * _r(rng, 1.01, 1.1)
+            for n in range(10):
+                count = int(7e6 / 10 ** n) if n < 6 else 0
+                mean = (n + 0.5) / 10 if count else None
+                observed = mean * _r(rng, 0.8, 1.1) if count else None
+                calibration.append({
+                    "split": split, "scorer": scorer, "bin": n, "p_low": n / 10,
+                    "p_high": (n + 1) / 10, "count": count, "mean_probability": mean,
+                    "observed_frequency": observed,
+                    "gap": None if mean is None else observed - mean,
+                    "reported": n >= 1 and bool(count), "brier": brier,
+                    "brier_reference": reference, "brier_skill_score": 1 - brier / reference,
+                    "ece": _r(rng, 0.0005, 0.001)})
+    _w("web/calibration.csv", calibration)
+    curve = []
+    for decisions in (30_000, 100_000, 300_000):
+        coverage = 0.09 + 0.01 * decisions / 300_000
+        for policy in ("fixed1", "adaptive_0.01"):
+            hit, issued = _r(rng, 0.12, 0.13), _r(rng, 0.7, 0.9)
+            curve.append({
+                "training_decisions": decisions, "candidate_rows": decisions * 14,
+                "positive_candidates": decisions // 18, "selected_C": 10.0,
+                "validation_coverage_at_8": coverage, "validation_hit_at_1": coverage * 0.4,
+                "validation_mrr_at_8": coverage * 0.6, "validation_views": 532_843,
+                "capacity": 8, "policy": policy, "cost": 0.01, "validation_hit_ratio": hit,
+                "validation_issued_per_view": issued, "validation_utility": hit - 0.01 * issued,
+                "train_s": _r(rng, 3, 30)})
+    _w("web/learning_curve.csv", curve)
+    kinds = {"novel": 167, "self_repeat": 55, "earlier_in_session": 28}
+    share = {k: v / sum(kinds.values()) for k, v in kinds.items()}
+    pair_kinds = {label: {"eligible": sum(kinds.values()), "kinds": kinds, "kinds_share": share}
+                  for label in ("validation", "test")}
+    _w("web/dataset_profile.json", [{
+        "source": "fixture", "dataset_version": 2, "source_verified": False,
+        "session_gap_minutes": 30, "raw_sha256": "0" * 64, "raw_rows": 2_000,
+        "duplicate_rows_removed": 0, "event_counts_after_dedup": {"view": 1_900},
+        "views": 1_900, "visitors": 400, "sessions": 500, "sessions_with_2plus_views": 200,
+        "sessions_with_3plus_views": 90, "sessions_with_5plus_views": 30,
+        "eligible_next_view_pairs": 700, "session_length_quantiles": {"0.5": 1.0, "0.9": 3.0},
+        "split_cutoffs_ms": [1, 2, 3], "views_by_split": {"0": 760, "1": 380, "2": 380, "3": 380},
+        "eligible_pairs_by_split": {"0": 280, "1": 140, "2": 140, "3": 140},
+        "prepared_path": "data/processed/views.csv.gz",
+        "replayed_views": {"validation": 380, "test": 380}, "pair_kinds": pair_kinds}])
+    _w("web/think_time.json", [{label: {
+        "eligible": 250, "quantiles_s": {"0.5": _r(rng, 40, 90)},
+        "share_below_s": {"1": _r(rng, 0.01, 0.05), "10": _r(rng, 0.1, 0.2)}}
+        for label in ("validation", "test")}])
+    cases = [{"session_id": 1000 + i, "policy": "adaptive", "resolved_policy": "adaptive_0.01",
+              "capacity": 8, "cost": cost, "views": 3, "hits": 1, "match": True}
+             for i in range(2) for cost in (0.0, 0.01)]
+    _w("web/session_parity.json", [{
+        "format": "webprefetch.session_parity/2", "selection_rule": "fixture sessions",
+        "benchmark_json_sha256": "0" * 64, "capacity": 8, "costs": [0.0, 0.01],
+        "policy": "adaptive (validation-selected)", "cases": cases, "mismatches": 0}])
+
+
+def build_live_side(rng) -> None:
+    _w("live/live_config.json", [{"format": "webprefetch.live.config/1", "runs": {
+        "headline/ssd/rtt40-mbps50-priority/priority": {
+            "command": ["python", "-m", "webprefetch.live", "run"],
+            "created_utc": "2026-01-01T00:00:00Z", "invocations": [],
+            "assumptions": {"rtt_ms": {"value": 40.0, "tag": "ASSUMED"}},
+            "reps": 3, "shards": 1, "policies": list(LIVE_POLICIES), "passes": [],
+            "superseded": [], "aborted": []}}}])
+    summary = {"mean_us": _r(rng, 300, 600), "p50_us": _r(rng, 200, 400),
+               "p99_us": _r(rng, 1500, 3000), "n": 1000}
+    _w("live/disk_probe_ssd.json", [{
+        "label": "ssd", "store": "/fixture/store.bin",
+        "device": {"dev": "8:34", "name": "fixture", "disk": "fixture", "rotational": False},
+        "objects": 1000, "load_avg": [1.0, 1.0, 1.0], "tag": "MEASURED",
+        "resident_after_drop": 0.0, "resident_after_read": 1.0, "cold": summary,
+        "warm": {**summary, "mean_us": 12.0},
+        "hinted": {"0": {"resident_frac": 0.0, **summary}}, "load_avg_end": [1.0, 1.0, 1.0]}])
+
+
 # ------------------------------------------------------------- provenance
 
 def write_provenance(study: str) -> None:
@@ -579,6 +724,10 @@ def main() -> int:
     build_realio(rng)
     build_web(rng)
     build_live(rng)
+    side = random.Random(20261027)
+    build_gpu_side(side)
+    build_web_side(side)
+    build_live_side(side)
     for study in ("disk", "gpu", "realio", "web", "live"):
         write_provenance(study)
     print(json.dumps(sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*") if p.is_file()),

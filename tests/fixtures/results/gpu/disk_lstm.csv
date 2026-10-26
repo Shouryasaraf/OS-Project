@@ -1,0 +1,4 @@
+trace,corpus,seed,status,n_requests,train_start,train_end,val_start,val_end,test_start,test_end,epochs_run,best_epoch,val_loss,test_bucket_top1,test_majority_top1,test_repeat_top1,lstm_hit_ratio,lstm_precision,lstm_issued,none_hit_ratio,sequential_hit_ratio,deep8_hit_ratio,linux_ra_hit_ratio,infer_us_per_request,device,train_s,gpu_contention
+msr_hm_0,msr,42,ok,2000000,0,1200000,1200000,1600000,1600000,2000000,8,6,"[1.5,1.47,1.44,1.41,1.38,1.35,1.32,1.29]",0.661637,0.438133,0.437517,0.240601,0.220227,16000,0.230601,0.235601,0.250601,0.26060099999999997,102.569394,cuda,6.447161,fixture: no GPU was used
+msr_web_2,msr,42,ok,2000000,0,1200000,1200000,1600000,1600000,2000000,8,6,"[1.5,1.47,1.44,1.41,1.38,1.35,1.32,1.29]",0.66457,0.588973,0.545733,0.293991,0.246579,16000,0.283991,0.288991,0.303991,0.313991,149.472945,cuda,9.298965,fixture: no GPU was used
+fiu_madmax,fiu,42,skipped: training or scoring did not finish,,,,,,,,,,,,,,,,,,,,,,,,

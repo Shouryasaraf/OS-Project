@@ -34,7 +34,7 @@
     "device_sdb.json": "ef430fec4c193efad92adde4e4d2c88949c3cd76568f15b20e5886bde755052f",
     "device_ssd.json": "7a56566c3d3866e411e41ce4bfbaf51d30eff135d7b33fa8234ee1f3b5dc7b0d",
     "realio.csv": "b43f9106dd61dd5022c62edac3dc7267176254137b6893cfee103cb69cd1cffb",
-    "realio_summary.csv": "caf9d29039d02696714309bded39cd5ffd23d59d2a3f35991ed97faac3505e5f"
+    "realio_summary.csv": "d8016289b9fcf6063d1ba52f2f91153e4c68e1c7b4b3f4e7dc8f1233cd268b09"
   },
   "notes": "FIXTURE: synthetic values from tests/fixtures/make_results_fixtures.py; not a result, never quote"
 }

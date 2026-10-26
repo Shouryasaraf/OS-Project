@@ -1,0 +1,15 @@
+trace,corpus,segment,start,end,action_cap,mode,param,chosen,hit_ratio,precision,issued,useful,device_ios
+msr_hm_0,msr,test,1600000,2000000,,none,,,0.230601,0.0,0,0,40000
+msr_hm_0,msr,test,1600000,2000000,,sequential,,,0.250601,0.3,50000,15000,40000
+msr_hm_0,msr,test,1600000,2000000,,deep,8.0,,0.250601,0.3,50000,15000,40000
+msr_hm_0,msr,test,1600000,2000000,,linux_ra,,,0.250601,0.3,50000,15000,40000
+msr_hm_0,msr,val,1200000,1300000,64,none,0.0,False,0.230601,0.0,0,0,9000
+msr_hm_0,msr,val,1200000,1300000,64,deep,8.0,True,0.238601,0.25,8000,2000,9000
+msr_hm_0,msr,val,1200000,1300000,64,deep,32.0,False,0.262601,0.25,32000,8000,9000
+msr_web_2,msr,test,1600000,2000000,,none,,,0.283991,0.0,0,0,40000
+msr_web_2,msr,test,1600000,2000000,,sequential,,,0.303991,0.3,50000,15000,40000
+msr_web_2,msr,test,1600000,2000000,,deep,8.0,,0.303991,0.3,50000,15000,40000
+msr_web_2,msr,test,1600000,2000000,,linux_ra,,,0.303991,0.3,50000,15000,40000
+msr_web_2,msr,val,1200000,1300000,64,none,0.0,False,0.283991,0.0,0,0,9000
+msr_web_2,msr,val,1200000,1300000,64,deep,8.0,True,0.291991,0.25,8000,2000,9000
+msr_web_2,msr,val,1200000,1300000,64,deep,32.0,False,0.315991,0.25,32000,8000,9000

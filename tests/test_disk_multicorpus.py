@@ -401,6 +401,32 @@ class AnalysisTests(FixtureCase):
         self.assertEqual({(d["baseline"], d["latency"]) for d in guard},
                          {("none", "break_even"), ("sequential", "break_even")})
 
+    def test_checks_carry_an_overall_pass_flag(self):
+        same = [_row("msr_fix_0", "guard", 0.2, latency="break_even"),
+                _row("msr_fix_0", "depth_adaptive", 0.2, latency="break_even"),
+                _row("msr_fix_0", "none", 0.1), _row("msr_fix_0", "deep@0", 0.1)]
+        for row in same:
+            row.update({f: row.get(f, 0) for f in analysis.IDENTITY_FIELDS})
+        report = analysis.checks(same)
+        self.assertEqual((report["pass"], report["failures"], report["not_checked"]),
+                         (True, [], ["hm0_deep8_250k"]))
+        # Nothing to compare is not a pass of that gate, and not a failure.
+        self.assertEqual(analysis.checks([])["not_checked"],
+                         ["guard_eq_depth_adaptive_at_break_even", "deep0_eq_none",
+                          "hm0_deep8_250k"])
+        differ = same[:1] + [dict(same[1], hit_ratio=0.3)] + same[2:]
+        report = analysis.checks(differ)
+        self.assertFalse(report["pass"])
+        self.assertEqual(report["failures"], ["guard_eq_depth_adaptive_at_break_even"])
+        skipped = _row("msr_fix_0", "lstm", None, status="skipped: evaluated in E2 only")
+        report = analysis.checks(same + [skipped, dict(skipped)])
+        self.assertEqual((report["pass"], report["failures"]), (False, ["duplicate_keys"]))
+        bad_hm0 = _row("msr_hm_0", "deep@8", 0.36, prefetches=901487, max_requests=250_000,
+                       config="XCHECK", merge="none", mms=None)
+        bad_hm0.update({f: bad_hm0.get(f, 0) for f in analysis.IDENTITY_FIELDS})
+        report = analysis.checks(same + [bad_hm0])
+        self.assertEqual((report["pass"], report["failures"]), (False, ["hm0_deep8_250k"]))
+
     def test_hm0_check_and_prototype_crosscheck(self):
         hm0 = _row("msr_hm_0", "deep@8", 0.357230590985335, prefetches=901487,
                    max_requests=250_000, config="XCHECK", merge="none", mms=None)
