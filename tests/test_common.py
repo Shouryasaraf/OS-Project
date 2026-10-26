@@ -390,7 +390,8 @@ class SchemaTests(unittest.TestCase):
 
     def test_every_schema_is_well_formed(self):
         expected = {"disk/sweep.jsonl", "disk/table_main.csv", "disk/table_by_corpus.csv",
-                    "disk/deltas.csv", "disk/kappa.csv", "disk/corpus_profile.csv",
+                    "disk/deltas.csv", "disk/winners.csv", "disk/kappa.csv",
+                    "disk/corpus_profile.csv",
                     "gpu/disk_learned_depth.csv", "realio/realio.csv",
                     "realio/realio_summary.csv", "realio/device_*.json",
                     "web/policy_metrics.csv", "web/comparisons.csv",

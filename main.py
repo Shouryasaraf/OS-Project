@@ -33,7 +33,8 @@ from adaptive_prefetch.benchmark import (  # noqa: E402
 )
 from adaptive_prefetch.datasets import (  # noqa: E402
     FORMATS, LSTM_ARTIFACT, LSTM_TRAINING_RECORD, MSR_SAMPLES, MSRC_TRACE_DIR,
-    OUTPUT_DIR, default_datasets, is_synthetic, lstm_training_set,
+    OUTPUT_DIR, QUICK_REAL_TRACE_LIMIT, REAL_TRACE_LIMIT, default_datasets,
+    is_synthetic, lstm_training_set,
     synthetic_datasets,
 )
 from adaptive_prefetch.eda import (  # noqa: E402
@@ -370,6 +371,7 @@ def main(argv: list[str] | None = None) -> None:
     capacity = max(1, args.cache_blocks)
 
     msrc_dir = Path(args.msrc_dir)
+    trace_limit = QUICK_REAL_TRACE_LIMIT if args.quick else REAL_TRACE_LIMIT
     if args.interactive:
         datasets = interactive_datasets(window_size, msrc_dir)
         base = LatencyModel() if ask_yes_no(
@@ -377,7 +379,8 @@ def main(argv: list[str] | None = None) -> None:
             float(ask("Hit us", "5")), float(ask("Miss us", "100")),
             float(ask("Prefetch us", "50")))
     else:
-        datasets = default_datasets(window_size, msrc_dir=msrc_dir)
+        datasets = default_datasets(window_size, msrc_dir=msrc_dir,
+                                    real_trace_limit=trace_limit)
         base = LatencyModel()
 
     # Calibrate the cost model from the traces' own recorded device service
@@ -400,6 +403,9 @@ def main(argv: list[str] | None = None) -> None:
                        f"/ prefetch {latency.prefetch_us:.0f} us"
                        if cost_label.startswith("measured") else cost_label),
         "mode": "interactive" if args.interactive else ("quick" if args.quick else "full"),
+        **({} if args.interactive or not msrc_dir.is_dir() else {
+            "MSRC traces": f"first {trace_limit:,} requests each"
+                           + (" (--quick)" if args.quick else "")}),
     }))
 
     print(cost_model_section(latency, cost_label))

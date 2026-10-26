@@ -81,14 +81,16 @@ def twin_group(stem: str) -> frozenset[str] | None:
 
 
 #: Traces chosen by the blocktrace-scout for diversity in sequentiality,
-#: in the order of plan §2.1. The plan calls the subset 21 traces but names
-#: only these 20; no 21st is guessed here. ``alibabaBlock_3`` is the drift case: its
+#: in the order of plan §2.1. The plan names 20 traces but calls the subset
+#: 21; the lead's ruling made ``msr_prn_0`` the 21st (it is also the trace E2
+#: must train on, plan C2). ``alibabaBlock_3`` is the drift case: its
 #: next-record contiguity is 0.027 over the first 18 h but 0.51 over the
 #: whole 744 h file (blocktrace-scout ``stats_all.jsonl``), so a prefix does
 #: not represent it. FIU entries are replayed as canonical (page-merged)
 #: requests.
 PAPER_SUBSET: tuple[str, ...] = (
     "msr_hm_0", "msr_prn_1", "msr_proj_0", "msr_web_2", "msr_prxy_0",
+    "msr_prn_0",
     "fiu_casa-110108-112108", "fiu_homes-110108-112108",
     "fiu_online.cs.fiu.edu-110108-113008", "fiu_madmax-110108-112108",
     "alibabaBlock_23", "alibabaBlock_19", "alibabaBlock_14",
