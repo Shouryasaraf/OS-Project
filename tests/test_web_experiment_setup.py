@@ -418,6 +418,9 @@ class LiveValidatedRunTests(unittest.TestCase):
                             if p["kind"] == "feedback")
             self.assertEqual((feedback["parameter"], feedback["epsilon"]), (0.01, 0.002))
             self.assertIn("foreign I/O", (results / "live_report.md").read_text())
+            # The selection record rides inside a run, so the WPF1 schema still holds.
+            from prefetch_common.schemas import validate_file
+            validate_file(results / "live_config.json", "live/live_config.json")
 
     def test_a_missing_selection_stops_the_run_before_any_output(self):
         from webprefetch.live.run import main
