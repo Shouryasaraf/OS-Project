@@ -8,7 +8,7 @@ from statistics import mean, pstdev
 from adaptive_prefetch.baselines import MarkovPrefetcher, StridePrefetcher
 from adaptive_prefetch.artifacts import load_model, save_model
 from adaptive_prefetch.benchmark import (MODES, aggregate_results, analyze_results,
-                                         benchmark_dataset, drift_report)
+                                         benchmark_dataset, drift_report, make_model)
 from adaptive_prefetch.cli import train
 from adaptive_prefetch.eda import (domain_shift, locality_profile, profile_trace)
 from adaptive_prefetch.features import (FEATURE_NAMES, STREAM_FEATURES,
@@ -1377,12 +1377,17 @@ class GateAuditRegressionTests(unittest.TestCase):
         requests = [Request(i * 0.5, rng.randrange(0, 100_000), 8)
                     for i in range(3000)]
         for mode in ("none", "sequential", "strided", "adaptive_evidence",
-                     "guard", "depth_adaptive", "correlate", "deep"):
-            a, _ = replay(requests, mode=mode)
-            b = replay_stream(iter([iter(requests)]), mode=mode)
+                     "guard", "depth_adaptive", "correlate", "deep",
+                     "stride", "markov", "adaptive", "linux_ra"):
+            model = make_model(42) if mode == "adaptive" else None
+            a, _ = replay(requests, mode=mode, model=model)
+            b = replay_stream(iter([iter(requests)]), mode=mode, model=model)
             for field in ("read_hits", "read_blocks", "prefetches",
                           "useful_prefetches", "policy_switches",
-                          "prefetch_cost_us", "demand_latency_us"):
+                          "prefetch_cost_us", "demand_latency_us",
+                          "demand_ios", "prefetch_ios",
+                          "prefetch_ios_mergeable", "age_table_evictions",
+                          "inference_calls"):
                 self.assertEqual(getattr(a, field), getattr(b, field),
                                  f"{mode}.{field} differs between paths")
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections import Counter
+from collections import Counter, OrderedDict
 from statistics import mean, pstdev
 
 from .trace import Request
@@ -38,6 +38,13 @@ FAST_GAP_FRACTION = 0.25
 #: as genuinely sequential. Calibrated against the measured real-trace
 #: distribution, where ``contiguous_ratio`` has median 0.032 and p90 0.097.
 MIN_CONTIGUITY = 0.10
+#: Default ceiling on the block-age table, in blocks (M9). Unbounded, the
+#: table held one entry per distinct block ever touched: ``adaptive`` reached
+#: 1,429 MB resident on 100k requests against 86 MB for ``none``. 4M entries
+#: (a 2 GiB footprint at 512 B) is far above any replayed cache, so features
+#: are unchanged wherever the trace's footprint fits; above it, the oldest
+#: ages are forgotten and a revisit of one reads as a first touch.
+DEFAULT_AGE_TABLE_BOUND = 4_000_000
 
 
 def extract(window: list[Request]) -> tuple[float, ...]:
@@ -82,29 +89,51 @@ class WindowContext:
     spatial features. This is the information a real system would get from
     block-age tracking in its cache; it is genuinely available at decision
     time, so using it is not lookahead.
+
+    The age table is LRU-bounded at ``bound`` entries (``None`` for
+    unbounded). An evicted block means "never seen", exactly as a real
+    block-age tracker of finite size would report it. Output is identical
+    to the unbounded table whenever the stream touches no more than
+    ``bound`` distinct blocks; ``evictions`` counts the entries dropped, so a
+    run can say whether the bound was ever reached.
     """
 
-    __slots__ = ("last_seen", "index", "previous", "previous_stride")
+    __slots__ = ("last_seen", "index", "previous", "previous_stride",
+                 "bound", "evictions")
 
-    def __init__(self):
-        self.last_seen: dict[int, int] = {}
+    def __init__(self, bound: int | None = DEFAULT_AGE_TABLE_BOUND):
+        if bound is not None and bound < 1:
+            raise ValueError("age table bound must be positive or None")
+        self.last_seen: OrderedDict[int, int] = OrderedDict()
         self.index = 0
         self.previous: tuple[float, ...] | None = None
         self.previous_stride: int | None = None
+        self.bound = bound
+        self.evictions = 0
 
     def observe(self, window: list[Request], stride: int | None) -> tuple:
         """Consume one window and return its full contextual feature vector."""
         base = extract(window)
         ages: list[int] = []
+        last_seen = self.last_seen
+        bound = self.bound
         for request in window:
             newest = 0
             for block in range(request.lba, request.lba + request.size_blocks):
-                previous = self.last_seen.get(block)
+                previous = last_seen.get(block)
                 if previous is not None:
                     age = self.index - previous
                     if age > newest:
                         newest = age
-                self.last_seen[block] = self.index
+                    # Recency order is touch order, so the front of the
+                    # table is always the oldest age and the one to drop.
+                    last_seen.move_to_end(block)
+                    last_seen[block] = self.index
+                else:
+                    last_seen[block] = self.index
+                    if bound is not None and len(last_seen) > bound:
+                        last_seen.popitem(last=False)
+                        self.evictions += 1
             ages.append(newest)
             self.index += 1
 
@@ -136,12 +165,13 @@ class WindowContext:
 
     def result(self, window: list[Request], stride: int | None) -> tuple:
         """Contextual vector without advancing the stream state."""
-        saved = (dict(self.last_seen), self.index, self.previous,
-                 self.previous_stride)
+        saved = (OrderedDict(self.last_seen), self.index, self.previous,
+                 self.previous_stride, self.evictions)
         try:
             return self.observe(window, stride)
         finally:
-            self.last_seen, self.index, self.previous, self.previous_stride = saved
+            (self.last_seen, self.index, self.previous, self.previous_stride,
+             self.evictions) = saved
 
 
 def dominant_stride(window: list[Request]) -> int | None:

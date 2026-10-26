@@ -14,7 +14,7 @@ from .trace import (CLASSES, Request, synthetic_dataset, synthetic_window,
 
 MODES = ("none", "sequential", "strided", "stride", "markov", "lstm",
          "adaptive", "adaptive_evidence", "guard", "depth_adaptive",
-         "correlate", "deep")
+         "correlate", "deep", "linux_ra")
 COLUMNS = ("dataset", "mode", "status", "hit_ratio", "precision", "recall",
            "unused", "total_prefetches", "useful_prefetches",
            "mean_latency_us", "speedup_vs_none", "inference_us",
@@ -22,7 +22,8 @@ COLUMNS = ("dataset", "mode", "status", "hit_ratio", "precision", "recall",
 
 
 def make_model(seed: int = 42, examples_per_class: int = 100,
-               classifier: str = DEFAULT_CLASSIFIER, contextual: bool = True):
+               classifier: str = DEFAULT_CLASSIFIER, contextual: bool = True,
+               interleave: bool = False):
     """Fit a classifier on labelled synthetic windows.
 
     With ``contextual=True`` the windows of a class are laid out as one
@@ -30,6 +31,15 @@ def make_model(seed: int = 42, examples_per_class: int = 100,
     previous-window features exactly as it does at replay time. Training on
     shuffled isolated windows would teach the model that the four contextual
     features are always zero, which is a train/deploy mismatch.
+
+    ``interleave=True`` is an opt-in sensitivity setting (M16). By default
+    the classes are fitted one after another, and under the 0.995 decay the
+    earlier classes' counts decay away, skewing the class priors to about
+    0.10/0.17/0.28/0.46. Interleaving the same feature vectors round-robin
+    keeps the priors near 0.25. The default stays as shipped so that the
+    recorded sweep cells, ``models/msr_sample_gnb.json`` and the
+    CLASSIFIER_EVAL figures still reproduce; held-out accuracy is the same
+    either way.
     """
     from .features import WindowContext, dominant_stride
 
@@ -39,6 +49,7 @@ def make_model(seed: int = 42, examples_per_class: int = 100,
             model.update(extract(window), label)
         return model
 
+    per_class: dict[str, list[tuple[float, ...]]] = {}
     for label in CLASSES:
         rng = random.Random(seed)
         context = WindowContext()
@@ -54,7 +65,18 @@ def make_model(seed: int = 42, examples_per_class: int = 100,
             window = flat[start:start + 32]
             if len(window) < 32:
                 break
-            model.update(context.observe(window, dominant_stride(window)), label)
+            vector = context.observe(window, dominant_stride(window))
+            if interleave:
+                per_class.setdefault(label, []).append(vector)
+            else:
+                model.update(vector, label)
+    if interleave:
+        longest = max(len(vectors) for vectors in per_class.values())
+        for index in range(longest):
+            for label in CLASSES:
+                vectors = per_class.get(label, [])
+                if index < len(vectors):
+                    model.update(vectors[index], label)
     return model
 
 
