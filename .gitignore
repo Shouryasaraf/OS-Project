@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 *.egg-info/
 outputs/
+data/
 data/raw/
 data/MSRC-trace-003
 .build/
