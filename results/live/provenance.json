@@ -1,0 +1,72 @@
+{
+  "format": "prefetch_common.provenance/1",
+  "study": "live",
+  "command": [
+    "python",
+    "-m",
+    "webprefetch.live",
+    "run",
+    "--sessions",
+    "2000",
+    "--results-dir",
+    "results/live",
+    "--max-load",
+    "32.0",
+    "--shards",
+    "2",
+    "--selection",
+    "results/web/comparisons.csv",
+    "--selection-cost",
+    "0.01",
+    "--store-dir",
+    "/mnt/b18edc65-4395-4a85-976a-bed3428c073b/os-project-prefetch/web-store",
+    "--store-label",
+    "hdd",
+    "--experiment",
+    "hint",
+    "--policies",
+    "hint:fixed4,hint:fixed8",
+    "--reps",
+    "1",
+    "--no-probe"
+  ],
+  "git_sha": "ae492d5dfa6fd8ad06bc3c85adcdfe6c48db0fa7",
+  "git_dirty": false,
+  "created_utc": "2026-10-26T21:34:10+00:00",
+  "host": {
+    "hostname": "antpc",
+    "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+    "kernel": "6.14.0-37-generic",
+    "python": "3.12.3",
+    "cpu_count": 128
+  },
+  "load_avg": {
+    "start": [
+      12.33,
+      8.27,
+      7.0
+    ],
+    "end": [
+      3.98,
+      6.68,
+      7.01
+    ]
+  },
+  "wall_s": 757.888,
+  "gpu": null,
+  "inputs": {
+    "outputs/web/live/plan_8e710fb1e422/plan.json": "fabc1616ecf63aba6187bbc27b7fccf4b54ca374793a38e4b97ef3d02c66a1a1",
+    "outputs/web/live/plan_8e710fb1e422/sim.json": "c04f6753a6403b1062c3f22f1a18fcaae6cff7f7028e7352e6cbada75868cbeb",
+    "/mnt/b18edc65-4395-4a85-976a-bed3428c073b/os-project-prefetch/web-store/m65536_s1_store_index.json": "e1c228b81ab0064d0d2997ebfce0fef4246dc3d4c53fd2a35b25263bf89e66ef"
+  },
+  "outputs": {
+    "PREREGISTERED.md": "fbd0f8cb0fd51a9aa6a8db805964a12e180ee5548d0dda201527af585f09c4c3",
+    "disk_probe_hdd.json": "a0eac5d6fdf484daf2032791ccdc41d2c7a5d36b84d9051e648966bb9e95a85c",
+    "disk_probe_ssd.json": "4143ba6219c88e120e88489152fe90fd61cb2d716af72d47c3efa2abd8b08f2a",
+    "live_config.json": "a1850b2d0307bb6ba8fab94b340499dff402a7813bf81fb2c1d142012676a8db",
+    "live_metrics.csv": "4a3675e9c4eddd70a0ff333277adb524ef7bf66e05cb0d02531019c2bf79fd89",
+    "live_parity.csv": "8415a58f52be84ab05c86aad5eb7bc2239599bbb49790363fca636afbddb079b",
+    "live_report.md": "f09030078ea3739cc684f9d6f9487108219319fbfbcdedf8f7120656adc49b1a"
+  },
+  "notes": "results accumulate across runs; live_config.json lists every run"
+}

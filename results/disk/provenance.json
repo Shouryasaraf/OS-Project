@@ -1,0 +1,142 @@
+{
+  "format": "prefetch_common.provenance/1",
+  "study": "disk",
+  "command": [
+    "/tmp/claude-1000/-home-antpc-Ashvik-OS-Project-OS-Project/30a4e740-9eeb-4ee7-b80b-95503b869ef2/scratchpad/wt/exp/.venv/bin/python",
+    "reproduce.py",
+    "disk",
+    "--workers",
+    "64"
+  ],
+  "git_sha": "beea45c3007ddbc62e3390095a0a0fa92e319a85",
+  "git_dirty": false,
+  "created_utc": "2026-10-26T15:51:43+00:00",
+  "host": {
+    "hostname": "antpc",
+    "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+    "kernel": "6.14.0-37-generic",
+    "python": "3.12.3",
+    "cpu_count": 128
+  },
+  "load_avg": {
+    "start": [
+      3.96,
+      6.16,
+      11.3
+    ],
+    "end": [
+      83.18,
+      87.22,
+      87.69
+    ]
+  },
+  "wall_s": 4130.516,
+  "gpu": null,
+  "inputs": {
+    "data/block-traces/alibaba/alibabaBlock_0.oracleGeneral.zst": "b5dbc6e8003d97dfcb80511dedee467ce5ce3a6dfa095c2769371cf70ca915a2",
+    "data/block-traces/alibaba/alibabaBlock_1.oracleGeneral.zst": "3c8fde50a86e59715129a436dbf6097d7fa9830686b70ed33277853fd98df35d",
+    "data/block-traces/alibaba/alibabaBlock_11.oracleGeneral.zst": "c4db76819f89acb78dbd4768434615f345ebf624f39bf9f51537129b978213d7",
+    "data/block-traces/alibaba/alibabaBlock_12.oracleGeneral.zst": "512f32aa29e6260541a409e3df3803c605eb7aca4dad2ddae87d33eba14781aa",
+    "data/block-traces/alibaba/alibabaBlock_13.oracleGeneral.zst": "66641fea45e083148b4b02a219bdf76954027cc497ef82c2ada673163e6d61fa",
+    "data/block-traces/alibaba/alibabaBlock_14.oracleGeneral.zst": "bc93f49f20b256748bc1a868a085f5f3d0b277d4f618a704a7d01813d9439a6a",
+    "data/block-traces/alibaba/alibabaBlock_15.oracleGeneral.zst": "fcd2590963edcb3170139234655c00947a132c08510ec3b59f525e13ebc79a4b",
+    "data/block-traces/alibaba/alibabaBlock_16.oracleGeneral.zst": "64b4c6655edc9540cf840a85c745d5688cd6bcf52b1b908daebcc1715fd71aa2",
+    "data/block-traces/alibaba/alibabaBlock_17.oracleGeneral.zst": "5b9061c69682f0c5d63f98575a695933212db52d9e2ecb2593740cd4290548e1",
+    "data/block-traces/alibaba/alibabaBlock_18.oracleGeneral.zst": "43117b14ac677f3ca0ebacaa56c3a7348698f5664869c44f1cd2cd585b2b8553",
+    "data/block-traces/alibaba/alibabaBlock_19.oracleGeneral.zst": "500884e23bf8491dea51bd43a51d0b12a90adcbb5f8634191c250284e8e1334a",
+    "data/block-traces/alibaba/alibabaBlock_2.oracleGeneral.zst": "9c70f3977d6186b8fd1d5cf1fca97bcc7121cefb038b48370c33ab1120e43d3d",
+    "data/block-traces/alibaba/alibabaBlock_20.oracleGeneral.zst": "dc57d641113fd9eea42d0db4241baeae380198d388eafe2322263e69831b31be",
+    "data/block-traces/alibaba/alibabaBlock_22.oracleGeneral.zst": "d1cc0c6685f93e3d9ee791dd8ea742abca41b14330e55b4d64c9bf2cca757cce",
+    "data/block-traces/alibaba/alibabaBlock_23.oracleGeneral.zst": "484dbd6cda0e87d046eb61698aaeffe4ac3789c109f7a24e4abd09b2d85e8c05",
+    "data/block-traces/alibaba/alibabaBlock_24.oracleGeneral.zst": "50abecd644d70147fb3793e43290733f223600ca46ee8513b7f7e425a5043b93",
+    "data/block-traces/alibaba/alibabaBlock_3.oracleGeneral.zst": "f6c9f0ee1101d290223be7b9ac30a72412bd8f47d32db4f4f921e1b6fbcb2d61",
+    "data/block-traces/alibaba/alibabaBlock_5.oracleGeneral.zst": "4e51f6e06fa1ad4f4fb72bf53394af7e9b6f432079edbcc661771cb63956166d",
+    "data/block-traces/alibaba/alibabaBlock_6.oracleGeneral.zst": "41d922c548b35886efd73db989001847f5c7b0632a4d011d995609c20d9605ee",
+    "data/block-traces/alibaba/alibabaBlock_8.oracleGeneral.zst": "77aa13f3b584bd958323b2ad54985416cb61df4e4ff20f0d4603845a5b445139",
+    "data/block-traces/fiu/fiu_casa-110108-112108.oracleGeneral.zst": "711eff2c7debbf886e8adf948b51503529a7780d0f4ba29998e78bf78f45ed30",
+    "data/block-traces/fiu/fiu_cheetah.cs.fiu.edu-110108-113008.oracleGeneral.zst": "9b99ebc96688fb5ae9884ce04b4287f71804bbcbd2996f076abc3ea828f9ebb7",
+    "data/block-traces/fiu/fiu_homes-110108-112108.oracleGeneral.zst": "5f3537b9ab909b731755af8b80f9006caced81aef7ebed325ffd21b54b121480",
+    "data/block-traces/fiu/fiu_ikki-110108-112108.oracleGeneral.zst": "954510e6cdb5999a29154c966db550c5de4c83b4cec87e2e28a6258f53fea842",
+    "data/block-traces/fiu/fiu_madmax-110108-112108.oracleGeneral.zst": "9da30ef8179b53ee05ab89ad62764e11dea4fb4a1640b475b2d9cb69f7cde88d",
+    "data/block-traces/fiu/fiu_online.cs.fiu.edu-110108-113008.oracleGeneral.zst": "cfda47b4fba88a90a21d426cf3300d8b08ac983f5695508c6f14ee85cc68553b",
+    "data/block-traces/fiu/fiu_webmail+online.cs.fiu.edu-110108-113008.oracleGeneral.zst": "ba4543d772dabe28b23d06339a0de4c22a41e94a53edd36c147a5555ecd8f006",
+    "data/block-traces/fiu/fiu_webmail.cs.fiu.edu-110108-113008.oracleGeneral.zst": "6c7c95eb29ae8f0be1824152d8132771d7444b51bd3d6eb83fd1ea0c05c9802c",
+    "data/block-traces/fiu/fiu_webresearch-030409-033109.oracleGeneral.zst": "4b80e4ed47bcbe406dd0292f15e24728c49260aa091ebaf44f78cd39b6d556ab",
+    "data/block-traces/fiu/fiu_webusers-030409-033109.oracleGeneral.zst": "816b163999f2d674239c77a3ccb1202a00f14317cee09957f2d6926dc8c59619",
+    "data/block-traces/msr/msr_hm_0.oracleGeneral.zst": "5fc99e798d5e06f61ad97019298ea7226d1afff9ef577e87b447c63a4480de17",
+    "data/block-traces/msr/msr_prn_0.oracleGeneral.zst": "a7131a3f04673cd4d2122377344cab919182f8d28ed2678c2d5270b530f4c1ea",
+    "data/block-traces/msr/msr_prn_1.oracleGeneral.zst": "2da82e93e608f8196874c2fad47040247ba0ce27fdd5bfa7c189c1e86028f58b",
+    "data/block-traces/msr/msr_proj_0.oracleGeneral.zst": "dc408c090ffda06a1d3d5638bd0bc0fb78fc47188620e7d88e57a25145cf6faa",
+    "data/block-traces/msr/msr_proj_1.oracleGeneral.zst": "ffa6a836b4ef5a69badcdd378ecb6d8d511c6beb062d1c39022976b1bb50e476",
+    "data/block-traces/msr/msr_proj_2.oracleGeneral.zst": "f2a0b22da44ba0e17d639260e98d063d4af8316fb759bc1922adeb230c8aac87",
+    "data/block-traces/msr/msr_proj_4.oracleGeneral.zst": "0fd3f5ed6a629424360892fc0c99feb7cd25d539ace510ed44d55db45f6dd36d",
+    "data/block-traces/msr/msr_prxy_0.oracleGeneral.zst": "8dac49720740de8c27c6c121c3cff94da573d5f63235e8d34e92a6f6badee751",
+    "data/block-traces/msr/msr_prxy_1.oracleGeneral.zst": "ba750da9c4edfdde042e876fb7ddca94a8b0e0525a87bac16c595b6d9bf35e78",
+    "data/block-traces/msr/msr_src1_0.oracleGeneral.zst": "d1378643140d2a8af21aaa446488d0baa9ef2ff6b47ce0ab297969bc2e3dc4d6",
+    "data/block-traces/msr/msr_src1_1.oracleGeneral.zst": "cbec82c3800e0815abdd944b953641a7aa64cb63f223c267b3e0d49107a11b65",
+    "data/block-traces/msr/msr_usr_1.oracleGeneral.zst": "4349aaee752dadf504ee724e6e6af4d09df63cf9c10cb5cc6d4e5fefc4bd205f",
+    "data/block-traces/msr/msr_usr_2.oracleGeneral.zst": "8904be27e78385f68b617c2492df8b08b5ad919c7b421b98aac962632eb68c42",
+    "data/block-traces/msr/msr_web_2.oracleGeneral.zst": "52d20c92af57e54a106f6b44bd2f37c467896daacb1abe02ab7667211e0a5c5b",
+    "data/block-traces/tencent/tencentBlock_1162.oracleGeneral.zst": "225e1b878fb00577495fc4de34499126c53a388164bf7949bd3c9c0ed80442de",
+    "data/block-traces/tencent/tencentBlock_1306.oracleGeneral.zst": "ccb676d43319d161366441488861b4dd6e36c345e7715dc6cf6476e7fd64a376",
+    "data/block-traces/tencent/tencentBlock_1362.oracleGeneral.zst": "f3597244cbaf574edfd0d0b51f12286d31ccebe811a406c836a4636ce6d0705f",
+    "data/block-traces/tencent/tencentBlock_1591.oracleGeneral.zst": "802612bb02eab49c15b283d7e477117fed3ddfce5a2dc9c6456aaea37f4d3a63",
+    "data/block-traces/tencent/tencentBlock_1633.oracleGeneral.zst": "ec9471f623d97b305f41f83cd2ac0f027db55a996ac76f23559d197fe51891f5",
+    "data/block-traces/tencent/tencentBlock_1757.oracleGeneral.zst": "7885fa24e671c11d2c9b0aba0bece90bf9398437b67fffa023a54fba9de85df0",
+    "data/block-traces/tencent/tencentBlock_1791.oracleGeneral.zst": "21e2f3c866b157025fc6e72b7d647870941ec002f37a03b5c49670857798068e",
+    "data/block-traces/tencent/tencentBlock_1847.oracleGeneral.zst": "04675ba8b0ca9b3d2e3a7d3a351e8a1bf6c447a3b004365b4ee2016ace7fddc5",
+    "data/block-traces/tencent/tencentBlock_1894.oracleGeneral.zst": "3789b566dea6f271719f8afb7fd10dc26faf5c5f4c55b9c597d6f6fbf6c1b626",
+    "data/block-traces/tencent/tencentBlock_1900.oracleGeneral.zst": "31634743867b51b912402715dd37811a4bbe98e5eada118061f1738d036ed294",
+    "data/block-traces/tencent/tencentBlock_1911.oracleGeneral.zst": "d6d9307d45ba9a96b3f6516d082e4e6f2494a644e45ab60b1319e78cc39a56d1",
+    "data/block-traces/tencent/tencentBlock_2145.oracleGeneral.zst": "c19d0634a900842d754e263ef737e78479eb5da6c11b85a146a1a6bf1c9456b4"
+  },
+  "outputs": {
+    "PREREGISTERED.md": "39ce21ed6dc2efa1f2a80f1158057aa44c7cb2d511cd5c6d17172bead6639ace",
+    "corpus_profile.csv": "6c3ecb9f31eb58df545f6fa2b7d0c0eeb35ea2b69ba8715416de52d60f0f0d1d",
+    "deltas.csv": "0062c15c1f1c72ceaf7ff0eb07e806b56d589377388207140fad1dc3b3ec5e8d",
+    "kappa.csv": "a4c4fe226c5534961d42510f8d6cc62f16694bfec4e3621bd00f859a0193d302",
+    "sweep.jsonl": "9d0ebad4d49f76fb922babf7be517c48b2635acd93453e46adb9b78179c53b14",
+    "table_by_corpus.csv": "a9bf267d47d394045ccd6d77edd4e78689ca3094b8cbfb25297d60bab678417b",
+    "table_main.csv": "92e4077811bcd4569adc79cd14f58ecf670da23e7597a3ab35646bc41cf7e237",
+    "winners.csv": "8ee0b0384370e613605a7ffb8685d9f744ca4f0e0479bd21c9b523b1013951f1"
+  },
+  "notes": "E1 multi-corpus sweep, simulated. Cost model: assumed 5/100/50 us for every row; the feedback-gated modes also at break-even 1.0101 (1/100/100 us). Consistency checks are in extra.checks.",
+  "extra": {
+    "configs": [
+      "C1",
+      "C2",
+      "C3",
+      "C4"
+    ],
+    "checks": {
+      "rows": 9324,
+      "duplicate_keys": 0,
+      "status_counts": {
+        "ok": 8758,
+        "skipped: evaluated in E2 only": 224,
+        "skipped: n/a: no full slice at skip 1,000,000": 36,
+        "skipped: n/a: whole file has more than 4,000,000 canonical requests": 306
+      },
+      "guard_eq_depth_adaptive_at_break_even": {
+        "pairs": 112,
+        "identical": 112,
+        "mismatches": []
+      },
+      "deep0_eq_none": {
+        "pairs": 488,
+        "identical": 488,
+        "mismatches": []
+      },
+      "hm0_deep8_250k": [
+        {
+          "config": "C2",
+          "merge": "auto",
+          "hit_ratio": 0.357230590985335,
+          "total_prefetches": 901487,
+          "pass": true
+        }
+      ],
+      "wilcoxon": null
+    }
+  }
+}

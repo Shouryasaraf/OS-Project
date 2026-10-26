@@ -2,14 +2,16 @@
   "format": "prefetch_common.provenance/1",
   "study": "realio",
   "command": [
-    "/home/antpc/Ashvik/OS-Project/OS-Project/src/adaptive_prefetch/realio/__main__.py",
-    "calibrate",
-    "--device-dir",
-    "outputs/realio/ssd"
+    "reproduce.py",
+    "realio",
+    "--device",
+    "/home/antpc/Ashvik/OS-Project/OS-Project/outputs/realio/ssd",
+    "--device-name",
+    "ssd"
   ],
-  "git_sha": "b9baefd7a241f6dc8a9e435575776ac9c267d817",
+  "git_sha": "aa382c1f7c017109713f8751ee17b6e5b48f25fe",
   "git_dirty": false,
-  "created_utc": "2026-10-26T14:42:19+00:00",
+  "created_utc": "2026-10-26T18:35:44+00:00",
   "host": {
     "hostname": "antpc",
     "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
@@ -19,22 +21,118 @@
   },
   "load_avg": {
     "start": [
-      4.52,
-      6.52,
-      11.61
+      4.85,
+      7.65,
+      7.14
     ],
     "end": [
-      4.56,
-      6.49,
-      11.58
+      11.63,
+      9.0,
+      7.77
     ]
   },
-  "wall_s": 4.426,
+  "wall_s": 509.45,
   "gpu": null,
-  "inputs": {},
-  "outputs": {
-    "device_sdb.json": "e6f3addd0f9504cf91813314f1bad4dd129172f436ad257a717117887120be79",
-    "device_ssd.json": "d86ae43059f766f25392b4589e35e64ce9aa7750edbe82c2daba06671786259d"
+  "inputs": {
+    "data/block-traces/msr/msr_hm_0.oracleGeneral.zst": "5fc99e798d5e06f61ad97019298ea7226d1afff9ef577e87b447c63a4480de17",
+    "data/block-traces/msr/msr_web_2.oracleGeneral.zst": "52d20c92af57e54a106f6b44bd2f37c467896daacb1abe02ab7667211e0a5c5b"
   },
-  "notes": "calibrate ssd"
+  "outputs": {
+    "PREREGISTERED.md": "6847b055555644d9eba0a5f9e7f53b9aa34399bee031e25a765c080efb79ff43",
+    "device_sdb.json": "e6f3addd0f9504cf91813314f1bad4dd129172f436ad257a717117887120be79",
+    "device_ssd.json": "d86ae43059f766f25392b4589e35e64ce9aa7750edbe82c2daba06671786259d",
+    "realio.csv": "536b12de7e13efbadc402e5d058b41e2e3928481cbd2d4babb2d2fc5f5cbc440",
+    "realio_summary.csv": "47e8e03cf2d29af9862e492768c46f19d3dbc6ebd39381b01aaa121aeb31acba"
+  },
+  "notes": "54 runs appended; details in /tmp/claude-1000/-home-antpc-Ashvik-OS-Project-OS-Project/30a4e740-9eeb-4ee7-b80b-95503b869ef2/scratchpad/wt/exp/outputs/realio/runs.jsonl",
+  "extra": {
+    "earlier_invocations": [
+      {
+        "command": [
+          "/home/antpc/Ashvik/OS-Project/OS-Project/src/adaptive_prefetch/realio/__main__.py",
+          "calibrate",
+          "--device-dir",
+          "outputs/realio/ssd"
+        ],
+        "created_utc": "2026-10-26T14:42:19+00:00",
+        "git_sha": "b9baefd7a241f6dc8a9e435575776ac9c267d817",
+        "git_dirty": false,
+        "wall_s": 4.426,
+        "load_avg": {
+          "start": [
+            4.52,
+            6.52,
+            11.61
+          ],
+          "end": [
+            4.56,
+            6.49,
+            11.58
+          ]
+        },
+        "inputs": {},
+        "notes": "calibrate ssd"
+      },
+      {
+        "command": [
+          "reproduce.py",
+          "realio",
+          "--device",
+          "/mnt/b18edc65-4395-4a85-976a-bed3428c073b/os-project-prefetch"
+        ],
+        "created_utc": "2026-10-26T17:18:34+00:00",
+        "git_sha": "aa382c1f7c017109713f8751ee17b6e5b48f25fe",
+        "git_dirty": false,
+        "wall_s": 4614.721,
+        "load_avg": {
+          "start": [
+            7.98,
+            22.52,
+            52.63
+          ],
+          "end": [
+            15.62,
+            9.16,
+            7.37
+          ]
+        },
+        "inputs": {
+          "data/block-traces/msr/msr_hm_0.oracleGeneral.zst": "5fc99e798d5e06f61ad97019298ea7226d1afff9ef577e87b447c63a4480de17",
+          "data/block-traces/msr/msr_web_2.oracleGeneral.zst": "52d20c92af57e54a106f6b44bd2f37c467896daacb1abe02ab7667211e0a5c5b",
+          "data/block-traces/msr/msr_prn_0.oracleGeneral.zst": "a7131a3f04673cd4d2122377344cab919182f8d28ed2678c2d5270b530f4c1ea",
+          "data/block-traces/alibaba/alibabaBlock_17.oracleGeneral.zst": "5b9061c69682f0c5d63f98575a695933212db52d9e2ecb2593740cd4290548e1",
+          "data/block-traces/fiu/fiu_homes-110108-112108.oracleGeneral.zst": "5f3537b9ab909b731755af8b80f9006caced81aef7ebed325ffd21b54b121480"
+        },
+        "notes": "255 runs appended; details in /tmp/claude-1000/-home-antpc-Ashvik-OS-Project-OS-Project/30a4e740-9eeb-4ee7-b80b-95503b869ef2/scratchpad/wt/exp/outputs/realio/runs.jsonl"
+      },
+      {
+        "command": [
+          "reproduce.py",
+          "realio",
+          "--device",
+          "/mnt/b18edc65-4395-4a85-976a-bed3428c073b/os-project-prefetch"
+        ],
+        "created_utc": "2026-10-26T18:27:15+00:00",
+        "git_sha": "aa382c1f7c017109713f8751ee17b6e5b48f25fe",
+        "git_dirty": false,
+        "wall_s": 4120.688,
+        "load_avg": {
+          "start": [
+            15.62,
+            9.16,
+            7.37
+          ],
+          "end": [
+            4.85,
+            7.65,
+            7.14
+          ]
+        },
+        "inputs": {
+          "data/block-traces/msr/msr_hm_0.oracleGeneral.zst": "5fc99e798d5e06f61ad97019298ea7226d1afff9ef577e87b447c63a4480de17"
+        },
+        "notes": "51 runs appended; details in /tmp/claude-1000/-home-antpc-Ashvik-OS-Project-OS-Project/30a4e740-9eeb-4ee7-b80b-95503b869ef2/scratchpad/wt/exp/outputs/realio/runs.jsonl"
+      }
+    ]
+  }
 }

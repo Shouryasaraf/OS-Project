@@ -1,0 +1,78 @@
+{
+  "source": "https://www.kaggle.com/datasets/retailrocket/ecommerce-dataset",
+  "dataset_version": 2,
+  "source_verified": true,
+  "session_gap_minutes": 30,
+  "raw_sha256": "3745aa83238b1e6d44d8fda209807899f420084398f94ddf745f3cbcfecbf9e7",
+  "raw_rows": 2756101,
+  "duplicate_rows_removed": 460,
+  "event_counts_after_dedup": {
+    "view": 2664218,
+    "addtocart": 68966,
+    "transaction": 22457
+  },
+  "views": 2664218,
+  "visitors": 1407580,
+  "sessions": 1755863,
+  "sessions_with_2plus_views": 367474,
+  "sessions_with_3plus_views": 158980,
+  "sessions_with_5plus_views": 56983,
+  "eligible_next_view_pairs": 908355,
+  "session_length_quantiles": {
+    "0.5": 1.0,
+    "0.75": 1.0,
+    "0.9": 2.0,
+    "0.95": 4.0,
+    "0.99": 8.0
+  },
+  "split_cutoffs_ms": [
+    1435270223822,
+    1437508264878,
+    1439869763043
+  ],
+  "views_by_split": {
+    "0": 1065687,
+    "1": 532844,
+    "2": 532843,
+    "3": 532844
+  },
+  "eligible_pairs_by_split": {
+    "0": 384445,
+    "1": 181373,
+    "2": 174057,
+    "3": 168480
+  },
+  "prepared_path": "data/processed/views.csv.gz",
+  "replayed_views": {
+    "validation": 532843,
+    "test": 532844
+  },
+  "pair_kinds": {
+    "validation": {
+      "eligible": 174057,
+      "kinds": {
+        "novel": 111554,
+        "self_repeat": 42986,
+        "earlier_in_session": 19517
+      },
+      "kinds_share": {
+        "novel": 0.6409049908937877,
+        "self_repeat": 0.24696507465945064,
+        "earlier_in_session": 0.1121299344467617
+      }
+    },
+    "test": {
+      "eligible": 168480,
+      "kinds": {
+        "novel": 106765,
+        "self_repeat": 42437,
+        "earlier_in_session": 19278
+      },
+      "kinds_share": {
+        "novel": 0.6336953941120608,
+        "self_repeat": 0.2518815289648623,
+        "earlier_in_session": 0.11442307692307692
+      }
+    }
+  }
+}
