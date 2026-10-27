@@ -1,7 +1,9 @@
 # MSRC light sample (E7): labelled-window transfer check and sanity replay
 
-Regenerate with `python reproduce.py msrc` (5 min 20 s here on 8 workers, load
-average 37 to 151 from other tenants; `provenance.json` records it). Rules:
+Regenerate with `python reproduce.py msrc` (8 workers; 5 min 20 s and 9 min
+39 s in two identical runs here, with the 1-minute load average from other
+tenants between 37 and 151; `provenance.json` records the committed run's wall
+time and load). Rules:
 `PREREGISTERED.md` (with amendments A1, A2). Code:
 `src/adaptive_prefetch/msrc_eval.py`; tests: `tests/test_msrc_eval.py`.
 

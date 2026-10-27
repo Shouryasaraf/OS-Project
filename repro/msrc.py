@@ -45,8 +45,8 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
 def estimate(args: argparse.Namespace) -> str:
     if args.quick:
         return "about 30 s: 4,000 requests per file, 200 replicates, no replay"
-    return ("about 4-6 min on 8 workers for the seven-file sample (measured 2026-10-27 "
-            "at load ~40): windows and classifiers ~1-2 min, replay ~3 min")
+    return ("about 5-10 min on 8 workers for the seven-file sample (measured 2026-10-27: "
+            "5 min 20 s at load ~40, 9 min 39 s at load ~100-135)")
 
 
 def command(args: argparse.Namespace) -> list[str]:
