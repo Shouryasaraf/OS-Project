@@ -135,14 +135,20 @@ def _plain(row):
 
 
 def key_columns(rows: list[dict]) -> tuple[str, ...] | None:
-    """The fewest identifying columns (str/int/bool/None values, schema order)
-    that make every row unique, or None when no such set exists."""
+    """The fewest identifying columns (str/int/bool/None values in schema
+    order, then scalar floats) that make every row unique, or None."""
     if len(rows) <= 1:
         return ()
     plain = [_plain(r) for r in rows]
-    candidates = [k for k in plain[0]
-                  if all(v is None or (isinstance(v, (str, int, bool)) and not isinstance(v, float))
-                         for v in (r.get(k) for r in plain))]
+    def kind(key):
+        values = [r.get(key) for r in plain]
+        if all(v is None or isinstance(v, (str, int, bool)) for v in values):
+            return 0  # labels and counts first
+        if all(v is None or isinstance(v, (str, int, bool, float)) for v in values):
+            return 1  # then scalar floats (a cost grid; repr round-trips exactly)
+        return 2
+
+    candidates = sorted((k for k in plain[0] if kind(k) < 2), key=kind)
     chosen = []
     for key in candidates:
         chosen.append(key)

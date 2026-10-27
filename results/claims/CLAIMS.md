@@ -22,9 +22,9 @@ Rows: constant 3, decision 63, decision_count 36, derived 49, table 14, table_ce
 
 | macro | printed | kind | source | row | column | raw |
 |---|---|---|---|---|---|---|
-| `\webCmpAdaptivePolicyPerCapacityLogisticCapEightCostZeroPointZeroOne` | adaptive_0.01 | value | web/comparisons.csv | {"_row": 36} | adaptive_policy | ["adaptive_0.01"] |
-| `\webCmpAdaptivePolicyPerCapacityLogisticFeedbackCapEightCostZeroPointZeroOne` | feedback_0.01_eps0.005 | value | web/comparisons.csv | {"_row": 39} | adaptive_policy | ["feedback_0.01_eps0.005"] |
-| `\webCmpAdaptivePolicyPerCapacityTransOnlineCapEightCostZeroPointZeroOne` | adaptive_0.1 | value | web/comparisons.csv | {"_row": 676} | adaptive_policy | ["adaptive_0.1"] |
+| `\webCmpAdaptivePolicyPerCapacityLogisticCapEightCostZeroPointZeroOne` | adaptive_0.01 | value | web/comparisons.csv | {"adaptive_policy": "adaptive_0.01", "capacity": 8, "cost": 0.01, "scorer": "logistic", "selection": "per_capacity"} | adaptive_policy | ["adaptive_0.01"] |
+| `\webCmpAdaptivePolicyPerCapacityLogisticFeedbackCapEightCostZeroPointZeroOne` | feedback_0.01_eps0.005 | value | web/comparisons.csv | {"adaptive_policy": "feedback_0.01_eps0.005", "capacity": 8, "cost": 0.01, "scorer": "logistic", "selection": "per_capacity"} | adaptive_policy | ["feedback_0.01_eps0.005"] |
+| `\webCmpAdaptivePolicyPerCapacityTransOnlineCapEightCostZeroPointZeroOne` | adaptive_0.1 | value | web/comparisons.csv | {"adaptive_policy": "adaptive_0.1", "capacity": 8, "cost": 0.01, "scorer": "trans_online", "selection": "per_capacity"} | adaptive_policy | ["adaptive_0.1"] |
 
 ## sections/abstract.tex
 
@@ -521,11 +521,11 @@ Rows: constant 3, decision 63, decision_count 36, derived 49, table 14, table_ce
 
 | macro | printed | kind | source | row | column | raw |
 |---|---|---|---|---|---|---|
-| `\decWebWOneCapEightCI` | +0.36 pp [+0.33, +0.38] | decision | web/comparisons.csv | {"_row": 36} | vs_best_fixed_same_cap;vs_best_fixed_same_cap_lo;vs_best_fixed_same_cap_hi | [0.0035759997297520477, 0.0033085422330941558, 0.0038485272376049427] |
+| `\decWebWOneCapEightCI` | +0.36 pp [+0.33, +0.38] | decision | web/comparisons.csv | {"adaptive_policy": "adaptive_0.01", "capacity": 8, "cost": 0.01, "scorer": "logistic", "selection": "per_capacity"} | vs_best_fixed_same_cap;vs_best_fixed_same_cap_lo;vs_best_fixed_same_cap_hi | [0.0035759997297520477, 0.0033085422330941558, 0.0038485272376049427] |
 | `\webHeadlineCost` | 0.01 | value | web/decomposition.csv | {"capacity": 8, "lever": "ranker", "metric": "utility_per_view", "policy": "fixed1"} | cost | [0.01] |
-| `\decWebWOneCapThirtyTwoCI` | +0.58 pp [+0.55, +0.61] | decision | web/comparisons.csv | {"_row": 68} | vs_best_fixed_same_cap;vs_best_fixed_same_cap_lo;vs_best_fixed_same_cap_hi | [0.005813502638670981, 0.005549299245868608, 0.006063085327820343] |
-| `\decWebWTwoCapEightCI` | +0.44 pp [+0.41, +0.48] | decision | web/comparisons.csv | {"_row": 36} | vs_fixed0;vs_fixed0_lo;vs_fixed0_hi | [0.004441243590994738, 0.004126835277946787, 0.004765057316329892] |
-| `\webCmpVsTransitionPerCapacityLogisticCapEightCostZeroPointZeroOneCI` | +0.30 pp [+0.27, +0.32] | value | web/comparisons.csv | {"_row": 36} | vs_transition_top1;vs_transition_top1_lo;vs_transition_top1_hi | [0.0029625556448041076, 0.0027008984492422616, 0.0032037622580158853] |
+| `\decWebWOneCapThirtyTwoCI` | +0.58 pp [+0.55, +0.61] | decision | web/comparisons.csv | {"adaptive_policy": "adaptive_0.01", "capacity": 32, "cost": 0.01, "scorer": "logistic", "selection": "per_capacity"} | vs_best_fixed_same_cap;vs_best_fixed_same_cap_lo;vs_best_fixed_same_cap_hi | [0.005813502638670981, 0.005549299245868608, 0.006063085327820343] |
+| `\decWebWTwoCapEightCI` | +0.44 pp [+0.41, +0.48] | decision | web/comparisons.csv | {"adaptive_policy": "adaptive_0.01", "capacity": 8, "cost": 0.01, "scorer": "logistic", "selection": "per_capacity"} | vs_fixed0;vs_fixed0_lo;vs_fixed0_hi | [0.004441243590994738, 0.004126835277946787, 0.004765057316329892] |
+| `\webCmpVsTransitionPerCapacityLogisticCapEightCostZeroPointZeroOneCI` | +0.30 pp [+0.27, +0.32] | value | web/comparisons.csv | {"adaptive_policy": "adaptive_0.01", "capacity": 8, "cost": 0.01, "scorer": "logistic", "selection": "per_capacity"} | vs_transition_top1;vs_transition_top1_lo;vs_transition_top1_hi | [0.0029625556448041076, 0.0027008984492422616, 0.0032037622580158853] |
 
 > By decision rule 1 we may therefore say that **the adaptive controller beats fixed prefetching**{} at capacities 8 and 32, at this cost, and no more.
 
@@ -597,8 +597,8 @@ Rows: constant 3, decision 63, decision_count 36, derived 49, table 14, table_ce
 |---|---|---|---|---|---|---|
 | `\webSeqGruFinalCapEightFixedFourCostZeroPointZeroOneSeeds` | 5 | derived | web/seq_metrics.csv | 5 row(s) | seed | [5] |
 | `\webSeqGruFinalCapEightFixedFourCostZeroPointZeroOneCacheHit` | 13.90 % | derived | web/seq_metrics.csv | 5 row(s) | hit_ratio | [0.13903881811562108] |
-| `\webSeqGruFinalCapEightFixedFourCostZeroPointZeroOneCacheHitMin` | 13.89 % | value | web/seq_metrics.csv | {"_row": 1301} | hit_ratio | [0.13891683119261922] |
-| `\webSeqGruFinalCapEightFixedFourCostZeroPointZeroOneCacheHitMax` | 13.91 % | value | web/seq_metrics.csv | {"_row": 565} | hit_ratio | [0.13912890076645323] |
+| `\webSeqGruFinalCapEightFixedFourCostZeroPointZeroOneCacheHitMin` | 13.89 % | value | web/seq_metrics.csv | {"capacity": 8, "cost": 0.01, "policy": "fixed4", "protocol": "final", "seed": 3} | hit_ratio | [0.13891683119261922] |
+| `\webSeqGruFinalCapEightFixedFourCostZeroPointZeroOneCacheHitMax` | 13.91 % | value | web/seq_metrics.csv | {"capacity": 8, "cost": 0.01, "policy": "fixed4", "protocol": "final", "seed": 1} | hit_ratio | [0.13912890076645323] |
 | `\webHitTransOnlineCapEightFixedFour` | 14.69 % | value | web/policy_metrics.csv | {"capacity": 8, "policy": "fixed4", "scorer": "trans_online", "split": "test"} | hit_ratio | [0.14694920089181823] |
 | `\decWebWEightHitSequenceModelVerdict` | A worse | decision | disk/deltas.csv;disk/sweep.jsonl;gpu/disk_learned_depth.csv;live/live_metrics.csv;live/live_parity.csv;realio/realio.csv;realio/realio_summary.csv;web/comparisons.csv;web/decomposition.csv | 14767 row(s) | action_cap;adaptive_policy;backend;baseline;baseline_scorer;best_fixed_policy;bytes_vs_base;capacity;ci_hi;ci_lo;cluster_ci_hi;cluster_ci_lo;cluster_estimate;config;corpus;cost;delta_vs_base_ms;delta_vs_base_ms_hi;delta_vs_base_ms_lo;delta_vs_none_us;delta_vs_none_us_hi;delta_vs_none_us_lo;depth;device;estimate;experiment;foreign_io_frac;foreign_io_frac_max;hit_ratio;ideal_delta_vs_base_ms;lat_mean_us;lat_mean_us_hi;lat_mean_us_lo;latency;lever;load_avg_max;max_blocks;max_merge_sectors;max_requests;merge;metric;mismatched_sessions;mode;n;policy;read_blocks;rep;reps;scorer;seed;selection;sessions;sim_hit_ratio;skip_requests;spearman_device_time;spearman_hit_ratio;split;statistic;status;store;test_hit_ratio;think;trace;valid;vcf_hit_ratio;vs_best_fixed_same_cap;vs_best_fixed_same_cap_hi;vs_best_fixed_same_cap_lo;vs_fixed0;vs_fixed0_hi;vs_fixed0_lo | ["A worse"] |
 | `\decWebWEightHitSequenceModelCI` | -0.79 pp [-0.83, -0.76] | decision | web/decomposition.csv | {"capacity": 8, "lever": "sequence_model", "metric": "hit_ratio", "policy": "fixed4"} | estimate;ci_lo;ci_hi | [-0.007942287048366877, -0.008317085502089002, -0.007578144318421307] |
@@ -816,7 +816,7 @@ Rows: constant 3, decision 63, decision_count 36, derived 49, table 14, table_ce
 
 | macro | printed | kind | source | row | column | raw |
 |---|---|---|---|---|---|---|
-| `\webControllerVsBestFixedCI` | +0.36 pp [+0.33, +0.38] | value | web/comparisons.csv | {"_row": 36} | vs_best_fixed_same_cap;vs_best_fixed_same_cap_lo;vs_best_fixed_same_cap_hi | [0.0035759997297520477, 0.0033085422330941558, 0.0038485272376049427] |
+| `\webControllerVsBestFixedCI` | +0.36 pp [+0.33, +0.38] | value | web/comparisons.csv | {"adaptive_policy": "adaptive_0.01", "capacity": 8, "cost": 0.01, "scorer": "logistic", "selection": "per_capacity"} | vs_best_fixed_same_cap;vs_best_fixed_same_cap_lo;vs_best_fixed_same_cap_hi | [0.0035759997297520477, 0.0033085422330941558, 0.0038485272376049427] |
 | `\webLeverDepthFixedFourFixedOneLogisticLogisticEightZeroPointZeroCI` | +0.80 pp [+0.77, +0.83] | value | web/decomposition.csv | {"capacity": 8, "lever": "depth", "metric": "hit_ratio", "policy": "fixed4"} | estimate;ci_lo;ci_hi | [0.007964807711074912, 0.007653113617175736, 0.008269396820967027] |
 | `\webLeverRankerFixedOneFixedOneTransSZeroLogisticEightZeroPointZeroCI` | +0.07 pp [+0.06, +0.09] | value | web/decomposition.csv | {"capacity": 8, "lever": "ranker", "metric": "hit_ratio", "policy": "fixed1"} | estimate;ci_lo;ci_hi | [0.0007375517036881338, 0.0005927167739666441, 0.0008902328954814526] |
 | `\webLeverSequenceModelFixedFourFixedFourSeqTransOnlineEightZeroPointZeroCI` | -0.79 pp [-0.83, -0.76] | value | web/decomposition.csv | {"capacity": 8, "lever": "sequence_model", "metric": "hit_ratio", "policy": "fixed4"} | estimate;ci_lo;ci_hi | [-0.007942287048366877, -0.008317085502089002, -0.007578144318421307] |
