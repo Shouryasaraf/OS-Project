@@ -15,10 +15,11 @@ from .trace import (CLASSES, Request, synthetic_dataset, synthetic_window,
 
 MODES = ("none", "sequential", "strided", "stride", "markov", "lstm",
          "adaptive", "adaptive_evidence", "guard", "depth_adaptive",
-         "correlate", "deep", "linux_ra", "learned_depth")
+         "correlate", "deep", "linux_ra", "learned_depth",
+         "routed")
 #: Modes that need a trained artifact; without one they produce a
 #: ``skipped:`` row with ``None`` metrics, never a substitute.
-OPTIONAL_MODES = ("lstm", "learned_depth")
+OPTIONAL_MODES = ("lstm", "learned_depth", "routed")
 COLUMNS = ("dataset", "mode", "status", "hit_ratio", "precision", "recall",
            "unused", "total_prefetches", "useful_prefetches",
            "mean_latency_us", "speedup_vs_none", "inference_us",

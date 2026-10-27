@@ -74,7 +74,8 @@ class RegistrationTests(unittest.TestCase):
     """Stdlib only: the mode is registered everywhere, skipped without an artifact."""
 
     def test_registered_in_every_place(self):
-        self.assertEqual(MODES[-1], "learned_depth")
+        # Track HSR appended `routed` after it; appending is safe.
+        self.assertEqual(MODES[-2:], ("learned_depth", "routed"))
         self.assertEqual(MODES[5], "lstm")
         self.assertEqual(MODES.index("learned_depth"), MODES.index("linux_ra") + 1)
         self.assertIn("learned_depth", sweep.RANKING_MODES)
@@ -88,7 +89,7 @@ class RegistrationTests(unittest.TestCase):
         self.assertEqual(len(rows), len(MODES))
         self.assertEqual(rows[5]["mode"], "lstm")
         self.assertTrue(str(rows[5]["status"]).startswith("skipped"))
-        last = rows[-1]
+        last = rows[-2]
         self.assertEqual(last["mode"], "learned_depth")
         self.assertEqual(last["status"], "skipped: no trained learned_depth artifact")
         self.assertIsNone(last["hit_ratio"])

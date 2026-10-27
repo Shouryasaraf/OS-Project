@@ -115,6 +115,10 @@ class CacheFactoryTests(unittest.TestCase):
             kwargs["lstm_model_path"] = self.lstm_path
         if mode == "learned_depth":
             kwargs["depth_model"] = self.depth_path
+        if mode == "routed":
+            # A fresh in-loop router whose choice depends on the features.
+            from adaptive_prefetch.hindsight import feature_router
+            kwargs["router"] = feature_router()
         return kwargs
 
     def _modes(self):

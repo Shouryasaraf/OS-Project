@@ -131,6 +131,8 @@ class PlanningTests(FixtureCase):
         for job in jobs:
             if job.mode in multicorpus.E2_ONLY:
                 self.assertEqual(job.skip_reason, E2_ONLY_REASON)
+            elif job.mode in multicorpus.HSR_ONLY:
+                self.assertEqual(job.skip_reason, multicorpus.HSR_ONLY_REASON)
             else:
                 self.assertIsNone(job.skip_reason)
             self.assertEqual(job.latency == "break_even",

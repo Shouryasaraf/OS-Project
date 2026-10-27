@@ -85,6 +85,11 @@ def run_replay(args: argparse.Namespace) -> None:
         if mode == "lstm" and not args.lstm_model:
             print("lstm        skipped: no trained artifact")
             continue
+        if mode == "routed":
+            # A hindsight router is trained and scored on block-trace slices
+            # by repro/hindsight.py only; there is no artifact for a CSV trace.
+            print("routed      skipped: scored in the hindsight study only")
+            continue
         if mode == "learned_depth":
             reason = _depth_skip_reason(args.depth_model, args.trace, len(requests))
             if reason:

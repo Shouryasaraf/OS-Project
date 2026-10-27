@@ -22,7 +22,8 @@ Limits that are always reported, never silent:
   given an explicit ``latency_model``. Falling back to the assumed 5/100/50
   model silently moved the gated modes' break-even from 1.0101 to 0.526
   (M19), so every row records the ``break_even`` it ran under.
-* **A mode that needs a trained artifact** (``lstm``, ``learned_depth``) and
+* **A mode that needs a trained artifact** (``lstm``, ``learned_depth``,
+  ``routed``) and
   has none produces a ``skipped:`` row with ``None`` metrics instead of
   aborting the sweep. So does a ``learned_depth`` artifact whose training
   record says it was trained or selected on the requests being replayed
@@ -53,11 +54,12 @@ DEFAULT_CHUNK = 250_000
 
 RANKING_MODES = ("none", "sequential", "strided", "stride", "markov", "lstm",
                  "adaptive", "adaptive_evidence", "guard", "depth_adaptive",
-                 "correlate", "deep", "linux_ra", "learned_depth")
+                 "correlate", "deep", "linux_ra", "learned_depth",
+                 "routed")
 
 #: Modes that need a trained artifact. Without one they are reported as
 #: ``skipped:`` rows; every other mode must run or raise.
-OPTIONAL_MODES = ("lstm", "learned_depth")
+OPTIONAL_MODES = ("lstm", "learned_depth", "routed")
 
 #: File patterns ``discover_traces`` looks for, recursively.
 TRACE_PATTERNS = ("*.revised", "*.oracleGeneral.zst")
@@ -266,6 +268,10 @@ def sweep_trace(path: Path, mode: str, *,
     }
     if mode == "lstm" and not lstm_model_path:
         return _skipped_row(base, "no trained artifact")
+    if mode == "routed":
+        # Trained and scored on held-out block-trace slices by
+        # repro/hindsight.py only (training-range refusal lives there).
+        return _skipped_row(base, "no trained hindsight router")
     if mode == "learned_depth":
         if not depth_model_path:
             return _skipped_row(base, "no trained learned_depth artifact")

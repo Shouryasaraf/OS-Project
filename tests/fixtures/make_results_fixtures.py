@@ -687,6 +687,91 @@ def build_live_side(rng) -> None:
         "hinted": {"0": {"resident_frac": 0.0, **summary}}, "load_avg_end": [1.0, 1.0, 1.0]}])
 
 
+def build_hindsight(rng) -> None:
+    """Track HSR: the hindsight router's five files (synthetic)."""
+    actions = ("none", "sequential", "deep@8", "deep@32", "deep@256")
+    families = ("gnb", "logreg", "tree", "forest", "extra_trees", "hgb", "mlp", "knn")
+    policies = (*actions, "vcf_hit", "gvcf_hit", "routed_hit", "routed_hit_gnb",
+                "oracle_hit", "adaptive")
+    rows = []
+    for trace, corpus in TRACES[:4]:
+        for cap in CAPACITIES:
+            none_ios = rng.randint(200_000, 400_000)
+            for policy in policies:
+                read = 9_000_000
+                hits = int(read * _r(rng, 0.2, 0.6))
+                issued = 0 if policy == "none" else rng.randint(1_000_000, 9_000_000)
+                useful = min(issued, int(issued * _r(rng, 0.1, 0.6)))
+                routed = policy.startswith(("routed", "oracle"))
+                rows.append({
+                    "trace": trace, "corpus": corpus, "skip_requests": 1_000_000,
+                    "max_requests": 1_000_000, "capacity": cap, "policy": policy,
+                    "family": "hgb" if routed else None,
+                    "objective": "hit" if "_" in policy else None,
+                    "action": policy if policy in actions else None, "status": "ok",
+                    "source": "replay" if routed else "record",
+                    "read_blocks": read, "read_hits": hits, "hit_ratio": hits / read,
+                    "precision": useful / issued if issued else 0.0,
+                    "total_prefetches": issued, "useful_prefetches": useful,
+                    "wasted_share": (issued - useful) / issued if issued else None,
+                    "u05_per_block": (hits - 0.5 * issued) / read,
+                    "demand_ios": none_ios, "prefetch_ios": issued // 64,
+                    "prefetch_ios_mergeable": issued // 512,
+                    "device_ios": none_ios + issued // 64 - issued // 512,
+                    "blocks_moved": read - hits + issued,
+                    "policy_switches": rng.randint(0, 900) if routed else None,
+                    "action_shares": ({a: 0.2 for a in actions} if routed else None),
+                    "training_range": "FIXTURE" if routed else None,
+                    "sweep_match": None if routed else True,
+                    "load_start": 1.0, "load_end": 1.0, "wall_s": _r(rng, 5, 60)})
+    _w("hindsight/rows.csv", rows)
+    selection, family_rows, summary, comparisons = [], [], [], []
+    for cap in CAPACITIES:
+        for family in families:
+            score = _r(rng, -0.5, 0.9)
+            selection.append({
+                "capacity": cap, "objective": "hit", "family": family, "config": 0,
+                "params": {"weighting": "none"}, "cv_score": score,
+                "cv_accuracy": _r(rng, 0.3, 0.8), "cv_fold_scores": [score] * 5,
+                "cv_traces_scored": 21, "family_best": True, "selected": family == "hgb",
+                "n_train_windows": 42_000, "wall_s": _r(rng, 1, 90), "load": 1.0})
+            lo = _r(rng, -0.5, 0.3)
+            family_rows.append({
+                "capacity": cap, "objective": "hit", "which": family, "family": family,
+                "params": {"weighting": "none"}, "cv_score": score, "n_traces": 4,
+                "proxy_headroom": lo + 0.1, "proxy_headroom_lo": lo,
+                "proxy_headroom_hi": lo + 0.2, "label_accuracy": _r(rng, 0.3, 0.8),
+                "action_shares": {a: 0.2 for a in actions}})
+        for policy in policies:
+            hit = _r(rng, 0.2, 0.6)
+            summary.append({
+                "capacity": cap, "policy": policy, "n_traces": 4, "mean_hit_ratio": hit,
+                "mean_u05_per_block": hit - 0.2,
+                "mean_precision": None if policy == "none" else _r(rng, 0.1, 0.6),
+                "mean_wasted_share": None if policy == "none" else _r(rng, 0.4, 0.9),
+                "device_io_ratio": 1.1, "device_io_ratio_lo": 1.0, "device_io_ratio_hi": 1.2,
+                "blocks_moved_ratio": 2.0, "blocks_moved_ratio_lo": 1.5,
+                "blocks_moved_ratio_hi": 2.5,
+                "headroom_captured": 0.3 if policy == "routed_hit" else None,
+                "action_shares": ({a: 0.2 for a in actions}
+                                  if policy.startswith(("routed", "oracle")) else None)})
+        for cid, policy, baseline, word in (("H1", "routed_hit", "vcf_hit", "no difference detected"),
+                                            ("H2", "routed_hit", "sequential", "better"),
+                                            ("H5", "routed_hit", "adaptive", "better")):
+            est = _r(rng, -0.01, 0.1)
+            comparisons.append({
+                "capacity": cap, "comparison": cid, "metric": "hit_ratio", "policy": policy,
+                "baseline": baseline, "primary": cid == "H1", "statistic": "difference",
+                "n": 4, "estimate": est, "ci_lo": est - 0.02, "ci_hi": est + 0.02,
+                "cluster_estimate": est, "cluster_ci_lo": est - 0.03,
+                "cluster_ci_hi": est + 0.03, "wins": 2, "losses": 1, "ties": 1,
+                "verdict": word})
+    _w("hindsight/selection.csv", selection)
+    _w("hindsight/families.csv", family_rows)
+    _w("hindsight/summary.csv", summary)
+    _w("hindsight/comparisons.csv", comparisons)
+
+
 # ------------------------------------------------------------- provenance
 
 def write_provenance(study: str) -> None:
@@ -728,7 +813,8 @@ def main() -> int:
     build_gpu_side(side)
     build_web_side(side)
     build_live_side(side)
-    for study in ("disk", "gpu", "realio", "web", "live"):
+    build_hindsight(random.Random(20261028))
+    for study in ("disk", "gpu", "realio", "web", "live", "hindsight"):
         write_provenance(study)
     print(json.dumps(sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*") if p.is_file()),
                      indent=1))

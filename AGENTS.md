@@ -165,10 +165,10 @@ rules come from plan section 5 and the pre-registrations:
 
 ### Modes: the four-places rule
 
-`benchmark.MODES` and `sweep.RANKING_MODES` hold **14** modes in this order:
+`benchmark.MODES` and `sweep.RANKING_MODES` hold **15** modes in this order:
 `none, sequential, strided, stride, markov, lstm, adaptive,
 adaptive_evidence, guard, depth_adaptive, correlate, deep, linux_ra,
-learned_depth`. `rows[0]` is `none` and `rows[5]` is `lstm`, which
+learned_depth, routed` (`routed` appended by track HSR). `rows[0]` is `none` and `rows[5]` is `lstm`, which
 `test_benchmark_includes_skipped_optional_lstm` asserts; it also checks
 `len(rows) == len(MODES)`, so **appending is safe, reordering is not**.
 
@@ -180,7 +180,7 @@ somewhere (`test_registered_in_all_four_places` checks `linux_ra`):
 3. `simulator.MODES_SUPPORTED` and `_make_predictor`;
 4. `simulator.GATED_MODES` if it is feedback-gated, and
    `benchmark.OPTIONAL_MODES` / `sweep.OPTIONAL_MODES`
-   (`("lstm", "learned_depth")`) if it needs a trained artifact.
+   (`("lstm", "learned_depth", "routed")`) if it needs a trained artifact.
 
 Two candidate interfaces feed the same cache:
 
@@ -197,7 +197,14 @@ default `DEFAULT_READ_AHEAD_DEPTH`); `linux_ra` takes `linux_ra_max_blocks`
 `read_ahead_kb`); `learned_depth` takes `depth_model=` in `replay`,
 `replay_stream` and `_make_predictor`: an artifact path, or a fresh object
 with `next_candidates` (`depth_model.PrecomputedDepth`, `RelativeDepth`). A
-predictor is stateful; each replay needs a fresh one.
+predictor is stateful; each replay needs a fresh one. `routed` (track HSR,
+`hindsight.py`) takes `router=`: a fresh `hindsight.WindowRouter` (decides
+in the loop from the window's 12 features) or `ScheduledRouter` (a
+batch-inferred or oracle per-window schedule); a window's action applies to
+the next window, the first window never prefetches, and its trained routers
+are scored only by `reproduce.py hindsight` (`results/hindsight/`). In E1
+(`multicorpus`) its rows are `skipped: evaluated in the hindsight study
+only`.
 
 ### Optional modes and skipped rows
 

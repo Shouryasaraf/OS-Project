@@ -1,0 +1,7 @@
+capacity,comparison,metric,policy,baseline,primary,statistic,n,estimate,ci_lo,ci_hi,cluster_estimate,cluster_ci_lo,cluster_ci_hi,wins,losses,ties,verdict
+2048,H1,hit_ratio,routed_hit,vcf_hit,True,difference,4,0.069656,0.04965599999999999,0.089656,0.069656,0.039656,0.099656,2,1,1,no difference detected
+2048,H2,hit_ratio,routed_hit,sequential,False,difference,4,0.009485,-0.010515,0.029485,0.009485,-0.020515,0.039485,2,1,1,better
+2048,H5,hit_ratio,routed_hit,adaptive,False,difference,4,0.016619,-0.003381000000000002,0.036619,0.016619,-0.013381,0.046618999999999994,2,1,1,better
+131072,H1,hit_ratio,routed_hit,vcf_hit,True,difference,4,0.016027,-0.003973000000000001,0.036027,0.016027,-0.013973,0.046027,2,1,1,no difference detected
+131072,H2,hit_ratio,routed_hit,sequential,False,difference,4,0.073459,0.05345899999999999,0.093459,0.073459,0.043459,0.103459,2,1,1,better
+131072,H5,hit_ratio,routed_hit,adaptive,False,difference,4,0.00359,-0.01641,0.02359,0.00359,-0.02641,0.03359,2,1,1,better

@@ -84,6 +84,10 @@ LATENCIES = {
 #: is merely optional is not mislabelled.
 E2_ONLY = ("lstm", "learned_depth")
 E2_ONLY_REASON = "evaluated in E2 only"
+#: The hindsight router is trained on slice 1 of the paper subset and scored
+#: on slice 2 by ``repro/hindsight.py``; in E1 its rows are skipped like E2's.
+HSR_ONLY = ("routed",)
+HSR_ONLY_REASON = "evaluated in the hindsight study only"
 
 WINDOW_SIZE = 32
 MODEL_SEED = 42
@@ -436,6 +440,7 @@ def build_jobs(configs, *, root: str | Path = corpora.BLOCK_TRACE_ROOT,
                     skip = reason
                     if skip is None and mode in OPTIONAL_MODES + E2_ONLY:
                         skip = (E2_ONLY_REASON if mode in E2_ONLY
+                                else HSR_ONLY_REASON if mode in HSR_ONLY
                                 else "no trained artifact")
                     belady = bool(spec.get("belady")) and mode == "none"
                     base = (measured or {}).get("min_lba") if spec.get("rebase_lba") else None

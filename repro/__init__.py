@@ -12,6 +12,7 @@ realio      real Linux prefetch testbed (E3)          WP8
 web         RetailRocket replay benchmark (E4)        WP6
 live        real HTTP prefetch experiment (E6)        WP12
 paper       figures, tables, numbers from results/    WP13
+hindsight   hindsight-labelled disk router            HSR
 ==========  ========================================  =====
 
 Interface every study module provides (``gpu`` differs; see its docstring)::
@@ -32,7 +33,7 @@ GPU) returns ``EXIT_UNAVAILABLE`` with a reason rather than faking a result.
 
 from __future__ import annotations
 
-STUDIES = ("disk", "realio", "web", "live", "paper")
+STUDIES = ("disk", "realio", "web", "live", "paper", "hindsight")
 
 EXIT_NOT_IMPLEMENTED = 3
 EXIT_UNAVAILABLE = 4

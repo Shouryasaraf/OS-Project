@@ -428,7 +428,7 @@ DEFAULT_CAPACITY = 2048
 MODES_SUPPORTED = frozenset({
     "adaptive", "adaptive_evidence", "none", "sequential", "strided",
     "stride", "markov", "lstm", "deep", "linux_ra", "learned_depth",
-    *GATED_MODES,
+    "routed", *GATED_MODES,
 })
 
 
@@ -471,6 +471,15 @@ def _publish_gate(gate: "GateController", metrics: "Metrics") -> None:
     # ``None`` means never measured, which is different from measured as zero.
     metrics.observed_precision = gate.precision if gate.has_data else None
     metrics.observed_stride = gate.stride
+
+
+def _publish_router(predictor, metrics: "Metrics") -> None:
+    """Copy a ``routed`` router's action switches into ``Metrics``.
+
+    Called from both replay paths, like :func:`_publish_gate`, so the two
+    report the same ``policy_switches`` for the same run.
+    """
+    metrics.policy_switches = getattr(predictor, "switches", 0)
 
 
 def _demand_read(cache: LRUCache, metrics: Metrics, latency: LatencyModel,
@@ -548,7 +557,7 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
            cache_factory=LRUCache,
            linux_ra_max_blocks: int = DEFAULT_LINUX_RA_MAX_BLOCKS,
            age_table_bound: int | None = DEFAULT_AGE_TABLE_BOUND,
-           depth_model=None):
+           depth_model=None, router=None):
     """Replay in request order; a completed window only affects later requests.
 
     ``labels`` represent controlled ground truth. Optional pseudo-label updates
@@ -568,7 +577,9 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
     ``age_table_bound`` caps the contextual block-age table (``None`` for
     unbounded). ``depth_model`` is the ``learned_depth`` artifact path, or an
     already-built per-request predictor (one fresh object per replay; see
-    :func:`_make_predictor`).
+    :func:`_make_predictor`). ``router`` is the ``routed`` mode's window
+    router (``hindsight.WindowRouter`` or ``ScheduledRouter``), also one
+    fresh object per replay.
     """
     interval_size = _validate_replay(mode, window_size, policy_interval,
                                      read_ahead_depth, linux_ra_max_blocks,
@@ -591,7 +602,7 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
                               for block in range(req.lba, req.lba + req.size_blocks))
     predictor = _make_predictor(mode, lstm_model_path, window_size=window_size,
                                 linux_ra_max_blocks=linux_ra_max_blocks,
-                                depth_model=depth_model)
+                                depth_model=depth_model, router=router)
     observer = predictor if getattr(predictor, "cache_aware", False) else None
     view = CacheView(cache) if observer is not None else None
 
@@ -714,6 +725,8 @@ def replay(requests: list[Request], capacity: int = DEFAULT_CAPACITY,
             gate.note_useful(metrics.useful_prefetches)
             gate.decide()
         _publish_gate(gate, metrics)
+    if mode == "routed":
+        _publish_router(predictor, metrics)
     if context is not None:
         metrics.age_table_evictions = context.evictions
     return metrics, predictions
@@ -730,7 +743,7 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
                   cache_factory=LRUCache,
                   linux_ra_max_blocks: int = DEFAULT_LINUX_RA_MAX_BLOCKS,
                   age_table_bound: int | None = DEFAULT_AGE_TABLE_BOUND,
-                  depth_model=None) -> Metrics:
+                  depth_model=None, router=None) -> Metrics:
     """Replay a request stream delivered in bounded chunks.
 
 
@@ -748,8 +761,9 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
     I/O, device I/Os, modelled cost, policy switches and inference counters
     are all exact, and those are the metrics that rank policies.
 
-    ``cache_factory``, ``linux_ra_max_blocks``, ``age_table_bound`` and
-    ``depth_model`` mean exactly what they mean for :func:`replay`.
+    ``cache_factory``, ``linux_ra_max_blocks``, ``age_table_bound``,
+    ``depth_model`` and ``router`` mean exactly what they mean for
+    :func:`replay`.
     """
     interval_size = _validate_replay(mode, window_size, policy_interval,
                                      read_ahead_depth, linux_ra_max_blocks,
@@ -760,7 +774,7 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
     context = WindowContext(age_table_bound) if contextual else None
     predictor = _make_predictor(mode, lstm_model_path, window_size=window_size,
                                 linux_ra_max_blocks=linux_ra_max_blocks,
-                                depth_model=depth_model)
+                                depth_model=depth_model, router=router)
     observer = predictor if getattr(predictor, "cache_aware", False) else None
     view = CacheView(cache) if observer is not None else None
     # Same controller as replay(). These two paths used to carry separate
@@ -848,6 +862,8 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
             gate.note_useful(metrics.useful_prefetches)
             gate.decide()
         _publish_gate(gate, metrics)
+    if mode == "routed":
+        _publish_router(predictor, metrics)
     if context is not None:
         metrics.age_table_evictions = context.evictions
     return metrics
@@ -856,7 +872,7 @@ def replay_stream(chunks, capacity: int = DEFAULT_CAPACITY,
 def _make_predictor(mode: str, lstm_model_path: str | None, *,
                     window_size: int = 32,
                     linux_ra_max_blocks: int = DEFAULT_LINUX_RA_MAX_BLOCKS,
-                    depth_model=None):
+                    depth_model=None, router=None):
     """The per-request predictor for ``mode``, or ``None`` for window modes.
 
     Both replay paths build their predictor here, so a mode cannot be wired
@@ -868,6 +884,13 @@ def _make_predictor(mode: str, lstm_model_path: str | None, *,
     threshold selection and for baselines replayed through the same loop
     (``depth_model.PrecomputedDepth``, ``RelativeDepth``). A predictor is
     stateful, so each replay needs a fresh one.
+
+    ``routed`` takes ``router``: an object with ``next_candidates`` that
+    chooses one action per completed window from that window's features
+    (``hindsight.WindowRouter``) or from a precomputed per-window schedule
+    (``hindsight.ScheduledRouter``). Like ``adaptive``, a window's decision
+    applies to the following window only, and the replay loop's first-window
+    gate still holds. It is used as given and must be fresh.
     """
     if mode == "stride":
         return StridePrefetcher()
@@ -891,6 +914,11 @@ def _make_predictor(mode: str, lstm_model_path: str | None, *,
             return depth_model
         from .depth_model import load_prefetcher
         return load_prefetcher(depth_model)
+    if mode == "routed":
+        if router is None or not hasattr(router, "next_candidates"):
+            raise RuntimeError("no trained hindsight router; "
+                               "optional mode skipped")
+        return router
     if mode not in MODES_SUPPORTED:
         raise ValueError(f"unknown mode: {mode!r}")
     return None
