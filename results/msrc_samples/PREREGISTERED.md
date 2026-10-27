@@ -103,3 +103,18 @@ added as a dated amendment below; the original text stays.
   `device_ios` and `blocks_moved` ratios to `none` on the same trace, view
   and cost model. A replay is deterministic and has no sampling unit, so it
   has no interval and no verdict word: these rows are descriptive.
+
+## Amendment A1 (2026-10-27, before the full run; no result seen)
+
+- **Seven traces.** `wdev_2` and `rsrch_2` were committed after the text
+  above was written, so the data are now all seven files the sample's README
+  lists: `rsrch_1`, `rsrch_2`, `wdev_1`, `wdev_2`, `wdev_3`, `web_1`,
+  `web_3`. Section 0's rule ("every `*.revised` file at run time") already
+  covers them; LOTO (section 2.3) is now over seven folds.
+- **Leave-one-host-family-out (LOFO)**, added as a **secondary** within-real
+  protocol. Volumes of one MSRC host (`rsrch_*`, `wdev_*`, `web_*`; the
+  family is the file stem before the last `_`) are near-twins, so a LOTO fold
+  can train on a sibling of its test volume. LOFO fits the same families on
+  the other two hosts' windows and scores every volume of the held-out host.
+  Same defaults, same skip rule, same metrics and words. Where LOTO and LOFO
+  disagree, the LOFO figure is the one quoted for "within-real" transfer.
