@@ -188,7 +188,7 @@ def decision_frame(study=None, rules=None, scope_contains=None):
     return pd.DataFrame(rows)
 
 
-print(f"repository: {ROOT.name}; {len(DECISIONS)} pre-registered verdicts computed from results/")
+print(f"{len(DECISIONS)} pre-registered verdicts computed from results/")
 '''),
     md("""
 ### Provenance of every results directory
