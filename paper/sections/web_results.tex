@@ -5,16 +5,14 @@
 % generalises from one capacity or one cost (web decision rule 1).
 % Sources: results/web/{decomposition,comparisons,policy_metrics,freshness,
 % seq_metrics,calibration}.csv, via numbers.tex and paper/decisions.py.
-% Generated: Table T5 (T4, T6 and Fig. F6 in the appendix).
+% Generated: Tables T5, T4, T6 and Fig. F6, all in the appendix (page budget).
 
 \section{Web Results (Simulated)}\label{sec:web}
 
-\input{tables/t5_web_decomposition}
-
 All numbers here replay the RetailRocket test split (\webSessions{} sessions)
 through per-session caches with instant prefetch, with an assumed $c$.
-Table~\ref{tab:t5_web_decomposition} isolates one lever per row against its
-pre-registered baseline.
+Table~\ref{tab:t5_web_decomposition} in the appendix isolates one lever per
+row against its pre-registered baseline.
 
 \textbf{The controller.} Selected on validation separately at each capacity,
 the adaptive controller (\polAdaptive) beats the best fixed depth at the same

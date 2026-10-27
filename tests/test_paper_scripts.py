@@ -53,7 +53,7 @@ check = _load("paper_check", "check.py")
 TABLE_NAMES = tuple(f.__name__ for f in tables_py.TABLES)
 FIGURE_NAMES = ("f1_schematic", "f2_hit_vs_depth", "f3_device_io_vs_hit", "f4_kappa_cdf",
                 "f5_sim_vs_measured", "f6_freshness", "f7_live_saved_vs_bytes",
-                "f8_utility_envelopes")
+                "f8_utility_envelopes", "f9_action_space")
 _NEWCOMMAND = re.compile(r"^\\newcommand\{\\([^}]*)\}\{(.*)\}$")
 
 

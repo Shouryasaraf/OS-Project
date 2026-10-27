@@ -67,3 +67,18 @@ These deck citations were confirmed correct as given:
 3. Add a row to the table above.
 4. Run `python paper/check.py`. It fails on a duplicate key, on an entry with
    no title, and on any `\cite` key that is not in `refs.bib`.
+
+## Classifier study and E7 references (paper-v2)
+
+The tracks CLF, HSR and WRK and the MSRC light sample (E7) proposed their
+references in `paper/refs_CLF.bib`, `refs_HSR.bib`, `refs_WRK.bib` and
+`refs_MSRC.bib`. They were merged into `paper/refs.bib` and the four files
+removed. Where two files held the same key, the entries agreed on authors,
+title, venue, volume, pages and year and differed only in author-name order
+or venue spelling; the entry with the most fields was kept. The CART book had
+two keys (`breiman1984classification` in CLF, `breiman1984cart` elsewhere);
+`breiman1984cart` is kept, `clfzoo/zoo.py` cites it, and the
+`results/classifier/README.md` table still shows the old key because that
+README is hashed in its provenance. `tests/test_paper_check.py` checks that
+every `clfzoo.zoo.CITATIONS` key is in `refs.bib` and that no
+`refs_<TRACK>.bib` file is left.

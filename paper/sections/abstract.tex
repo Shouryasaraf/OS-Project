@@ -1,11 +1,11 @@
 % Abstract and index terms. Written from the outcome of the pre-registered
 % comparisons (paper/decisions.py; tables/t9_decisions.tex); every number is a numbers.tex
-% macro. Four claims: disk sweep, real device, web decomposition, live HTTP.
+% macro. Five claims: disk sweep, real device, web decomposition, live HTTP,
+% and the classifier study (pre-registered after the first four were known).
 
 \begin{abstract}
-Kernels and browsers both prefetch, spending device or network work now to
-hide latency later. We ask which decision moves the result, under rules fixed
-before any experiment ran. \emph{Disk (simulated):} on \diskTraces{} block
+Kernels and browsers both prefetch. We ask which decision moves the result,
+under rules fixed before the experiments ran. \emph{Disk (simulated):} on \diskTraces{} block
 traces from \diskCorpora{} corpora and a 1\,MiB cache, a learned workload-class
 router hit less often than plain sequential read-ahead
 (\decDiskPOneAdaptiveAssumedOneMiBPairedCI) with \diskIORatioAdaptiveOneMiB{} the
@@ -15,8 +15,7 @@ less often than a validation-chosen fixed depth
 window growth added \decDiskPFourLinuxRaAtTwoHundredFiftySixAssumedOneMiBPaired{}
 and cut device I/Os to \decDiskPFiveLinuxRaAtTwoHundredFiftySixOneMiBPaired{} of no
 prefetching's.
-\emph{Real devices (measured):} replaying the same plans on a hard disk and
-an SSD, the mode with the highest simulated hit ratio was fastest in
+\emph{Real devices (measured):} on a hard disk and an SSD, the mode with the highest simulated hit ratio was fastest in
 \decCellsTopSimFastest{} of \decCells{} cells, and with exact cache parity
 prefetching raised the mean closed-loop latency on the hard disk in
 \decCountROneSdbOdirectClosedRaises{} of \decCountROneSdbOdirectClosed{}
@@ -28,10 +27,15 @@ ranker (\decWebWThreeHitRankerCI), online counts beat a GRU
 \emph{Live HTTP (measured, emulated network):} every prefetching policy
 lowered the wait with a hard-disk store, by up to
 \liveSavedHddAdaptiveZeroPointOneAtTransOnline{} per view against
-\liveBaseWaitHdd{} without prefetching, with \liveParityMismatches{} parity
-mismatches. How much to fetch and how fresh the
-statistics are moved the results; no learned predictor beat its simple
-baseline, and simulated hit ratio did not predict real-disk latency.
+\liveBaseWaitHdd{} without prefetching, with exact simulator parity.
+\emph{Better learners (simulated):} none of \clfRouterClassifiers{}
+classifiers made the router beat sequential read-ahead, a hindsight-trained
+router choosing depth did not beat a per-trace fixed depth, and a tuned web
+ranker gained \decWrkSOneMlpUtilityPerViewCapEight{} in utility but stayed
+below transition counts.
+How much to fetch and how fresh the statistics are moved the results; no
+learned predictor beat its simple baseline, and simulated hit ratio did not
+predict real-disk latency.
 \end{abstract}
 
 \begin{IEEEkeywords}

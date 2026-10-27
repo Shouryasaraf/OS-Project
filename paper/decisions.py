@@ -20,6 +20,17 @@ of leaving it to the prose:
 - live (E6): H1-H7. Following the lead's ruling, an SSD-store pass whose
   ``foreign_io_frac`` exceeds 1 % is not cited, so H2-H7 use the passes that
   are valid *and* unflagged (``genlib.live_citable``).
+- the classifier study, written after E1-E6 were known: the classifier zoo
+  and the real-trace router benchmark (track CLF, ``results/classifier``:
+  CLF0 synthetic accuracy against the shipped GNB, CLF1-CLF4 and the two
+  claim rules), the hindsight router (track HSR, ``results/hindsight``:
+  H1-H7, S1, S2, the oracle reference R and device work D), the web rankers
+  (track WRK, ``results/web_rankers``: S1, K1-K6 and decision rules 1-4) and
+  the MSRC light sample (E7, ``results/msrc_samples``: M1/M2 balanced
+  accuracy against the shipped GNB and ``route_window``). Each rule is
+  re-applied to the intervals in the results file; the file's own verdict
+  column is not trusted (``tests/test_paper_decisions.py`` checks that they
+  agree).
 
 :func:`decide` returns one :class:`Decision` per verdict. ``numbers.py``
 turns them into macros and ``tables/make_tables.py`` into the decisions
@@ -86,7 +97,8 @@ class Decision:
     """One verdict. ``key`` is a letters-only macro stem; ``intervals`` holds
     the interval(s) the verdict rests on, as (label, estimate, lo, hi,
     statistic) with statistic ``difference`` (fractions, printed in pp),
-    ``absolute`` (an interval of |D|, unsigned pp),
+    ``difference_fine`` (pp to three decimals, for the hindsight router's
+    near-zero gaps), ``absolute`` (an interval of |D|, unsigned pp),
     ``ratio`` (printed as a multiplier), ``us``, ``ms`` or ``rho``."""
     study: str
     rule: str
@@ -712,7 +724,268 @@ def live_decisions(results, out) -> list[Decision]:
     return found
 
 
+# ---------------------------------------------------------------------------
+# The classifier study (tracks CLF, HSR, WRK; E7), written after E1-E6
+# ---------------------------------------------------------------------------
+
+#: Rules whose decisions get only a ``Verdict`` macro (their intervals are
+#: printed by numbers.py's own family), and rules whose intervals get only
+#: the estimate and ``CI`` macros (no ``Lo``/``Hi``; TeX memory).
+VERDICT_ONLY_RULES = ("CLF0",)
+COMPACT_STUDIES = ("classifier", "hindsight", "web_rankers", "msrc_samples")
+
+#: The routed classifiers of results/classifier (every family; the shipped
+#: ``gnb_online`` first). Other policies there are reference rows.
+CLF_REFERENCE_POLICIES = ("adaptive_evidence", "deep@8", "linux_ra@256")
+
+
+def two_interval_verdict(row, *, higher_is_better=True, study="classifier") -> str:
+    """The paired-and-cluster rule shared by CLF part 2 and HSR (their
+    PREREGISTERED.md sections 4 and 6): both intervals must agree. A
+    paired-only exclusion is "no difference detected" under CLF's rule, and
+    HSR's rule adds that it is paired-only."""
+    ratio = row["statistic"] == "ratio"
+    verdict = disk_verdict((row["ci_lo"], row["ci_hi"]),
+                           (row["cluster_ci_lo"], row["cluster_ci_hi"]), ratio=ratio,
+                           higher_is_better=higher_is_better)
+    if verdict == PAIRED_ONLY:
+        return NO_DIFFERENCE + (f" ({PAIRED_ONLY})" if study == "hindsight" else "")
+    return verdict
+
+
+def one_interval_verdict(lo, hi) -> str:
+    """The single-interval rule (CLF part 1, WRK, E7): the three words."""
+    if lo is None or hi is None:
+        return NO_DIFFERENCE
+    if lo > 0:
+        return BETTER
+    if hi < 0:
+        return WORSE
+    return NO_DIFFERENCE
+
+
+def _device_words(metric: str, verdict: str) -> str:
+    """A lower-is-better device-work verdict, in the words of P5/P6."""
+    if metric == "device_ios":
+        return {BETTER: "reduces device I/Os", WORSE: "increases device I/Os"}.get(verdict,
+                                                                                    verdict)
+    return {BETTER: "moves fewer blocks", WORSE: "moves more blocks"}.get(verdict, verdict)
+
+
+def _condition_word(condition: str) -> str:
+    return "" if condition == "in_regime" else g.camel(condition.replace("->", " to "))
+
+
+def classifier_decisions(results, out) -> list[Decision]:
+    """Track CLF (results/classifier/PREREGISTERED.md sections 2-4)."""
+    found = []
+    synthetic = results.rows("classifier/synthetic_eval.csv", out, required=False) or []
+    for row in synthetic:
+        if row["delta_accuracy"] is None:
+            continue  # the baseline's own row
+        tail = g.camel(row["setting"]) + _condition_word(row["condition"]) + g.camel(row["family"])
+        found.append(Decision(
+            "classifier", "CLF0", f"{row['setting']}, {row['condition']}",
+            f"{row['family']} - gnb_online, synthetic test accuracy",
+            one_interval_verdict(row["delta_accuracy_lo"], row["delta_accuracy_hi"]),
+            "clfZero" + tail,
+            (("", row["delta_accuracy"], row["delta_accuracy_lo"], row["delta_accuracy_hi"],
+              "difference"),),
+            f"n = {row['n_seed_pairs']} seed pairs"))
+    rows = results.rows("classifier/router_comparisons.csv", out, required=False) or []
+    better = defaultdict(list)
+    beats = defaultdict(list)
+    for row in rows:
+        cap = g.disk_capacity_word(row["capacity"])
+        scope = _cap(row["capacity"])
+        if row["metric"] == "hit_ratio":
+            rule = "CLF1" if row["baseline"] == "sequential" else "CLF2"
+            verdict = two_interval_verdict(row)
+            text = f"{row['policy']} - {row['baseline']}, hit ratio"
+        else:
+            rule = "CLF3" if row["metric"] == "device_ios" else "CLF4"
+            verdict = _device_words(row["metric"],
+                                    two_interval_verdict(row, higher_is_better=False))
+            text = f"{row['policy']} / none, " + ("device I/Os" if row["metric"] == "device_ios"
+                                                  else "blocks moved")
+        routed = row["policy"] not in CLF_REFERENCE_POLICIES
+        if rule == "CLF2" and routed and verdict == BETTER:
+            better[row["capacity"]].append(row["policy"])
+        if rule == "CLF1" and routed and verdict == BETTER:
+            beats[row["capacity"]].append(row["policy"])
+        found.append(Decision(
+            "classifier", rule, scope, text, verdict,
+            "clf" + g.camel(rule[3:]) + g.camel(row["policy"]) + cap, _row_intervals(row),
+            f"n = {row['n']} traces; wins/losses {row['wins']}/{row['losses']}"))
+    for capacity in sorted({r["capacity"] for r in rows}):
+        named = better.get(capacity, [])
+        found.append(Decision(
+            "classifier", "claim", _cap(capacity), "a tuned classifier makes the router better",
+            ("supported for " + ", ".join(named)) if named
+            else "no tuned classifier makes the router better",
+            "clfClaimTunedBetter" + g.disk_capacity_word(capacity),
+            note="some family better than gnb_online on hit ratio (device-I/O ratio beside it)"))
+        named = beats.get(capacity, [])
+        found.append(Decision(
+            "classifier", "claim", _cap(capacity), "the router beats read-ahead",
+            ("supported for " + ", ".join(named)) if named
+            else "no routed classifier beats read-ahead",
+            "clfClaimBeatsReadAhead" + g.disk_capacity_word(capacity),
+            note="some routed classifier better than sequential on hit ratio"))
+    return found
+
+
+#: HSR comparisons whose baseline is ``none`` (D) are device work.
+HSR_ORDER = ("H1", "H2", "H3", "H4", "H5", "H6", "H7", "S1", "S2", "R", "D")
+
+
+def hindsight_decisions(results, out) -> list[Decision]:
+    """Track HSR (results/hindsight/PREREGISTERED.md section 6)."""
+    rows = results.rows("hindsight/comparisons.csv", out, required=False) or []
+    found = []
+    for row in rows:
+        lower = row["metric"] in ("device_ios", "blocks_moved")
+        verdict = two_interval_verdict(row, higher_is_better=not lower, study="hindsight")
+        if row["comparison"] == "D":
+            verdict = _device_words(row["metric"], verdict)
+            text = f"{row['policy']} / none, " + ("device I/Os" if row["metric"] == "device_ios"
+                                                  else "blocks moved")
+        else:
+            word = {"hit_ratio": "hit ratio", "u0.5": "U(0.5) per block",
+                    "device_ios": "device I/Os (ratio)"}.get(row["metric"], row["metric"])
+            text = f"{row['policy']} - {row['baseline']}, {word}"
+        found.append(Decision(
+            "hindsight", row["comparison"], _cap(row["capacity"]), text, verdict,
+            "hsr" + g.camel(row["comparison"]) + g.camel(row["metric"]) + g.camel(row["policy"])
+            + "Vs" + g.camel(row["baseline"]) + g.disk_capacity_word(row["capacity"]),
+            tuple((label, est, lo, hi, "difference_fine" if stat == "difference" else stat)
+                  for label, est, lo, hi, stat in _row_intervals(row)),
+            f"n = {row['n']} traces; wins/losses/ties {row['wins']}/{row['losses']}/{row['ties']}"))
+    return found
+
+
+#: WRK's comparison metrics, as they read in a sentence.
+WRK_METRICS = {"hit_ratio": "hit ratio", "utility_per_view": "U(0.01)", "hit_at_1": "hit@1",
+               "coverage_at_8": "coverage@8", "mrr_at_8": "MRR@8",
+               "novel_hit_at_1": "novel hit@1", "novel_coverage_at_8": "novel coverage@8"}
+
+
+def _wrk_key(row) -> str:
+    key = "wrk" + g.camel(row["comparison"]) + g.camel(row["scorer"])
+    if row["comparison"] == "K6":
+        key += "Vs" + g.camel(row["baseline_policy"])
+    key += g.camel(row["metric"])
+    if row["capacity"] is not None:
+        key += "Cap" + g.camel(row["capacity"])
+    return key
+
+
+def web_rankers_decisions(results, out) -> list[Decision]:
+    """Track WRK (results/web_rankers/PREREGISTERED.md, 'Decision rules')."""
+    rows = [r for r in results.rows("web_rankers/comparisons.csv", out, required=False) or ()
+            if r["split"] == "test"]
+    found = []
+    verdicts = {}
+    for row in rows:
+        verdict = one_interval_verdict(row["ci_lo"], row["ci_hi"])
+        if row["comparison"] == "K6" and row["baseline_policy"] == "fixed0" and verdict == WORSE:
+            verdict = "loses to no prefetch"  # decision rule 4
+        cap = "" if row["capacity"] is None else f"cap {row['capacity']}"
+        a = row["scorer"] if row["policy"] == "ranking" else f"{row['policy']}@{row['scorer']}"
+        b = (row["baseline_scorer"] if row["baseline_policy"] == "ranking"
+             else f"{row['baseline_policy']}@{row['baseline_scorer']}")
+        key = _wrk_key(row)
+        verdicts[key] = verdict
+        found.append(Decision(
+            "web_rankers", row["comparison"], cap or "test ranking",
+            f"{a} - {b}, {WRK_METRICS.get(row['metric'], row['metric'])}", verdict, key,
+            (("", row["estimate"], row["ci_lo"], row["ci_hi"], "difference"),),
+            f"{row['sessions']} sessions"))
+    families = [s for s in dict.fromkeys(r["scorer"] for r in rows
+                                         if r["comparison"] == "K1")
+                if not s.startswith("trans_")]
+    capacities = sorted({r["capacity"] for r in rows if r["capacity"] is not None})
+    for family in families:
+        stem = "wrkKOne" + g.camel(family)
+        ranker = (verdicts.get(stem + "HitAtOne") == BETTER
+                  and verdicts.get(stem + "MrrAtEight") == BETTER)
+        found.append(Decision(
+            "web_rankers", "rule 1", family, "better ranker than the shipped logistic",
+            "better ranker" if ranker else "not called a better ranker",
+            "wrkRuleOne" + g.camel(family), note="K1 hit@1 and MRR@8 both better"))
+        for capacity in capacities:
+            k3 = verdicts.get("wrkKThree" + g.camel(family) + "UtilityPerViewCap"
+                              + g.camel(capacity))
+            if k3 is None:
+                continue
+            found.append(Decision(
+                "web_rankers", "rule 1", f"{family}, cap {capacity}",
+                "better for prefetching than the shipped logistic",
+                "better for prefetching" if k3 == BETTER else "not called better for prefetching",
+                "wrkRuleOnePrefetch" + g.camel(family) + "Cap" + g.camel(capacity),
+                note="K3 U(0.01)"))
+            k4 = [verdicts.get("wrkKFour" + g.camel(family) + metric + "Cap" + g.camel(capacity))
+                  for metric in ("HitRatio", "UtilityPerView")]
+            k5 = verdicts.get("wrkKFive" + g.camel(family) + "UtilityPerViewCap"
+                              + g.camel(capacity))
+            if None not in k4 and k5 is not None:
+                found.append(Decision(
+                    "web_rankers", "rule 3", f"{family}, cap {capacity}",
+                    "against transition top-1 (K4) and online counts (K5)",
+                    ("beats transition top-1" if all(v == BETTER for v in k4)
+                     else "does not beat transition top-1")
+                    + ("; closes the freshness gap" if k5 != WORSE
+                       else "; stays below online counts"),
+                    "wrkRuleThree" + g.camel(family) + "Cap" + g.camel(capacity),
+                    note="K4 hit ratio and U(0.01); K5 U(0.01)"))
+    for capacity in capacities:
+        s1 = [r for r in rows if r["comparison"] == "S1" and r["capacity"] == capacity
+              and r["metric"] == "utility_per_view"]
+        if not s1:
+            continue
+        verdict = verdicts[_wrk_key(s1[0])]
+        found.append(Decision(
+            "web_rankers", "rule 2", f"cap {capacity}", "primary claim (S1)",
+            ("a tuned alternative ranker improves the controller" if verdict == BETTER
+             else "no claim that a tuned ranker improves the controller"),
+            "wrkRuleTwoCap" + g.camel(capacity), note=f"selected scorer: {s1[0]['scorer']}"))
+    return found
+
+
+#: E7 scopes with enough windows of both classes for a verdict, and the
+#: protocols the paper reports (LOFO is the within-real figure A1 quotes).
+MSRC_SCOPES = ("pooled", "web_1", "web_3")
+MSRC_PROTOCOLS = ("shipped_synthetic", "sklearn_synthetic", "lofo_real")
+
+
+def msrc_decisions(results, out) -> list[Decision]:
+    """E7 (results/msrc_samples/PREREGISTERED.md section 4)."""
+    rows = results.rows("msrc_samples/classifier_deltas.csv", out, required=False) or []
+    found = []
+    for row in rows:
+        if (row["label_rule"] != "majority" or row["trace"] not in MSRC_SCOPES
+                or row["protocol"] not in MSRC_PROTOCOLS):
+            continue
+        rule = "M1" if row["baseline"].endswith("/gnb") else "M2"
+        if row["small_n"] or row["delta"] is None:
+            verdict = "insufficient n"
+        else:
+            verdict = one_interval_verdict(row["delta_lo"], row["delta_hi"])
+        found.append(Decision(
+            "msrc_samples", rule, f"{row['trace']}, {row['protocol']}",
+            f"{row['classifier']} - {row['baseline'].split('/')[-1]}, balanced accuracy",
+            verdict,
+            "msrc" + g.camel(rule) + g.camel(row["protocol"]) + g.camel(row["classifier"])
+            + g.camel(row["trace"]),
+            (("", row["delta"], row["delta_lo"], row["delta_hi"], "difference"),),
+            f"n = {row['n_windows']} windows (serially correlated; window bootstrap)"))
+    return found
+
+
 def decide(results, out=None) -> list[Decision]:
-    """Every verdict, disk then real device, web and live."""
+    """Every verdict, disk then real device, web and live, then the
+    classifier study (CLF, HSR, WRK) and E7."""
     return (disk_decisions(results, out) + realio_decisions(results, out)
-            + web_decisions(results, out) + live_decisions(results, out))
+            + web_decisions(results, out) + live_decisions(results, out)
+            + classifier_decisions(results, out) + hindsight_decisions(results, out)
+            + web_rankers_decisions(results, out) + msrc_decisions(results, out))

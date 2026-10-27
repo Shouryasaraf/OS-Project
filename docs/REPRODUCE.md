@@ -80,8 +80,10 @@ under `outputs/` and never touches `results/`: a smoke run is not a result.
 | `python reproduce.py web --gpu` | **E5**: GRU sequence model, 5 seeds, and the decomposition `sequence_model` lever | `results/web/seq_metrics.csv`, `results/web/seq/` | E4's prepared views, CUDA |
 | `python reproduce.py web_rankers` | **WRK** (after E4-E6): five tuned ranker families against the shipped logistic ranker, transition top-1 and online counts; random search, per-capacity policy selection, one frozen test replay | `results/web_rankers/`, `models/web/rankers/` | E4's prepared views and ranker (run first if absent), `[web]` |
 | `python reproduce.py live --store-dir DIR` | **E6**: real HTTP replay with simulator parity | `results/live/` | E4's `comparisons.csv`, prepared views and ranker; a quiet host |
+| `python reproduce.py classifier [--workers N]` | **CLF** (after E1-E6): Part 1, 15 classifier families tuned by random search on synthetic training seeds and scored once on fresh test seeds; Part 2, each routed through the unchanged `adaptive` mode on C3 slice 2 of the 19 subset traces | `results/classifier/` | block traces, `[web]` (scikit-learn) |
+| `python reproduce.py hindsight [--workers N]` | **HSR** (after E1-E6): the `routed` mode, a router over {`none`, `sequential`, `deep@8`, `deep@32`, `deep@256`} trained on slice-1 hindsight labels, families selected by corpus-grouped CV, scored once on slice 2 | `results/hindsight/`, `models/hindsight/` | block traces, `[web]` |
 | `python reproduce.py msrc` | **E7**: MSRC light sample, labelled-window transfer check (seq flag) and sanity replay; see `results/msrc_samples/README.md` for its wall time | `results/msrc_samples/` | `data/samples/msrc/` (tracked), `[web]` |
-| `python reproduce.py paper` | figures, tables and `numbers.tex` from `results/` (no experiment), then the claims ledger | `paper/`, `results/claims/` | `[paper]` for figures |
+| `python reproduce.py paper` | figures, tables and `numbers.tex` from `results/` (no experiment), then the claims ledger and the single-file `paper/main_flat.tex` and `paper/paper_full.txt` | `paper/`, `results/claims/` | `[paper]` for figures |
 | `python reproduce.py notebook` | rebuilds and executes `notebooks/walkthrough.ipynb` from `results/` and `paper/decisions.py` (no experiment, under a minute; exit 4 without nbformat, pandas or matplotlib) | `notebooks/walkthrough.ipynb` | `[web,paper]`, nbformat |
 | `python reproduce.py all [--quick]` | every study above in order; a step that cannot run here is passed over and the exit status says so | as above | |
 
@@ -99,6 +101,18 @@ under `outputs/` and never touches `results/`: a smoke run is not a result.
 | E4 | `reproduce.py web --workers 40` | 1319.366 s | recorded under `extra.e4_provenance` |
 | E5 | `python -m webprefetch.seqmodel experiment` | 6654.864 s | `results/web/seq/provenance.json` |
 | E6, last invocation | `webprefetch.live run ... --experiment hint` | 757.888 s | 42 passes in total over several invocations; every pass's `wall_s` is in `live_config.json` |
+<!-- source: none -->
+
+The classifier study (written after E1-E6; `extra.computing_run` holds the
+CLF computing run when a later cached pass rewrote `provenance.json`):
+
+<!-- source: results/classifier/provenance.json; results/hindsight/provenance.json; results/web_rankers/provenance.json; results/msrc_samples/provenance.json -->
+| Run | Command recorded | Wall time | Notes |
+|---|---|---:|---|
+| CLF, computing run | `reproduce.py classifier` | 2161.948 s | the committed `provenance.json` is a cached pass of 104.899 s that recomputed nothing |
+| HSR, last pass | `reproduce.py hindsight --workers 28` | 155.049 s | cached stages; the stage-by-stage runtimes of the computing run (about an hour on a loaded host) are in `results/hindsight/README.md` |
+| WRK | `reproduce.py web_rankers --workers 16` | 2736.277 s | load rose to about 78 (1-minute average at the end of the run: 29.47) |
+| E7 | `reproduce.py msrc` | 340.264 s | 8 workers |
 <!-- source: none -->
 
 Each E3 and E6 invocation appends to the same results directory; the earlier
@@ -147,6 +161,20 @@ invocations' commands, times and git states are kept under
   results/web/comparisons.csv` resolves `validated_*` policy names to what
   E4 selected on validation; there is no built-in fallback. It exits 1 on a
   parity mismatch and 2 when the planned request rate is refused.
+- **CLF** (`repro/classifier.py`): `adaptive_prefetch.clfzoo` (`zoo` the
+  families and search spaces, `synthetic` Part 1, `router` Part 2 with the
+  precomputed-label replay, `analysis` the bootstraps). Validity gate 1: the
+  shipped GNB through the label replay equals E1's C3 `adaptive` rows on every
+  counter; gate 2: four E1 baseline rows are re-run exactly before they are
+  reused. `--part synthetic|router` reruns one part from the cache.
+- **HSR** (`repro/hindsight.py`): `adaptive_prefetch.hindsight` (labels and
+  routers), `hindsight_models` (families, random search, grouped CV),
+  `hindsight_experiment`/`hindsight_pipeline` (fixed-action replays of both
+  slices, selection, refits with `.training.json` records, slice-2 scoring)
+  and `hindsight_analysis` (H1-H7, S1, S2, R, D). Every fixed-action replay
+  must equal `results/disk/sweep.jsonl` on every counter.
+- **WRK** (`repro/web_rankers.py`): `python -m webprefetch.rankers run`; see
+  `docs/web/WEB_RANKERS.md`.
 - **paper** (`repro/paper.py`): `paper/numbers.py`,
   `paper/tables/make_tables.py` and `paper/figures/make_figures.py` (sharing
   `paper/genlib.py`, loaded by path), then the claims ledger

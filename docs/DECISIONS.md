@@ -1308,3 +1308,70 @@ device the latency a requester sees depends on how many I/Os a policy issues,
 whether its prefetches finish before they are needed, and whether they queue
 in front of demand reads. The disk study therefore reports device work beside
 every hit ratio (D18), and makes no latency claim from simulation.
+
+## D22. A better classifier is not the fix: the classifier zoo, the hindsight router and the MSRC check (CLF, HSR, E7)
+
+**Why it exists.** E1 found the GNB-routed `adaptive` mode *worse* than
+`sequential` at both capacities (`results/disk/`), and the obvious objection
+is "use a better classifier". Three follow-up studies test it. All three were
+pre-registered **after** E1-E6 were known (each `PREREGISTERED.md` says so),
+so they are not blind to the result that motivated them; selection used only
+training or validation data, and each test set was scored once.
+
+- **CLF** (`results/classifier/`, `adaptive_prefetch.clfzoo`): 13 tuned
+  scikit-learn families plus the shipped online GNB and QDA, random search
+  (16 candidates per family) on synthetic training seeds; Part 1 scores them
+  on fresh synthetic test seeds, Part 2 routes the unchanged `adaptive` mode
+  with each on C3 slice 2 of the 19 subset traces.
+- **HSR** (`results/hindsight/`, `adaptive_prefetch.hindsight*`): the new
+  `routed` mode (appended to `MODES` and `RANKING_MODES` in all four places;
+  `OPTIONAL_MODES` now includes it) chooses the next window's action among
+  `none`, `sequential`, `deep@8`, `deep@32` and `deep@256`, trained on
+  slice-1 trajectory hindsight labels and selected by corpus-grouped CV.
+- **E7** (`results/msrc_samples/`): the seven size-selected MSRC `.revised`
+  files, the only real workload label (`seq` flag), as a transfer check.
+
+**What was found** (simulated; synthetic where stated).
+
+<!-- source: results/classifier/router_comparisons.csv metric=hit_ratio -->
+- No routed classifier beats `sequential`: no difference detected at 1 MiB
+  for every one, worse at 64 MiB for every one (the MLP, the closest, by
+  -0.0034 [-0.0051, -0.0020]).
+- Against the shipped GNB, the random forest is better at 1 MiB
+  (+0.0025 [+0.0007, +0.0055], cluster interval also above 0) and 8 of the
+  14 alternatives are better at 64 MiB (MLP +0.0046 [+0.0028, +0.0068]).
+<!-- source: results/classifier/router_summary.csv -->
+- Every routed policy issues more device I/Os than `none` (ratios 1.027 to
+  1.160 at 1 MiB); only `linux_ra@256` issues fewer (0.713 and 0.548).
+<!-- source: results/hindsight/comparisons.csv comparison=H1 -->
+- The hindsight router against the per-trace validation-chosen fixed action
+  (VCF): no difference detected at 1 MiB (+0.0003 [-0.0199, +0.0226]); worse
+  by a negligible margin at 64 MiB, where VCF is `deep@256` on every trace.
+<!-- source: results/hindsight/summary.csv policy=routed_hit -->
+- Its gains over `sequential` and `adaptive` are the gains of depth, and it
+  moves 3.649 and 2.795 times the blocks of `none`.
+<!-- source: results/hindsight/summary.csv policy=routed_dev -->
+- The device-objective router issues fewer device I/Os than `none` (0.976
+  and 0.956), but `linux_ra@256` does better still.
+<!-- source: none -->
+- GNB has the lowest grouped-CV score of the hindsight families in every
+  objective-capacity cell (descriptive), yet the selected family does not
+  beat VCF either: the limit is what a per-window choice adds over a
+  per-trace fixed depth, not the classifier.
+- Synthetic Part 1 (`results/classifier/synthetic_eval.csv`): under the
+  block-size covariate shift the tree models and boosting match GNB and the
+  scale-sensitive families lose; on the 75% phase blend trees and boosting
+  beat GNB by a wide margin, an optimistic synthetic figure (each window's
+  context comes from earlier windows of the same class).
+- E7: the `seq` flag is an address-contiguity flag, no synthetic-trained
+  family is clearly better than GNB on it, and in replay the gain comes from
+  `linux_ra` (`results/msrc_samples/README.md`).
+
+**What this changes.** D1's choice of GNB stands as the right choice for its
+action space, but it no longer matters: the four-class router prefetches at
+most two blocks, so no classifier can beat read-ahead with it. The paper's
+section "Can a Better Learner Help?" (`paper/sections/classifier_results.tex`,
+Tables T10-T12, Fig. F9) reports this with the verdicts `paper/decisions.py`
+computes; the title stands. The CART reference is `breiman1984cart` in
+`paper/refs.bib` (`results/classifier/README.md` predates the merge and names
+it `breiman1984classification`; the track bib files were merged and removed).

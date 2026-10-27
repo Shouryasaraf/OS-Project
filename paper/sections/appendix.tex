@@ -13,6 +13,21 @@ everything else is labelled descriptive or exploratory.
 
 \section{Supplementary Results}\label{app:supplementary}
 
+\textbf{The shared abstraction and the web decomposition}
+(Fig.~\ref{fig:f1}, Table~\ref{tab:t5_web_decomposition}), moved here from
+Sections~\ref{sec:model} and~\ref{sec:web} for length.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/f1_schematic}
+\caption{The shared abstraction. The disk study counts 512-byte blocks and the
+web study counts product views; both report hits, issued, useful and wasted
+prefetches, and the utility $U(c)$.}
+\label{fig:f1}
+\end{figure}
+
+\input{tables/t5_web_decomposition}
+
 \textbf{Hardware and data} (Tables~\ref{tab:t1b_hardware}
 and~\ref{tab:t4_web_dataset}). Table~\ref{tab:t4_web_dataset} lists every
 numeric field of the web dataset profile, including the share of next views
@@ -85,3 +100,82 @@ and policy (loopback, emulated network, assumed sizes; citable passes only).}
 \textbf{Cross-domain summary} (Table~\ref{tab:t8_cross_domain}).
 
 \input{tables/t8_cross_domain}
+
+\section{The Classifier Study in Detail}\label{app:classifiers}
+
+\textbf{The families.} Gaussian naive
+Bayes~\cite{domingos1997optimality,zhang2004optimality}, LDA~\cite{fisher1936use}
+with shrinkage~\cite{ledoit2004well}, QDA~\cite{hastie2009elements}, logistic
+regression~\cite{cox1958regression}, $k$-nearest
+neighbours~\cite{cover1967nearest}, linear and RBF
+SVMs~\cite{cortes1995support} with Platt
+probabilities~\cite{platt1999probabilistic}, CART~\cite{breiman1984cart},
+random forests~\cite{breiman2001random}, extremely randomised
+trees~\cite{geurts2006extremely}, histogram gradient
+boosting~\cite{friedman2001greedy,ke2017lightgbm}, an
+MLP~\cite{rumelhart1986learning} trained with Adam~\cite{kingma2015adam} and
+logistic SGD trained online~\cite{bottou2010large}, all in
+scikit-learn~\cite{pedregosa2011sklearn}; a streaming Hoeffding
+tree~\cite{domingos2000mining} was not run. Selection used
+\clfSynFolds{} folds over the training seeds.
+
+\textbf{Synthetic windows} (Table~\ref{tab:t10_classifier_zoo}). Each cell is
+the mean test accuracy over \clfSynSeedPairs{} pairs of independent training
+and test seeds, after selection on the training seeds alone. The settings are
+those of the earlier synthetic evaluation, on the twelve contextual features
+the router uses; the transfer columns are the block-size shift. Under it,
+\decTallyClfZeroTransferOneToThirtyTwoWorse{} of
+\decTallyClfZeroTransferOneToThirtyTwo{} families, the scale-sensitive ones
+among them, are worse than GNB at the 32-block size. On the heaviest phase blend GNB
+scores \clfSynAccTransitionHeavyGnbOnline{} and a random forest
+\clfSynAccTransitionHeavyRf{} (\clfSynDeltaTransitionHeavyRfCI), a margin that
+is optimistic because each window's context comes from earlier windows of the
+same class.
+
+\input{tables/t10_classifier_zoo}
+
+\textbf{The routed classifiers} (Table~\ref{tab:t11_classifier_router}). The
+shipped GNB through the precomputed-label replay reproduces E1's
+\texttt{adaptive} rows on every counter, and the reference rows are E1's own.
+At 64\,MiB, \decTallyClfTwoSixtyFourMiBBetter{} alternatives are better than the
+shipped GNB (\decClfClaimTunedBetterSixtyFourMiBVerdict) and every routed
+classifier is worse than \texttt{sequential}; all of them increase device I/Os
+and move more blocks than \texttt{none}.
+
+\input{tables/t11_classifier_router}
+
+\textbf{The hindsight router} (Table~\ref{tab:t12_hindsight}). Fixed-action
+replays equal E1's sweep rows on every counter. The selected families
+differ per objective and cache size (for the hit objective,
+\hsrCvBestHitOneMiB{} at 1\,MiB and \hsrCvBestHitSixtyFourMiB{} at 64\,MiB);
+the GNB-family router is \decHsrSTwoHitRatioRoutedHitGnbVsRoutedHitSixtyFourMiBVerdict{}
+than the selected one at 64\,MiB
+(\decHsrSTwoHitRatioRoutedHitGnbVsRoutedHitSixtyFourMiBPairedCI).
+
+\input{tables/t12_hindsight}
+
+\textbf{The web rankers} (Table~\ref{tab:t13_web_rankers}). The shipped ranker
+was regenerated and reproduces E4's test row exactly. The new families train on
+\wrkTrainDecisions{} split-1 decisions and are tuned on a
+\wrkTuneDecisions-decision split-2 sample; \texttt{logistic\_tuned} is the
+same-data control, and its search chose class-balanced weights that rank well
+but feed the controller uncalibrated probabilities (K3 worse at both
+capacities).
+
+\input{tables/t13_web_rankers}
+
+\textbf{MSRC light sample (E7).} The only real workload label in the project
+is the \texttt{seq} flag of MSRC's \texttt{.revised} traces~\cite{narayanan2008write}.
+On \msrcTraces{} files chosen by size, the flag equals ``starts where the
+previous request ended'' on \msrcFlagContiguityMin--\msrcFlagContiguityMax{} of
+requests, so agreeing with it measures contiguity recovery, not workload
+recognition, and only \msrcSeqWindows{} of \msrcWindows{} windows are
+sequential. In balanced accuracy~\cite{brodersen2010balanced}, the shipped GNB
+scores \msrcBalAccShippedSyntheticGnbPooled{} pooled and the shipped QDA
+\msrcBalAccShippedSyntheticQdaPooled{}, which is
+\decMsrcMOneShippedSyntheticQdaPooledVerdict{}
+(\decMsrcMOneShippedSyntheticQdaPooledCI); of the synthetic-trained scikit-learn
+families, \decTallyMOneSklearnSyntheticPooledBetter{} of
+\decTallyMOneSklearnSyntheticPooled{} are better than GNB pooled and none is
+better on both sequential-rich traces and pooled. These intervals resample
+serially correlated windows and are optimistic; the rows are descriptive.

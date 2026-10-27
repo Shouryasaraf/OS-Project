@@ -92,6 +92,9 @@ data/block-traces/*.oracleGeneral.zst             data/raw/events.csv (SHA-pinne
 | `multicorpus.py` | E1 driver: configs C1-C4, explicit latency model per row, resumable `sweep.jsonl` | `python -m adaptive_prefetch.multicorpus` |
 | `analysis.py` | E1 tables, paired and cluster deltas, winners, `kappa*`, validity checks | `write_analysis`, `checks` |
 | `realio/` | real Linux testbed (below) | `python -m adaptive_prefetch.realio` |
+| `clfzoo/` | track CLF, optional (scikit-learn, imported lazily): the classifier zoo (`zoo`: 13 tuned families plus the two shipped ones, search spaces, citations), Part 1 on synthetic windows (`synthetic`), Part 2 routing `adaptive` on real traces from precomputed labels (`router`, `Replayed`), the bootstraps (`analysis`) | `python reproduce.py classifier` |
+| `hindsight.py`, `hindsight_models.py`, `hindsight_experiment.py`, `hindsight_pipeline.py`, `hindsight_analysis.py` | track HSR: trajectory hindsight labels, the `routed` mode's router (`next window's action from this window's 12 features`), families and grouped CV (optional, scikit-learn), the slice-1/slice-2 driver, H1-H7/S1/S2/R/D | `python reproduce.py hindsight` |
+| `msrc_eval.py` | E7: labelled-window transfer check on the MSRC light sample and its sanity replay | `python reproduce.py msrc` |
 | `eda.py`, `pipeline.py`, `training.py`, `artifacts.py`, `report.py`, `datasets.py`, `cli.py` | trace profiling, classifier evaluation regimes, weak-label adaptation of the MSR sample, JSON model persistence, the `main.py` report, dataset lists, the CLI | |
 
 ### The replay loop
@@ -128,7 +131,8 @@ only parameter validator, `_make_predictor` the only predictor factory, and
 
 ### Modes
 
-`benchmark.MODES` and `sweep.RANKING_MODES` (14 modes, this order):
+`benchmark.MODES` and `sweep.RANKING_MODES` (15 modes, this order; `routed`
+was appended by track HSR):
 
 | Family | Modes | What decides |
 |---|---|---|
@@ -139,9 +143,12 @@ only parameter validator, `_make_predictor` the only predictor factory, and
 | feedback-gated | `guard`, `depth_adaptive`, `correlate` (`GATED_MODES`) | *observed* precision against `LatencyModel.break_even_precision()` |
 | kernel policy | `linux_ra` (window ceiling `linux_ra@N`, default 256 blocks) | an emulation of mm/readahead.c's on-demand read-ahead policy: sync window on a sequential miss, async ramp on the marker block |
 | learned depth | `learned_depth` (optional artifact) | a trained per-segment model; how far to read ahead |
+| hindsight-routed | `routed` (optional artifact, `router=`) | a router trained on real-trace hindsight labels picks the next window's action among `none`, `sequential`, `deep@8`, `deep@32`, `deep@256` |
 
-`OPTIONAL_MODES = ("lstm", "learned_depth")`: without an artifact they give
-a `skipped:` row with `None` metrics, never a substitute.
+`OPTIONAL_MODES = ("lstm", "learned_depth", "routed")`: without an artifact
+they give a `skipped:` row with `None` metrics, never a substitute (E1's job
+lists carry `routed` as `skipped:`; it is scored in `results/hindsight/`
+only).
 
 ### Cost models
 
@@ -230,8 +237,14 @@ Every parameter is chosen on validation per capacity and frozen for test.
 
 `reproduce.py paper` runs `paper/numbers.py` (one `\newcommand` per quoted
 number), `paper/tables/make_tables.py` and `paper/figures/make_figures.py`,
-which share `paper/genlib.py` and are loaded by path, then
-`paper/check.py --strict`. `--fixtures` builds the same outputs from the
+which share `paper/genlib.py` and are loaded by path, then the claims ledger
+(`paper/claims.py`), `paper/flatten.py` (`main_flat.tex`, `paper_full.txt`)
+and `paper/check.py --strict`. `paper/decisions.py` applies every
+`results/*/PREREGISTERED.md` rule, the classifier study's (CLF0-CLF4 and the
+claim rules, HSR's H1-H7/S1/S2/R/D, WRK's S1/K1-K6 and rules 1-3, E7's M1/M2)
+included, re-computing each verdict from the intervals; the classifier
+study's macros are `\clf...`, `\hsr...`, `\wrk...` and `\msrc...`, its
+tables T10-T13 and its figure F9. `--fixtures` builds the same outputs from the
 synthetic `tests/fixtures/results/` tree into `outputs/paper-fixture/`.
 `presentation/slides.tex` inputs `paper/numbers.tex` and the same figure
 PDFs. `tools/check_doc_numbers.py` keeps the Markdown docs honest in the same

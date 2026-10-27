@@ -103,8 +103,37 @@ class CommittedPaperTests(unittest.TestCase):
             "hidasi2016session", "kang2018sasrec",
             "paszke2019pytorch", "man_posix_fadvise", "man_readahead", "man_cachestat",
             "man_readv", "man_open", "linux_cgroup_v2", "linux_mglru",
+            # The classifier study (CLF, HSR, WRK) and E7, merged from their
+            # refs_<TRACK>.bib files; the CART book is breiman1984cart.
+            "domingos1997optimality", "zhang2004optimality", "fisher1936use",
+            "ledoit2004well", "hastie2009elements", "cox1958regression", "cover1967nearest",
+            "cortes1995support", "platt1999probabilistic", "breiman1984cart",
+            "breiman2001random", "geurts2006extremely", "friedman2001greedy",
+            "ke2017lightgbm", "rumelhart1986learning", "kingma2015adam", "bottou2010large",
+            "domingos2000mining", "bergstra2012random", "jain2016hawkeye", "ross2011reduction",
+            "tibshirani1996lasso", "efron1979bootstrap", "brodersen2010balanced",
         ):
             self.assertIn(key, keys)
+        self.assertNotIn("breiman1984classification", keys)
+        self.assertFalse(list(PAPER.glob("refs_*.bib")), "merge refs_<TRACK>.bib into refs.bib")
+
+    def test_classifier_zoo_citations_are_in_the_bibliography(self):
+        # clfzoo.zoo.CITATIONS names a BibTeX key per family; read it without
+        # importing the module (it needs scikit-learn).
+        import ast
+        source = (PAPER.parent / "src" / "adaptive_prefetch" / "clfzoo" / "zoo.py").read_text(
+            encoding="utf-8")
+        cited = set()
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.Assign) and any(
+                    getattr(target, "id", None) in ("CITATIONS", "COMMON_CITATIONS")
+                    for target in node.targets):
+                value = ast.literal_eval(node.value)
+                for item in (value.values() if isinstance(value, dict) else [value]):
+                    cited.update(item)
+        self.assertGreater(len(cited), 15)
+        entries, _ = check.parse_bib((PAPER / "refs.bib").read_text(encoding="utf-8"))
+        self.assertLessEqual(cited, {entry.key for entry in entries})
 
     def test_review1_corrections_are_in_the_bibliography(self):
         entries, _ = check.parse_bib((PAPER / "refs.bib").read_text(encoding="utf-8"))

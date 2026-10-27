@@ -30,8 +30,8 @@ prefetch, and it is a choice of how much to fetch.
 
 \textbf{The hypothesis, by its rules.} The pre-registered hypothesis had three
 parts. \emph{The predictor is the smallest lever:} not established in either
-study. Every learned predictor lost to its simple, fair baseline (the class
-router to \texttt{sequential}, the depth network to the validation-chosen
+study. No learned predictor beat its simple, fair baseline (the class
+router lost to \texttt{sequential}, the depth network to the validation-chosen
 depth, the logistic ranker to transition counts, the GRU to online counts),
 but on disk the feedback gate moved the hit ratio as little or less, and on
 the web the GRU's loss could not be separated from the depth lever's gain.
@@ -42,6 +42,15 @@ gate is no better than \texttt{sequential} and the web gate shows no
 detectable difference from the adaptive controller; both mainly issue less.
 The one gated disk mode above \texttt{sequential}, \texttt{depth\_adaptive},
 also chooses its depth (an exploratory comparison).
+
+\textbf{Is the learner the problem?} No, in either domain. On disk, any of
+\clfRouterClassifiers{} classifiers leaves the router level with or below
+\texttt{sequential}, because its actions prefetch two blocks at most; with
+depth as an action a router only reaches a fixed depth chosen per trace,
+moving \hsrMovedRatioRoutedHitOneMiB{} the blocks of no prefetching at 1\,MiB.
+On the web a better ranker helps the controller slightly, but transition
+top-1 and online counts stay ahead. A learner matters only once its decision
+can move the result, and even then depth and freshness decide more.
 
 \textbf{Simulation against measurement.} The two real-system studies point in
 opposite directions, and both are measured. On a hard disk with O\_DIRECT and
@@ -58,4 +67,5 @@ latency, and which way the error goes depends on where the bottleneck sits.
 per price of a prefetch, prefer window growth that merges reads when device
 operations are the cost, keep the statistics fresh, and validate on the real
 device before trusting a simulated hit ratio. A learned predictor must beat
-these baselines on held-out data to earn its training cost; none of ours did.
+these baselines on held-out data to earn its training cost; none of ours did,
+tuned or not.

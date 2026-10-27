@@ -21,6 +21,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -96,6 +97,31 @@ class RuleTests(unittest.TestCase):
         self.assertTrue(r2(-1.0, 4, sign_consistent=-1).startswith("descriptive only"))
 
 
+class ClassifierStudyRuleTests(unittest.TestCase):
+    """The rules of results/{classifier,hindsight,web_rankers,msrc_samples}."""
+
+    def test_two_interval_rule_words_paired_only_per_study(self):
+        row = dict(_row(0.01, 0.02, -0.01, 0.03), statistic="difference")
+        self.assertEqual(decisions.two_interval_verdict(row), decisions.NO_DIFFERENCE)
+        self.assertEqual(decisions.two_interval_verdict(row, study="hindsight"),
+                         decisions.NO_DIFFERENCE + f" ({decisions.PAIRED_ONLY})")
+        both = dict(_row(0.01, 0.02), statistic="difference")
+        self.assertEqual(decisions.two_interval_verdict(both), decisions.BETTER)
+        ratio = dict(_row(0.9, 0.95), statistic="ratio")
+        self.assertEqual(decisions.two_interval_verdict(ratio, higher_is_better=False),
+                         decisions.BETTER)
+
+    def test_one_interval_rule(self):
+        self.assertEqual(decisions.one_interval_verdict(0.1, 0.2), decisions.BETTER)
+        self.assertEqual(decisions.one_interval_verdict(-0.2, -0.1), decisions.WORSE)
+        self.assertEqual(decisions.one_interval_verdict(-0.1, 0.1), decisions.NO_DIFFERENCE)
+        self.assertEqual(decisions.one_interval_verdict(None, 0.1), decisions.NO_DIFFERENCE)
+
+    def test_device_words(self):
+        self.assertEqual(decisions._device_words("device_ios", "better"), "reduces device I/Os")
+        self.assertEqual(decisions._device_words("blocks_moved", "worse"), "moves more blocks")
+
+
 class DecideTests(unittest.TestCase):
     def test_fixture_tree_gives_unique_macro_keys(self):
         found = decisions.decide(genlib.Results(FIXTURES))
@@ -103,7 +129,9 @@ class DecideTests(unittest.TestCase):
         keys = [d.key for d in found]
         self.assertEqual(len(keys), len(set(keys)))
         self.assertTrue(all(genlib.is_macro_name(k) for k in keys))
-        self.assertEqual({d.study for d in found}, {"disk", "realio", "web", "live"})
+        self.assertEqual({d.study for d in found},
+                         {"disk", "realio", "web", "live", "classifier", "hindsight",
+                          "web_rankers", "msrc_samples"})
 
     def test_empty_tree_gives_nothing_and_a_placeholder_table(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -197,6 +225,89 @@ class CommittedPaperTests(unittest.TestCase):
         for key, expected in claims.items():
             with self.subTest(key=key):
                 self.assertEqual(self.verdict(key), expected)
+
+    def test_the_classifier_study_verdicts_the_prose_states(self):
+        # paper/sections/classifier_results.tex, abstract, introduction,
+        # discussion, conclusion and appendix (the classifier study, E7).
+        claims = {
+            "clfClaimBeatsReadAheadOneMiB": "no routed classifier beats read-ahead",
+            "clfClaimBeatsReadAheadSixtyFourMiB": "no routed classifier beats read-ahead",
+            "clfClaimTunedBetterOneMiB": "supported for rf",
+            "clfTwoRfOneMiB": "better",
+            "clfTwoMlpSixtyFourMiB": "better",
+            "clfOneMlpSixtyFourMiB": "worse",
+            "clfOneLinuxRaAtTwoHundredFiftySixOneMiB": "better",
+            "hsrHOneHitRatioRoutedHitVsVcfHitOneMiB": "no difference detected",
+            "hsrHOneHitRatioRoutedHitVsVcfHitSixtyFourMiB": "worse",
+            "hsrHTwoHitRatioRoutedHitVsSequentialOneMiB": "better",
+            "hsrSOneHitRatioRoutedHitVsLinuxRaAtTwoHundredFiftySixOneMiB": "better",
+            "hsrDDeviceIosRoutedDevVsNoneOneMiB": "reduces device I/Os",
+            "hsrDBlocksMovedRoutedHitVsNoneOneMiB": "moves more blocks",
+            "hsrHSixHitRatioRoutedHitLocoVsVcfHitOneMiB": "worse",
+            "hsrSTwoHitRatioRoutedHitGnbVsRoutedHitSixtyFourMiB": "worse",
+            "hsrRHitRatioOracleHitVsVcfHitOneMiB": "better",
+            "wrkRuleTwoCapEight": "a tuned alternative ranker improves the controller",
+            "wrkRuleTwoCapThirtyTwo": "a tuned alternative ranker improves the controller",
+            "wrkSOneMlpHitRatioCapEight": "worse",
+            "wrkRuleOneMlp": "better ranker",
+            "wrkRuleOneLogisticTuned": "not called a better ranker",
+            "wrkRuleThreeMlpCapEight": "does not beat transition top-1; stays below online counts",
+            "wrkRuleThreeMlpCapThirtyTwo":
+                "does not beat transition top-1; stays below online counts",
+            "msrcMOneShippedSyntheticQdaPooled": "better",
+        }
+        for key, expected in claims.items():
+            with self.subTest(key=key):
+                self.assertEqual(self.verdict(key), expected)
+        # The 64 MiB claim lists the families the appendix counts.
+        claim = self.verdict("clfClaimTunedBetterSixtyFourMiB")
+        self.assertTrue(claim.startswith("supported for "))
+        # The oracle is not a ceiling at 64 MiB: not better than VCF there.
+        self.assertNotEqual(self.verdict("hsrRHitRatioOracleHitVsVcfHitSixtyFourMiB"), "better")
+        # No web family beats transition top-1 or closes the freshness gap.
+        rule3 = [d for d in self.found.values() if d.study == "web_rankers" and d.rule == "rule 3"]
+        self.assertTrue(rule3)
+        self.assertTrue(all(d.verdict.startswith("does not beat") for d in rule3))
+        # E7 appendix: no synthetic-trained sklearn family is better than GNB
+        # on web_1, web_3 and pooled together.
+        better = defaultdict(set)
+        for d in self.found.values():
+            if d.study == "msrc_samples" and d.rule == "M1" and d.verdict == "better":
+                trace, protocol = d.scope.split(", ")
+                if protocol == "sklearn_synthetic":
+                    better[d.comparison.split(" - ")[0]].add(trace)
+        self.assertFalse(any(v == set(decisions.MSRC_SCOPES) for v in better.values()))
+
+    def test_recomputed_verdicts_match_the_results_files(self):
+        # decisions.py re-applies each rule to the intervals; the verdict
+        # column each track wrote must agree with it.
+        results = genlib.Results(RESULTS)
+        device = {"reduces device I/Os": "better", "increases device I/Os": "worse",
+                  "moves fewer blocks": "better", "moves more blocks": "worse",
+                  "loses to no prefetch": "worse"}
+        pairs = []
+        clf = [d for d in decisions.classifier_decisions(results, None)
+               if d.rule not in ("CLF0", "claim")]
+        pairs += zip(clf, results.rows("classifier/router_comparisons.csv"))
+        synthetic = [r for r in results.rows("classifier/synthetic_eval.csv")
+                     if r["delta_accuracy"] is not None]
+        pairs += [(d, dict(r, verdict=r["verdict_vs_gnb"])) for d, r in zip(
+            [d for d in decisions.classifier_decisions(results, None) if d.rule == "CLF0"],
+            synthetic)]
+        pairs += zip(decisions.hindsight_decisions(results, None),
+                     results.rows("hindsight/comparisons.csv"))
+        wrk = [d for d in decisions.web_rankers_decisions(results, None)
+               if d.rule.startswith(("S", "K"))]
+        pairs += zip(wrk, [r for r in results.rows("web_rankers/comparisons.csv")
+                           if r["split"] == "test"])
+        msrc = [r for r in results.rows("msrc_samples/classifier_deltas.csv")
+                if r["label_rule"] == "majority" and r["trace"] in decisions.MSRC_SCOPES
+                and r["protocol"] in decisions.MSRC_PROTOCOLS]
+        pairs += zip(decisions.msrc_decisions(results, None), msrc)
+        self.assertGreater(len(pairs), 500)
+        for d, row in pairs:
+            with self.subTest(key=d.key):
+                self.assertEqual(device.get(d.verdict, d.verdict), row["verdict"])
 
     def test_the_counts_the_prose_states(self):
         def count(rule, prefix, verdict=None):

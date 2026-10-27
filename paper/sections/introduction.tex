@@ -22,10 +22,13 @@ lever and depth, feedback and freshness the large ones. Every claim below is
 the verdict of one of those rules, computed from the results files by a script
 and listed in Table~\ref{tab:t9_decisions} in the appendix.
 
-The hypothesis held only in part. Every learned predictor we tried lost to its
-simple, fair baseline: the class router to sequential read-ahead, the
+The hypothesis held only in part. No learned predictor we tried beat its
+simple, fair baseline: the class router lost to sequential read-ahead, the
 GPU-trained depth controller to a validation-chosen fixed depth, the logistic
-ranker to transition counts, and the GRU sequence model to online counts. How
+ranker to transition counts, and the GRU sequence model to online counts. A
+follow-up study asked whether a better learner would change that; it did not,
+and its one gain, a tuned ranker's for the web controller, was small next to
+freshness. How
 much to prefetch, and how fresh the statistics were, moved the simulated hit
 ratio by far more. Yet neither study's ordering rule calls the predictor the
 smallest lever. On disk, the feedback gate, which we expected to matter,
@@ -50,11 +53,16 @@ Our contributions are:
 \item A live HTTP replay of the validated web policies over loopback with an
   emulated network, with \liveParityMismatches{} mismatches between the live
   and simulated cache counters.
+\item A tuned comparison of \clfSynFamilies{} classifier families for the
+  disk router, a hindsight-labelled router that can choose read-ahead depth,
+  and tuned web rankers, which locates the limit in the router's action space
+  and in index freshness rather than in the choice of learner.
 \end{itemize}
 
 Section~\ref{sec:related} places the work. Section~\ref{sec:model} defines the
 shared model, Section~\ref{sec:systems} the systems and
 Section~\ref{sec:method} the protocol. Sections~\ref{sec:disk}--\ref{sec:live}
-report the four studies, Section~\ref{sec:discussion} compares the domains,
+report the four studies, Section~\ref{sec:classifiers} asks whether a better
+learner helps, Section~\ref{sec:discussion} compares the domains,
 and Sections~\ref{sec:threats} and~\ref{sec:conclusion} give the threats and
 conclusions.

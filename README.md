@@ -97,6 +97,28 @@ an emulated network (RTT 50 ms, 10 Mbps, assumed object sizes) the online-index
 controller saved about 8 ms per view at 2.20x the bytes, where fixed depth 4
 saved about the same at 6.71x (W4).
 
+**Would a better learner help?** (`results/classifier/`, `results/hindsight/`,
+`results/web_rankers/`; pre-registered after the results above were known;
+D22, W5; the paper's section "Can a Better Learner Help?"):
+
+- **Disk router.** 13 tuned scikit-learn families plus the shipped online
+  GNB and QDA, each routing the unchanged `adaptive` mode on the second
+  slice (C3) of 19 traces: none beats `sequential` (no
+  difference detected at 1 MiB, worse at 64 MiB for every one), and every one
+  issues more device I/Os than `none`. Some beat the shipped GNB slightly
+  (the random forest at 1 MiB, 8 of 14 at 64 MiB). The router's four classes
+  prefetch at most two blocks, so the classifier cannot matter much.
+- **Depth as an action.** A router trained on real-trace hindsight labels to
+  pick `none`, `sequential` or `deep@{8,32,256}` per window is level with a
+  fixed depth chosen per trace at 1 MiB and worse by a negligible margin at
+  64 MiB; its large gain over `sequential` is the gain of depth, at several
+  times the blocks moved. `linux_ra@256` still does the least device work.
+- **Web ranker.** A tuned MLP ranker improves the validated controller's
+  U(0.01) slightly at capacities 8 and 32, yet no ranker beats transition
+  top-1 at depth 1 and all stay far below online counts.
+- Synthetic accuracies (`results/classifier/synthetic_eval.csv`) are
+  reported separately and never as accuracy on real traces.
+
 ## Install
 
 Python 3.10 or newer. The disk core needs only the standard library.
@@ -148,7 +170,7 @@ disk except the SSD and the HDD `sdb`.
 
 [`notebooks/walkthrough.ipynb`](notebooks/walkthrough.ipynb) goes through
 every experiment in the order of the talk: the data, E1-E6, every
-pre-registered decision, and the classifier studies once their results land.
+pre-registered decision, and the classifier studies (CLF, HSR, WRK) and E7.
 Each table and figure in it is computed from `results/` by a code cell, and
 the verdict columns come from `paper/decisions.py`, the same code that writes
 the paper's verdicts. The notebook is committed with its outputs, so it reads
@@ -162,13 +184,13 @@ rebuild it with `reproduce.py notebook`.
 
 | Path | What |
 |---|---|
-| `src/adaptive_prefetch/` | disk study: trace loaders, causal simulator (14 modes), multi-corpus sweep and analysis, learned depth, LSTM, `realio/` real-device testbed |
+| `src/adaptive_prefetch/` | disk study: trace loaders, causal simulator (15 modes), multi-corpus sweep and analysis, learned depth, LSTM, the classifier zoo (`clfzoo/`), the hindsight router, `realio/` real-device testbed |
 | `src/webprefetch/` | web study: data preparation, scorers, browser-cache core, benchmark, GRU, demo, `live/` HTTP replay |
 | `src/prefetch_common/` | `U(c)`, bootstraps, provenance, results schemas |
 | `reproduce.py`, `repro/` | one reproduce module per study |
 | `results/` | **tracked** aggregates the paper reads, one directory per study, each with `PREREGISTERED.md` and `provenance.json`; `results/pivot_original/` is the web branch's original run, verbatim |
 | `notebooks/` | the results walkthrough notebook and the script that builds and executes it |
-| `paper/` | IEEEtran paper, generators for `numbers.tex`, tables and figures, `check.py` |
+| `paper/` | IEEEtran paper, generators for `numbers.tex`, tables and figures, `check.py`; the whole paper as one file: `main_flat.tex` (LaTeX) and `paper_full.txt` (plain text) |
 | `presentation/` | Beamer deck reusing the paper's numbers and figures |
 | `docs/` | architecture, metrics, reproduction, decision logs, presentation outline |
 | `tests/` | the unit suite and synthetic results fixtures |
@@ -185,8 +207,8 @@ rebuild it with `reproduce.py notebook`.
 | [docs/architecture.md](docs/architecture.md) | how every component works, module by module, and the data flow |
 | [docs/METRICS.md](docs/METRICS.md) | the definition and limits of every metric |
 | [docs/REPRODUCE.md](docs/REPRODUCE.md) | every command, runtime, requirement and output |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | disk decision log: D1-D17 (history on `main`), D18-D21 (corrections from the multi-corpus and real-device results) |
-| [docs/web/WEB_DECISIONS.md](docs/web/WEB_DECISIONS.md) | web decision log W0-W4 |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | disk decision log: D1-D17 (history on `main`), D18-D21 (corrections from the multi-corpus and real-device results), D22 (the classifier study) |
+| [docs/web/WEB_DECISIONS.md](docs/web/WEB_DECISIONS.md) | web decision log W0-W5 |
 | [docs/PRESENTATION.md](docs/PRESENTATION.md) | slide-by-slide outline, speaker notes and viva questions |
 | [AGENTS.md](AGENTS.md) | the invariants and claim rules for anyone (or any agent) changing the code |
 | [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md) | the work plan this branch was built to |

@@ -2,7 +2,7 @@
 
 | File | What |
 |---|---|
-| `slides.tex` | the Beamer deck: 15 slides, one per section of [`docs/PRESENTATION.md`](../docs/PRESENTATION.md), with `\note{}` speaker notes |
+| `slides.tex` | the Beamer deck: 16 slides, one per section of [`docs/PRESENTATION.md`](../docs/PRESENTATION.md), with `\note{}` speaker notes |
 | [`docs/PRESENTATION.md`](../docs/PRESENTATION.md) | the same talk in full: what each slide shows, what to say, the demo, and the viva questions with answers |
 
 The deck has no numbers or figures of its own. Every number is a macro from

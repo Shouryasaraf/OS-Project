@@ -1,6 +1,6 @@
 # Presentation outline, speaker notes and viva preparation
 
-This is the talk for the final review: 15 slides covering both studies, each
+This is the talk for the final review: 16 slides covering both studies, each
 with the figure it shows and what to say, followed by the questions an
 examiner is most likely to ask and honest answers. The Beamer deck that
 implements it is `presentation/slides.tex` (compile on Overleaf; see
@@ -81,7 +81,7 @@ offset in bytes and, for two corpora, a volume tag in the high bits. Getting
 this wrong changes hit ratios a lot, so the loader detects units per file
 and every result names its reconstruction rule (`docs/DECISIONS.md` D20).
 
-### 5. The disk simulator and its 14 policies
+### 5. The disk simulator and its 14 policies (15 with the later `routed`)
 
 **Figure:** `paper/figures/f1_schematic.pdf`.
 
@@ -260,7 +260,31 @@ With a FIFO link (SSD store, one repetition), depth 8's saving was no longer
 detectable: its interval includes 0, because speculative bytes queued in
 front of demand fetches. With demand priority it saved time (W4).
 
-### 15. Across both domains, and what we claim
+### 15. Would a better learner help?
+
+**Figure:** `paper/figures/f9_action_space.pdf` (tables
+`paper/tables/t11_classifier_router.tex`, `t12_hindsight.tex`,
+`t13_web_rankers.tex`).
+
+**On the slide:** the three follow-up studies, pre-registered after E1-E6
+were known. The tuned classifiers in the router beat `sequential` at neither
+capacity and all issue more device I/Os than `none`; a router given depth as
+an action is level with a fixed depth chosen per trace (1 MiB) and worse by a
+negligible margin (64 MiB); a tuned MLP ranker raises the web controller's
+utility slightly but stays far below online counts. All figures are macros
+from `paper/numbers.tex` (`\pnum`).
+
+**Say:** The obvious objection to our disk result is "use a better
+classifier". We tried thirteen tuned families. None helped the router beat
+two-block read-ahead, because the router's four classes each prefetch at
+most two blocks: the classifiers disagree with GNB on most windows and the
+hit ratio barely moves. When we let a router choose read-ahead depth, trained
+on what would have worked in hindsight, it matched a fixed depth chosen per
+trace and did not beat it, at several times the blocks moved; the Linux
+window still did the least device work. On the web a better ranker helped the
+controller a little, and freshness still decided (D22, W5).
+
+### 16. Across both domains, and what we claim
 
 **Figure:** `paper/figures/f8_utility_envelopes.pdf`.
 
@@ -302,6 +326,31 @@ call the predictor the smallest lever. On disk the predictor is smaller than dep
 window growth, but at 64 MiB the feedback gate's effect is smaller than the
 predictor's, so "the predictor is the smallest lever" is not written for disk
 (`docs/DECISIONS.md` D20).
+
+**Q: Why not just use a better classifier?**
+We did (D22). Thirteen scikit-learn families, tuned by random search on
+training seeds only, replaced GNB in the router. Some beat GNB slightly (the
+random forest at 1 MiB, more families at 64 MiB), but none made the router
+beat `sequential`, and every one issued more device I/Os than `none`. The
+reason is the action space: each class maps to at most two blocks of
+read-ahead, so even a perfect classifier is capped near `sequential`. We then
+gave a router read-ahead depth as an action and real-trace hindsight labels;
+it matched a fixed depth chosen per trace instead of beating it. The limit is
+what the router can do, not how well it classifies. These studies were
+pre-registered after E1-E6, which we state.
+
+**Q: Then is GNB the best classifier?**
+On real-trace routing, no family is clearly best: GNB had the lowest
+cross-validation score of the hindsight families, yet the best family did no
+better than a fixed depth. On synthetic windows the tree models and boosting
+match GNB under the block-size shift and beat it on heavy phase blends, but
+those are synthetic, optimistic accuracies, never accuracy on real traces.
+
+**Q: Did any learned predictor help?**
+One, a little: on the web, the validation-selected MLP ranker raised the
+adaptive controller's utility at both replayed capacities (W5). Its hit ratio
+at capacity 8 is lower, it does not beat transition top-1 at depth 1, and
+online counts stay far ahead.
 
 **Q: Is your classifier's accuracy on real traces good?**
 We do not know, and we never claim it. The real traces carry no workload

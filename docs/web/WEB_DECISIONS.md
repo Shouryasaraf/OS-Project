@@ -243,3 +243,35 @@ SSD-store rows whose foreign I/O exceeds 1% are flagged in
 rows (no foreign I/O) are the headline. The model-ideal column is what an
 analytic simulator without contention would predict; the difference is the
 link queue, disk time and timer lag that `live_report.md` decomposes.
+
+## W5. Better rankers help the controller a little; freshness still decides (track WRK)
+
+**Why it exists.** The disk classifier study (D22) asked whether a better
+learner fixes the disk router; WRK asks the same of the web ranker, the
+"predictor" lever of E4. It was pre-registered after E1-E6 were known
+(`results/web_rankers/PREREGISTERED.md`). Five families (`logistic_tuned`,
+`hgb`, `rf`, `et`, `mlp`) rank the shipped candidates with the shipped
+features; hyperparameters are chosen by random search on a split-2 sample,
+policies per capacity on the whole of split 2, and split 3 is replayed once.
+The write-up is `docs/web/WEB_RANKERS.md`.
+
+**What was found** (simulated; `c` and object sizes assumed).
+
+<!-- source: results/web_rankers/comparisons.csv comparison=S1 -->
+- S1 (primary): validation chose `mlp` at both capacities, and its validated
+  adaptive controller beats logistic's on U(0.01): +0.00154 at capacity 8 and
+  +0.00147 at capacity 32 (both intervals above 0). At capacity 8 its hit
+  ratio is lower (-0.00163), because the controller it feeds prefetches less.
+<!-- source: none -->
+- K1: `hgb`, `rf`, `et` and `mlp` are better rankers than logistic on both
+  hit@1 and MRR@8 (decision rule 1); `logistic_tuned` is not, and its
+  class-balanced weights make the adaptive controller worse (K3).
+- K4/K5: no family beats transition top-1 at depth 1, and every static
+  ranker stays far below online counts (W2's freshness gap is not closed).
+
+**What this changes.** This is the only learned predictor in the project
+that improves its controller, and only slightly; the paper states it in the
+words rule 2 allows ("a tuned alternative ranker improves the controller")
+and never as a hit-ratio gain at capacity 8. The pivot branch's ranker
+(`results/pivot_original/`) is the shipped logistic ranker these families are
+compared against; nothing in `results/pivot_original/` changed.

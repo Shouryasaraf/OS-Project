@@ -776,6 +776,226 @@ def t8_cross_domain(results, out):
 # T9: the pre-registered decisions
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# T10-T13: the classifier study (tracks CLF, HSR, WRK), after E1-E6
+# ---------------------------------------------------------------------------
+
+def _marked(text: str, verdict: str | None) -> str:
+    """A number with its verdict as a superscript, inside the number's own
+    math (``$x$$^{+}$`` would open display math): + better, - worse."""
+    mark = {"better": "^{+}", "worse": "^{-}"}.get((verdict or "").split(" (")[0], "")
+    if not mark:
+        return text
+    return text[:-1] + mark + "$" if text.endswith("$") else text + f"${mark}$"
+
+
+#: Part 1 columns of Table T10, in the order of the pre-registration.
+T10_SETTINGS = (("baseline", "in_regime", "base."), ("noisy", "in_regime", "noisy"),
+                ("overlap", "in_regime", "ovl."), ("overlap2", "in_regime", "ovl.\\,2"),
+                ("realistic", "in_regime", "real."), ("transition", "in_regime", "trans."),
+                ("transition_heavy", "in_regime", "trans.\\ heavy"),
+                ("transfer", "1->1", "1$\\to$1"), ("transfer", "1->8", "1$\\to$8"),
+                ("transfer", "1->32", "1$\\to$32"), ("transfer", "1->128", "1$\\to$128"))
+
+
+def t10_classifier_zoo(results, out):
+    caption = ("Classifier zoo on synthetic windows (track CLF, Part 1; \\emph{synthetic} test "
+               "accuracy, mean over independent test seeds, never an accuracy on real traces). "
+               "Every tuned family was selected by random search on training seeds only; "
+               "\\texttt{gnb\\_online} and \\texttt{qda\\_online} are the shipped models, "
+               "untuned. $^{+}$/$^{-}$: better/worse than \\texttt{gnb\\_online} by the paired "
+               "bootstrap over seed pairs; no mark: no difference detected. Transfer: trained "
+               "on single-block requests, tested at the request size shown (block-size "
+               "covariate shift). The context features come from earlier windows of the same "
+               "class, which favours the phase-blend settings.")
+    rows = results.rows("classifier/synthetic_eval.csv", out)
+    if not rows:
+        return placeholder("t10_classifier_zoo", caption, out, wide=True)
+    verdicts = {d.key: d.verdict for d in _decisions().classifier_decisions(results, None)}
+    cell = {(r["setting"], r["condition"], r["family"]): r for r in rows}
+    families = list(dict.fromkeys(r["family"] for r in rows))
+    table = Table("l" + "r" * len(T10_SETTINGS),
+                  ["Family"] + [label for _, _, label in T10_SETTINGS])
+    for family in families:
+        cells = []
+        for setting, condition, _ in T10_SETTINGS:
+            row = cell.get((setting, condition, family))
+            if row is None:
+                cells.append(DASH)
+                continue
+            key = ("clfZero" + g.camel(setting) + ("" if condition == "in_regime" else
+                                                   g.camel(condition.replace("->", " to ")))
+                   + g.camel(family))
+            cells.append(_marked(fnum(row["accuracy"], 3), verdicts.get(key)))
+        table.row([esc(family)] + cells)
+    pairs = sorted({r["n_seed_pairs"] for r in rows})
+    return float_env("t10_classifier_zoo", caption, table.latex(), wide=True, out=out, dense=True,
+                     note=f"{'/'.join(fcount(n) for n in pairs)} seed pairs per cell; "
+                          f"{_resamples_of(rows_reps(results, out))} bootstrap resamples.")
+
+
+def rows_reps(results, out):
+    rows = results.rows("classifier/router_comparisons.csv", out, required=False) or []
+    return sorted({r["reps"] for r in rows})
+
+
+def _resamples_of(reps) -> str:
+    return "/".join(fcount(r) for r in reps) or DASH
+
+
+#: Row order of Table T11: the references, the shipped GNB, then the families.
+T11_FIRST = ("none", "sequential", "deep@8", "linux_ra@256", "adaptive_evidence", "gnb_online",
+             "qda_online")
+
+
+def t11_classifier_router(results, out):
+    caption = ("Routed \\texttt{adaptive} with each classifier on real traces (track CLF, Part 2; "
+               "simulated LRU cache, C3 slice 2, writes replay as reads). Hit ratio is the mean "
+               "over traces; $\\Delta$ in pp with the paired-bootstrap interval over traces, "
+               "$^{+}$/$^{-}$ when the paired and the corpus-cluster interval agree on "
+               "better/worse; device-I/O and blocks-moved ratios are means over traces of the "
+               "policy's count over \\texttt{none}'s; agreement is the share of windows given "
+               "the shipped GNB's class.")
+    summary = results.rows("classifier/router_summary.csv", out)
+    comparisons = results.rows("classifier/router_comparisons.csv", out)
+    if not summary or not comparisons:
+        return placeholder("t11_classifier_router", caption, out, wide=True)
+    index = {(r["capacity"], r["policy"], r["baseline"], r["metric"]): r for r in comparisons}
+    verdicts = {d.key: d.verdict for d in _decisions().classifier_decisions(results, None)}
+    table = Table("lrrrrrrr", ["Policy", "Hit (\\%)", "$\\Delta$ vs sequential",
+                               "$\\Delta$ vs gnb\\_online", "Dev.\\ I/O", "Blocks", "Prec.\\ (\\%)",
+                               "Agree"])
+    order = {p: i for i, p in enumerate(T11_FIRST)}
+    for capacity in sorted({r["capacity"] for r in summary}):
+        items = [r for r in summary if r["capacity"] == capacity]
+        table.group(f"{g.capacity_label(capacity)} cache ({fcount(capacity)} blocks), n = "
+                    f"{fcount(max(r['n_traces'] for r in items))} traces")
+        word = g.disk_capacity_word(capacity)
+        for row in sorted(items, key=lambda r: (order.get(r["policy"], len(order)), 0)):
+            cells = [esc(row["policy"]), fnum(100 * row["mean_hit_ratio"], 2)]
+            for baseline, rule in (("sequential", "One"), ("gnb_online", "Two")):
+                c = index.get((capacity, row["policy"], baseline, "hit_ratio"))
+                cells.append(DASH if c is None else _marked(
+                    ci_cell(c["estimate"], c["ci_lo"], c["ci_hi"]),
+                    verdicts.get("clf" + rule + g.camel(row["policy"]) + word)))
+            cells += [fratio(row["device_io_ratio"]), fratio(row["blocks_moved_ratio"]),
+                      fnum(None if row["mean_precision"] is None
+                           else 100 * row["mean_precision"], 1),
+                      fnum(row["mean_agreement_with_gnb"], 2)]
+            table.row(cells)
+    return float_env("t11_classifier_router", caption, table.latex(), wide=True, out=out,
+                     dense=True, note=f"Bootstrap: {_resamples_of(rows_reps(results, out))} "
+                                      "resamples, seed 42.")
+
+
+#: Device-work rows of Table T12 (comparison D), the policies the text names.
+T12_DEVICE = ("routed_hit", "routed_u0.5", "routed_dev", "vcf_hit", "vcf_dev", "adaptive",
+              "deep@256", "linux_ra@256", "oracle_hit")
+
+
+def t12_hindsight(results, out):
+    caption = ("Hindsight-labelled router with read-ahead depth in its action space (track HSR; "
+               "simulated, C3 slice 2, trained and selected on slice 1 only). VCF: the fixed "
+               "action with the best slice-1 objective per trace; GVCF: one fixed action for "
+               "all traces; \\texttt{oracle}: the slice-2 hindsight labels, a reference under "
+               "the trajectory approximation and never a policy. $\\Delta$ in pp, ratios as "
+               "multipliers; paired and corpus-cluster bootstrap intervals over traces. "
+               "W/L/T: traces where the policy is above/below/equal to the baseline.")
+    rows = results.rows("hindsight/comparisons.csv", out)
+    if not rows:
+        return placeholder("t12_hindsight", caption, out, wide=True)
+    verdicts = {d.key: d.verdict for d in _decisions().hindsight_decisions(results, None)}
+    table = Table("llrrrl", ["Rule", "Comparison", "Paired", "Cluster", "W/L/T", "Verdict"])
+
+    def key(row):
+        return ("hsr" + g.camel(row["comparison"]) + g.camel(row["metric"])
+                + g.camel(row["policy"]) + "Vs" + g.camel(row["baseline"])
+                + g.disk_capacity_word(row["capacity"]))
+
+    for capacity in sorted({r["capacity"] for r in rows}):
+        items = [r for r in rows if r["capacity"] == capacity]
+        table.group(f"{g.capacity_label(capacity)} cache ({fcount(capacity)} blocks), n = "
+                    f"{fcount(max(r['n'] for r in items))} traces")
+        for row in items:
+            if row["comparison"] == "D" and row["policy"] not in T12_DEVICE:
+                continue
+            ratio = row["statistic"] == "ratio"
+            formatter = fratio if ratio else t9_fine
+            if row["comparison"] == "D":
+                what = (f"{esc(row['policy'])} $/$ none, "
+                        + ("device I/Os" if row["metric"] == "device_ios" else "blocks moved"))
+            else:
+                metric = {"hit_ratio": "hit", "u0.5": "U(0.5)",
+                          "device_ios": "device I/Os"}.get(row["metric"], esc(row["metric"]))
+                what = f"{esc(row['policy'])} $-$ {esc(row['baseline'])}, {metric}"
+            table.row([esc(row["comparison"]), what,
+                       ci_cell(row["estimate"], row["ci_lo"], row["ci_hi"], formatter),
+                       ci_cell(row["cluster_estimate"], row["cluster_ci_lo"],
+                               row["cluster_ci_hi"], formatter),
+                       f"{fcount(row['wins'])}/{fcount(row['losses'])}/{fcount(row['ties'])}",
+                       _tex(verdicts.get(key(row), DASH).replace(
+                           " (paired interval only; not robust to corpus clustering)",
+                           " (paired only)"))])
+    return float_env("t12_hindsight", caption, table.latex(), wide=True, out=out, dense=True)
+
+
+#: Row order of Table T13.
+T13_SCORERS = ("logistic", "logistic_tuned", "hgb", "rf", "et", "mlp", "trans_s0", "trans_online")
+
+
+def t13_web_rankers(results, out):
+    caption = ("Web ranker alternatives (track WRK; RetailRocket test split, simulated, "
+               "per-session cache, assumed cost). Tuning: random-search trials and the selected "
+               "trial's MRR@8 on the split-2 tuning sample. Ranking: test hit@1 and MRR@8 over "
+               "eligible next views, and the K1 difference in MRR@8 from the shipped logistic "
+               "ranker. K3: each scorer's validated adaptive controller minus logistic's, "
+               "$\\Delta$U(c) per view at the pre-registered c. K4: fixed depth 1 minus transition top-1; K5: fixed "
+               "depth 4 minus online counts; $\\Delta$ hit ratio. All $\\Delta$ in pp with "
+               "paired session-bootstrap intervals; $^{+}$/$^{-}$ better/worse. Scoring time "
+               "per request is wall time on a contended shared host, never a cost.")
+    comparisons = results.rows("web_rankers/comparisons.csv", out)
+    ranking = results.rows("web_rankers/ranking_metrics.csv", out)
+    tuning = results.rows("web_rankers/tuning.csv", out)
+    if not comparisons or not ranking:
+        return placeholder("t13_web_rankers", caption, out, wide=True)
+    index = {(r["comparison"], r["scorer"], r["metric"], r["capacity"], r["baseline_policy"]): r
+             for r in comparisons if r["split"] == "test"}
+    levels = {(r["split"], r["scorer"]): r for r in ranking}
+    table = Table("l" + "r" * 12, [
+        ["", r"\multicolumn{2}{c}{Tuning}", r"\multicolumn{3}{c}{Test ranking}",
+         r"\multicolumn{2}{c}{K3 $\Delta$U(0.01)}", r"\multicolumn{2}{c}{K4 $\Delta$hit}",
+         r"\multicolumn{2}{c}{K5 $\Delta$hit}", ""],
+        ["Scorer", "Trials", "MRR@8", "Hit@1 (\\%)", "MRR@8 (\\%)", "K1 $\\Delta$MRR@8",
+         "cap 8", "cap 32", "cap 8", "cap 32", "cap 8", "cap 32", "$\\mu$s/req."]])
+
+    def delta(comparison, scorer, metric, capacity, baseline_policy=None):
+        for (c, s, mt, cap, base), row in index.items():
+            if (c, s, mt, cap) == (comparison, scorer, metric, capacity) and (
+                    baseline_policy is None or base == baseline_policy):
+                return _marked(ci_cell(row["estimate"], row["ci_lo"], row["ci_hi"]),
+                               _decisions().one_interval_verdict(row["ci_lo"], row["ci_hi"]))
+        return DASH
+
+    for scorer in T13_SCORERS:
+        test = levels.get(("test", scorer))
+        if test is None:
+            continue
+        searched = [r for r in tuning or () if r["family"] == scorer and r["trial"] >= 0]
+        chosen = [r for r in tuning or () if r["family"] == scorer and r["selected"]]
+        table.row([esc(scorer), fcount(len(searched)) if searched else DASH,
+                   fnum(chosen[0]["mrr_at_8"], 4) if chosen else DASH,
+                   fnum(100 * test["hit_at_1"], 2), fnum(100 * test["mrr_at_8"], 2),
+                   delta("K1", scorer, "mrr_at_8", None),
+                   delta("K3", scorer, "utility_per_view", 8),
+                   delta("K3", scorer, "utility_per_view", 32),
+                   delta("K4", scorer, "hit_ratio", 8), delta("K4", scorer, "hit_ratio", 32),
+                   delta("K5", scorer, "hit_ratio", 8), delta("K5", scorer, "hit_ratio", 32),
+                   fnum(test["request_us"], 0)])
+    reps = sorted({r["reps"] for r in comparisons})
+    return float_env("t13_web_rankers", caption, table.latex(), wide=True, out=out, dense=True,
+                     note=f"Bootstrap: {_resamples_of(reps)} session resamples, seed 42.")
+
+
 # Named and traced (genlib.traced_formatter) so the claims ledger can
 # re-apply them to the raw values of Table T9.
 @g.traced_formatter
@@ -793,10 +1013,17 @@ def t9_signed2(v) -> str:
     return fnum(v, 2, sign=True)
 
 
+@g.traced_formatter
+def t9_fine(v) -> str:
+    return fpp(v, 3)
+
+
 def _interval_text(label, estimate, lo, hi, statistic) -> str:
-    formatter = {"difference": fpp, "ratio": fratio, "absolute": t9_absolute,
-                 "us": t9_signed0, "ms": t9_signed2, "rho": t9_signed2}[statistic]
-    unit = {"difference": " pp", "absolute": " pp", "us": r" $\mu$s",
+    formatter = {"difference": fpp, "difference_fine": t9_fine, "ratio": fratio,
+                 "absolute": t9_absolute, "us": t9_signed0, "ms": t9_signed2,
+                 "rho": t9_signed2}[statistic]
+    unit = {"difference": " pp", "difference_fine": " pp", "absolute": " pp",
+            "us": r" $\mu$s",
             "ms": " ms"}.get(statistic, "")
     parts = []
     if estimate is not None:
@@ -824,7 +1051,9 @@ def _tally(decisions) -> str:
 
 #: The files the decisions rest on (paper/decisions.py reads them optionally).
 T9_INPUTS = ("disk/deltas.csv", "realio/realio_summary.csv", "web/comparisons.csv",
-             "web/decomposition.csv", "live/live_metrics.csv")
+             "web/decomposition.csv", "live/live_metrics.csv",
+             "classifier/router_comparisons.csv", "hindsight/comparisons.csv",
+             "web_rankers/comparisons.csv", "msrc_samples/classifier_deltas.csv")
 
 
 def t9_decisions(results, out):
@@ -833,7 +1062,8 @@ def t9_decisions(results, out):
                "are simulated; real-device and live rows are measured (live: loopback with an "
                "emulated network and assumed object sizes). Intervals are 95\\%: disk paired "
                "and corpus-cluster bootstraps over traces; web and live paired session "
-               "bootstraps; real device Student-t over three repeats.")
+               "bootstraps; real device Student-t over three repeats. The classifier-study "
+               "groups (CLF, HSR, WRK, E7) were pre-registered after E1--E6 were known.")
     decisions = _decisions().decide(results, out)
     if not decisions:
         out.missing.extend(f for f in T9_INPUTS if not results.exists(f))
@@ -963,12 +1193,106 @@ def t9_decisions(results, out):
         for d in by.get(("live", "H4"), ()):
             table.row(["H4", f"{_tex(d.comparison)} ({esc(d.scope)})", "descriptive",
                        _tex(d.verdict)])
+    _t9_classifier_study(table, by, single)
     return float_env("t9_decisions", caption, table.latex(), wide=True, out=out, dense=True)
+
+
+def _arrow(text: str) -> str:
+    """'1->8' as '1$\\to$8' (a bare > prints as another glyph in OT1)."""
+    return text.replace("-&gt;", "->").replace("->", "$\\to$")
+
+
+def _tally_inline(decisions) -> str:
+    """A tally as 'better 3, worse 7' (for several tallies in one cell)."""
+    return _tally(decisions).replace(": ", " ").replace("; ", ", ")
+
+
+def _t9_classifier_study(table, by, single) -> None:
+    """Table T9's rows for the classifier study (CLF, HSR, WRK) and E7."""
+    reference = _decisions().CLF_REFERENCE_POLICIES
+    if ("classifier", "CLF0") in by:
+        table.group("Classifier zoo, synthetic windows (CLF Part 1; accuracy vs gnb\\_online)")
+        scopes = list(dict.fromkeys(d.scope for d in by[("classifier", "CLF0")]))
+        for scope in scopes:
+            items = [d for d in by[("classifier", "CLF0")] if d.scope == scope]
+            named = ", ".join(d.comparison.split(" - ")[0] for d in items if d.verdict == "better")
+            table.row(["CLF0", f"every family $-$ gnb\\_online ({_arrow(esc(scope))}, "
+                       f"{fcount(len(items))} families)", _tally(items),
+                       "better: " + (esc(named) or "none")])
+    if any(k[0] == "classifier" and k[1] != "CLF0" for k in by):
+        table.group("Classifier router on real traces, simulated (CLF Part 2; C3 slice 2)")
+        for rule, what in (("CLF1", "routed classifier $-$ sequential, hit ratio"),
+                           ("CLF2", "routed classifier $-$ gnb\\_online, hit ratio"),
+                           ("CLF3", "routed classifier $/$ none, device I/Os"),
+                           ("CLF4", "routed classifier $/$ none, blocks moved")):
+            items = by.get(("classifier", rule), ())
+            for scope in dict.fromkeys(d.scope for d in items):
+                routed = [d for d in items if d.scope == scope
+                          and d.comparison.split(" - ")[0].split(" / ")[0] not in reference]
+                good = ("better", "reduces device I/Os", "moves fewer blocks")
+                named = ", ".join(d.comparison.split(" - ")[0].split(" / ")[0] for d in routed
+                                  if d.verdict in good)
+                table.row([rule, f"each {what} ({esc(scope)}, {fcount(len(routed))} "
+                           "classifiers)", _tally(routed),
+                           ("better: " + esc(named)) if named else "none better"])
+            for d in items:
+                if rule == "CLF1" and d.comparison.split(" - ")[0] in reference:
+                    single(d)
+        for d in by.get(("classifier", "claim"), ()):
+            table.row(["claim", f"{_tex(d.comparison)} ({esc(d.scope)})", _tex(d.note),
+                       _tex(d.verdict)])
+    if any(k[0] == "hindsight" for k in by):
+        table.group("Hindsight router, simulated (HSR; C3 slice 2, trained on slice 1)")
+        for rule in ("H1", "H2", "H3", "H4", "H5", "H6", "H7", "S1", "S2", "R"):
+            for d in by.get(("hindsight", rule), ()):
+                single(d)
+        items = by.get(("hindsight", "D"), ())
+        for scope in dict.fromkeys(d.scope for d in items):
+            for word, good in (("device I/Os", "reduces device I/Os"),
+                               ("blocks moved", "moves fewer blocks")):
+                group = [d for d in items if d.scope == scope and d.comparison.endswith(word)]
+                named = ", ".join(d.comparison.split(" / ")[0] for d in group
+                                  if d.verdict == good)
+                table.row(["D", f"every policy $/$ none, {word} ({esc(scope)}, "
+                           f"{fcount(len(group))} policies)", _tally(group),
+                           (("reduce: " if word == "device I/Os" else "move fewer: ")
+                            + (esc(named) or "no policy"))])
+    if any(k[0] == "web_rankers" for k in by):
+        table.group("Web rankers, simulated (WRK; RetailRocket test split, per-session cache)")
+        for d in by.get(("web_rankers", "S1"), ()):
+            single(d)
+        for rule in ("K1", "K2", "K3", "K4", "K5", "K6"):
+            items = by.get(("web_rankers", rule), ())
+            if items:
+                table.row([rule, f"secondary comparisons ({fcount(len(items))} rows; Table~"
+                           "\\ref{tab:t13_web_rankers})", _tally(items), "see the rule rows"])
+        for rule in ("rule 1", "rule 2", "rule 3"):
+            items = by.get(("web_rankers", rule), ())
+            for verdict in dict.fromkeys(d.verdict for d in items):
+                named = [d.scope for d in items if d.verdict == verdict]
+                table.row([esc(rule), _tex(items[0].comparison if rule == "rule 2"
+                                           else next(d.comparison for d in items
+                                                     if d.verdict == verdict)),
+                           esc("; ".join(named)), _tex(verdict)])
+    if any(k[0] == "msrc_samples" for k in by):
+        table.group("MSRC light sample (E7; seven size-selected files, not representative; "
+                    "balanced accuracy on the seq flag)")
+        for rule, baseline in (("M1", "shipped GNB"), ("M2", "route\\_window")):
+            items = by.get(("msrc_samples", rule), ())
+            for protocol in dict.fromkeys(d.scope.split(", ")[1] for d in items):
+                parts = []
+                for trace in dict.fromkeys(d.scope.split(", ")[0] for d in items):
+                    group = [d for d in items if d.scope == f"{trace}, {protocol}"]
+                    if group:
+                        parts.append(f"{esc(trace)} ({_tally_inline(group)})")
+                table.row([rule, f"each classifier $-$ {baseline} ({esc(protocol)})",
+                           "; ".join(parts), "descriptive; no choice made"])
 
 
 TABLES = (t1_datasets, t1b_hardware, t2_disk_main, t2b_disk_by_corpus, t2c_learned_depth,
           t3_realio, t3b_realio_summary, t4_web_dataset, t5_web_decomposition,
-          t6_web_comparisons, t7_live, t7b_live_ablation, t8_cross_domain, t9_decisions)
+          t6_web_comparisons, t7_live, t7b_live_ablation, t8_cross_domain, t9_decisions,
+          t10_classifier_zoo, t11_classifier_router, t12_hindsight, t13_web_rankers)
 
 
 def generate(results, paper_dir: Path = g.PAPER_DIR) -> list:

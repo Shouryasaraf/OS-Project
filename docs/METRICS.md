@@ -83,6 +83,24 @@ mask never ranks an item already in the window, so its `hit_at_1` and
 `mrr_at_8` are not comparable with an unmasked ranker's; compare sequence
 models on the `novel_*` columns.
 
+## Classifier metrics (classifier study, after E1-E6)
+
+| Metric | Definition | Where |
+|---|---|---|
+| **synthetic accuracy, macro-F1** | share of synthetic test windows given their generating class, and the mean of the four per-class F1 scores; mean over independent (train, test) seed pairs. **Synthetic only**: real traces carry no workload label | `results/classifier/synthetic_eval.csv` |
+| **ECE, Brier** | expected calibration error (15 equal-width confidence bins) and the multiclass Brier score of the predicted probabilities; descriptive | same |
+| **predict_us, train_ms** | median single-window predict time and fit time on a contended shared host; never a cost | same |
+| **agreement with GNB** | share of a trace's windows a classifier gives the same class as the shipped GNB; with the class shares it shows how differently a router routes, independent of the hit ratio | `results/classifier/router_runs.csv`, `router_summary.csv` |
+| **CV score (hindsight)** | per held-out trace, the share of hindsight headroom over `none` a router's choices capture under the trajectory approximation, `(S(pred) - S(none)) / (S(oracle) - S(none))`, averaged over traces; selection only | `results/hindsight/selection.csv` |
+| **headroom captured** | `(routed - vcf) / (oracle - vcf)` on slice 2; empty when the trajectory oracle does not beat VCF (amendment A3); descriptive | `results/hindsight/summary.csv` |
+| **U(0.5) per block (`u05_per_block`)** | `(hits - 0.5 x prefetches issued) / read blocks`, the hindsight `u0.5` objective | `results/hindsight/rows.csv` |
+| **balanced accuracy** | mean of the two class recalls on E7's `seq`/`not_seq` window label; undefined when the truth holds one class | `results/msrc_samples/classifier_metrics.csv` |
+
+The hindsight `oracle_*` rows replay the slice's own hindsight labels: a
+reference under the trajectory approximation, never a policy and not a true
+ceiling (it falls below VCF at 64 MiB). The web rankers (`results/web_rankers/`)
+use the ranking metrics above, over the same eligible next views as E4.
+
 ## Measured latency (real systems)
 
 | Metric | Definition | Where |

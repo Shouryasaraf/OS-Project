@@ -2,7 +2,8 @@
 
     PYTHONPATH=src python paper/figures/make_figures.py [--results DIR] [--paper-dir DIR]
 
-One function per figure (MASTER_PLAN section 5, F1-F8). matplotlib with the
+One function per figure (MASTER_PLAN section 5, F1-F8; F9 for the classifier
+study). matplotlib with the
 Agg backend writes vector PDFs at IEEE widths: one column is 3.5 in, the
 full text width 7.16 in (``WIDTHS`` records which a figure uses, so the
 section knows whether it needs ``figure`` or ``figure*``). Fonts are embedded
@@ -91,6 +92,7 @@ SIZES = {
     "f6_freshness": (COLUMN_IN, 2.2),
     "f7_live_saved_vs_bytes": (COLUMN_IN, 2.4),
     "f8_utility_envelopes": (TEXT_IN, 2.5),
+    "f9_action_space": (COLUMN_IN, 2.3),
 }
 WIDTHS = {name: ("column" if size[0] == COLUMN_IN else "text") for name, size in SIZES.items()}
 
@@ -606,6 +608,65 @@ def f8_utility_envelopes(results, out, path):
     _save(fig, path, out)
 
 
+# ---------------------------------------------------------------------------
+# F9: the classifier study's action-space ceiling
+# ---------------------------------------------------------------------------
+
+#: F9's labelled reference policies, from the classifier and hindsight
+#: summaries (the same 19 C3 slice-2 traces): (study file, policy, label).
+F9_POINTS = (("classifier", "sequential", "sequential"), ("classifier", "deep@8", "deep@8"),
+             ("classifier", "linux_ra@256", "linux_ra@256"),
+             ("hindsight", "routed_hit", "routed_hit"), ("hindsight", "routed_dev", "routed_dev"),
+             ("hindsight", "vcf_hit", "VCF"))
+#: F9 label placement per policy (or per policy and capacity): (dx, dy) in
+#: points and the alignment.
+F9_LABELS = {"sequential": (4, 2, "left"), "deep@8": (2, 4, "left"),
+             "linux_ra@256": (-3, 5, "right"), "routed_hit": (-3, -8, "right"),
+             "routed_dev": (3, -8, "left"), "vcf_hit": (-3, 3, "right"),
+             ("sequential", 131072): (2, -8, "left")}
+F9_NOT_CLASSIFIERS = ("none", "sequential", "deep@8", "linux_ra@256", "adaptive_evidence")
+
+
+def f9_action_space(results, out, path):
+    clf = results.rows("classifier/router_summary.csv", out)
+    hsr = results.rows("hindsight/summary.csv", out)
+    if not clf or not hsr:
+        raise Missing
+    capacities = sorted({r["capacity"] for r in clf} & {r["capacity"] for r in hsr})
+    if not capacities:
+        out.missing.append("no capacity in both classifier and hindsight summaries")
+        raise Missing
+    fig, axes = _figure("f9_action_space", 1, len(capacities), sharey=True)
+    axes = axes if len(capacities) > 1 else [axes]
+    rows = {"classifier": clf, "hindsight": hsr}
+    for ax, capacity in zip(axes, capacities):
+        routed = [r for r in clf if r["capacity"] == capacity
+                  and r["policy"] not in F9_NOT_CLASSIFIERS and r["mean_hit_ratio"] is not None]
+        ax.scatter([100 * r["mean_hit_ratio"] for r in routed],
+                   [r["device_io_ratio"] for r in routed], s=9, marker=MARKERS[0],
+                   color=MUTED, edgecolors="white", linewidths=0.3, zorder=2,
+                   label=f"{len(routed)} routed classifiers")
+        for k, (study, policy, label) in enumerate(F9_POINTS):
+            row = next((r for r in rows[study] if r["capacity"] == capacity
+                        and r["policy"] == policy), None)
+            if row is None or row["mean_hit_ratio"] is None:
+                continue
+            x, y = 100 * row["mean_hit_ratio"], row["device_io_ratio"]
+            ax.scatter([x], [y], s=14, marker=MARKERS[(k + 1) % len(MARKERS)],
+                       color=CATEGORICAL[k], edgecolors="white", linewidths=0.3, zorder=3)
+            dx, dy, align = F9_LABELS.get((policy, capacity),
+                                          F9_LABELS.get(policy, (3, 3, "left")))
+            ax.annotate(label, (x, y), xytext=(dx, dy), textcoords="offset points",
+                        fontsize=4.8, color=INK_2, ha=align)
+        ax.axhline(1.0, color=AXIS, linewidth=0.6, zorder=0)
+        ax.margins(x=0.08, y=0.08)
+        ax.set_title(f"{g.capacity_label(capacity)} cache")
+        ax.set_xlabel("mean hit ratio (%)")
+    axes[0].set_ylabel("device I/Os relative to none")
+    axes[0].legend(loc="upper left", handletextpad=0.2)
+    _save(fig, path, out)
+
+
 def _missing_panel(ax, name):
     ax.axis("off")
     ax.text(0.5, 0.5, f"{g.MISSING_TEXT}:\n{name}", ha="center", va="center", fontsize=8,
@@ -613,7 +674,8 @@ def _missing_panel(ax, name):
 
 
 FIGURES = (f1_schematic, f2_hit_vs_depth, f3_device_io_vs_hit, f4_kappa_cdf,
-           f5_sim_vs_measured, f6_freshness, f7_live_saved_vs_bytes, f8_utility_envelopes)
+           f5_sim_vs_measured, f6_freshness, f7_live_saved_vs_bytes, f8_utility_envelopes,
+           f9_action_space)
 
 
 def generate(results, paper_dir: Path = g.PAPER_DIR) -> list:

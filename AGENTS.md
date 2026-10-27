@@ -71,13 +71,14 @@ of it). How components work: `docs/architecture.md`. Metric definitions:
 ## Commands
 
 ```bash
-PYTHONPATH=src .venv/bin/python -m unittest discover -s tests   # 722 tests at this commit, about 155 s (290 s on a loaded host)
+PYTHONPATH=src .venv/bin/python -m unittest discover -s tests   # 728 tests at this commit, about 160 s (290 s on a loaded host)
 PYTHONPATH=src python3 -m unittest discover -s tests            # stdlib only; web/GPU tests skip
 PYTHONPATH=src .venv/bin/python -m unittest tests.test_project.SimulatorTests   # one class
 python3 tools/check_doc_numbers.py        # every number in the docs is in results/
 python3 paper/check.py --strict           # paper lint (after reproduce.py paper)
 python reproduce.py disk --quick          # smoke; reproduce.py --help lists every study
 python reproduce.py notebook              # rebuild + execute notebooks/walkthrough.ipynb (after reproduce.py paper)
+python reproduce.py {classifier,hindsight,web_rankers,msrc} [--quick]   # the classifier study and E7
 python main.py --quick                    # the original disk entry point (outputs/ only)
 python -m adaptive_prefetch.multicorpus --config C1 --dry-run   # E1 job list
 python -m adaptive_prefetch.realio {mkfile,calibrate,run,grid,report}
@@ -453,7 +454,23 @@ requests.
   loaded by path, never by putting `paper/` on `sys.path` (`numbers.py` would
   shadow the stdlib module). A missing input gives a "MISSING" placeholder.
   `reproduce.py paper --fixtures` writes `outputs/paper-fixture/`, never
-  `paper/`.
+  `paper/`. `reproduce.py paper` also writes the single-file versions
+  `paper/main_flat.tex` and `paper/paper_full.txt` (`paper/flatten.py`;
+  `tests/test_paper_flatten.py` pins them), so commit them with every
+  regeneration.
+- **The classifier study in the paper.** `numbers.py` families
+  `classifier_synthetic`, `classifier_router`, `hindsight`, `web_rankers` and
+  `msrc_samples` give the `\clf...`, `\hsr...`, `\wrk...` and `\msrc...`
+  macros (prefixes registered in `check.NUMBER_MACRO`); `decisions.py`
+  re-applies each track's rule (CLF0-CLF4 and the claim rules, HSR H1-H7, S1,
+  S2, R, D, WRK S1, K1-K6 and rules 1-3, E7 M1/M2) to the intervals, and
+  `tests/test_paper_decisions.py` checks the recomputed verdicts equal the
+  files' own verdict columns. Their decision macros carry only the estimate
+  and `CI` (no `Lo`/`Hi`; `decisions.COMPACT_STUDIES`), and CLF0 only a
+  `Verdict`, to keep `numbers.tex` inside TeX's memory. Tables T10-T13 and
+  Fig. F9 are generated; the bibliography is one `refs.bib` (the track
+  `refs_<TRACK>.bib` files were merged and removed, and a test fails if one
+  reappears).
 - **The claims ledger: every claim is traced to `results/`.** `reproduce.py
   paper` writes `results/claims/paper_claims.csv` (schema
   `claims/paper_claims.csv`) and `results/claims/CLAIMS.md`: for every number
@@ -510,8 +527,8 @@ requests.
 
 ## Known current state
 
-What the experiments found (details and figures: `docs/DECISIONS.md` D18-D21,
-`docs/web/WEB_DECISIONS.md` W1-W4, the paper):
+What the experiments found (details and figures: `docs/DECISIONS.md` D18-D22,
+`docs/web/WEB_DECISIONS.md` W1-W5, the paper):
 
 - **Disk, simulated (E1, `results/disk/`).** Read-ahead depth and window
   growth carry the hit-ratio effect, and hit ratio keeps rising with depth
@@ -545,6 +562,21 @@ What the experiments found (details and figures: `docs/DECISIONS.md` D18-D21,
   *lower* than logistic's at capacity 8 (as for `rf` and `et`). None beats
   transition top-1 at depth 1 and all stay far below online counts.
   `docs/web/WEB_RANKERS.md`.
+- **Classifier zoo and router benchmark (track CLF, `results/classifier/`,
+  after E1-E6).** On synthetic windows the tree models and boosting match GNB
+  under the block-size shift and beat it on heavy phase blends (synthetic and
+  optimistic). Routed through `adaptive` on C3 slice 2, no classifier beats
+  `sequential` (no difference detected at 1 MiB, worse at 64 MiB), every one
+  issues more device I/Os than `none`, and only small gains over the shipped
+  GNB exist (`rf` at 1 MiB, 8 of 14 at 64 MiB). The four-class action space
+  caps any classifier. D22.
+- **Hindsight router (track HSR, `results/hindsight/`, after E1-E6).** The
+  `routed` mode with depth in its action space is level with the per-trace
+  validation-chosen fixed action at 1 MiB and worse by a negligible margin
+  at 64 MiB; its gain over `sequential` is depth's and moves several times
+  the blocks; `linux_ra@256` does the least device work; GNB has the lowest
+  grouped-CV score but replacing it does not beat VCF. The trajectory oracle
+  is not a true ceiling. D22.
 - **Live (E6, `results/live/`).** Every pass valid, zero parity mismatches;
   measured waits are on loopback with an emulated network.
 - **MSRC light sample (E7, `results/msrc_samples/`).** Seven size-selected
@@ -556,10 +588,16 @@ What the experiments found (details and figures: `docs/DECISIONS.md` D18-D21,
   GNB on that label (shipped QDA is the closest); real same-host training
   data, not a better algorithm, is where the headroom is; in replay the gain
   comes from `linux_ra`. Writes are write-allocated in the `.revised` loader
-  (a `native` view and a `writes_as_reads` sensitivity view). **The classifier
-  study's paper integration must cover E7 alongside the classifier zoo, the
-  hindsight router and the web rankers** (its PREREGISTERED.md rules, its
-  README citations in `paper/refs_MSRC.bib`).
+  (a `native` view and a `writes_as_reads` sensitivity view). The paper
+  reports it in the appendix only (M1/M2 tallies in Table T9).
+- **Paper (tag `paper-v2`).** The paper covers E1-E7 and the classifier
+  study (section "Can a Better Learner Help?", appendix "The Classifier Study
+  in Detail"); the title was kept, because every new verdict agrees with it.
+  The README citations of `results/classifier/`, `results/hindsight/`,
+  `results/web_rankers/` and `results/msrc_samples/` still name their
+  pre-merge `refs_<TRACK>.bib` files (those READMEs are hashed in
+  provenance); every key is now in `paper/refs.bib`, the CART book as
+  `breiman1984cart`.
 - **Open items.** The paper's page count (estimated, not compiled) and the
   authors' e-mail placeholder in `paper/main.tex` await an Overleaf build.
   The C2 best depths are descriptive argmaxes (`deltas.csv` has no
@@ -575,10 +613,10 @@ What the experiments found (details and figures: `docs/DECISIONS.md` D18-D21,
 | `docs/architecture.md` | module maps of all three packages, the replay loop, data flow |
 | `docs/METRICS.md` | every metric, its denominator and its limits |
 | `docs/REPRODUCE.md` | every command, its runtime here, inputs and outputs |
-| `docs/DECISIONS.md` | disk decision log: D1-D17 history on `main`, D18-D21 corrections from E1-E3 |
-| `docs/web/WEB_DECISIONS.md` | web decision log: W0 (GRILL), W1-W4 |
+| `docs/DECISIONS.md` | disk decision log: D1-D17 history on `main`, D18-D21 corrections from E1-E3, D22 the classifier study |
+| `docs/web/WEB_DECISIONS.md` | web decision log: W0 (GRILL), W1-W5 |
 | `docs/CLASSIFIER_EVAL.md`, `docs/MSR_SAMPLE_TRAINING.md` | the synthetic classifier evaluation and the MSR sample adaptation (history; regenerate before quoting) |
-| `docs/PIPELINE.md` | the disk pipeline and the 14 modes in one page |
+| `docs/PIPELINE.md` | the disk pipeline and the 15 modes in one page |
 | `notebooks/README.md` | the results walkthrough notebook: opening it in VS Code, rebuilding it |
 | `docs/PRESENTATION.md`, `presentation/` | the talk, speaker notes, viva answers, Beamer deck |
 | `docs/REFERENCES.md` | corrections to the Review 1 deck's citations |

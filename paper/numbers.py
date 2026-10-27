@@ -937,6 +937,239 @@ def live(results: g.Results, out: g.Output, m: Macros) -> None:
               fms(statistics.fmean(r["mean_wait_ms"] for r in items)), relative)
         m.add("liveReps" + tail, fcount(len(items)), relative)
 
+# ---------------------------------------------------------------------------
+# The classifier study (tracks CLF, HSR, WRK) and the MSRC light sample (E7),
+# written after E1-E6 were known. Verdicts and their intervals are the
+# ``\dec...`` macros (paper/decisions.py); these families give the levels.
+# ---------------------------------------------------------------------------
+
+def _condition_word(condition: str) -> str:
+    return "" if condition == "in_regime" else camel(condition.replace("->", " to "))
+
+
+@g.traced_formatter
+def facc(value) -> str:
+    """A synthetic accuracy (a fraction, three decimals)."""
+    return fnum(value, 3)
+
+
+@g.traced_formatter
+def fdacc(value) -> str:
+    """A difference of synthetic accuracies (signed, three decimals)."""
+    return fnum(value, 3, sign=True)
+
+
+def classifier_synthetic(results: g.Results, out: g.Output, m: Macros) -> None:
+    """``\\clfSyn<Acc|Delta><Setting>[<Condition>]<Family>`` (Part 1; synthetic
+    test accuracy, mean over seed pairs, and its difference from gnb_online
+    with the paired interval as ``...CI``), the protocol's sizes, and the
+    contended single-window predict times (never a cost)."""
+    relative = "classifier/synthetic_eval.csv"
+    rows = results.rows(relative, out, required=False)
+    if not rows:
+        return
+    for row in rows:
+        tail = camel(row["setting"]) + _condition_word(row["condition"]) + camel(row["family"])
+        m.add("clfSynAcc" + tail, facc(row["accuracy"]), relative)
+        if row["delta_accuracy"] is not None:
+            m.add("clfSynDelta" + tail, fdacc(row["delta_accuracy"]), relative)
+            m.add("clfSynDelta" + tail + "CI", fdacc(row["delta_accuracy"]) + "~"
+                  + fci(row["delta_accuracy_lo"], row["delta_accuracy_hi"], fdacc), relative)
+        if row["setting"] == "baseline" and row["predict_us"] is not None:
+            m.add("clfSynPredictUs" + camel(row["family"]), fus(row["predict_us"], 0), relative)
+    m.add("clfSynSeedPairs", fcount(_one((r["n_seed_pairs"] for r in rows), "pairs")), relative)
+    m.add("clfSynFamilies", fcount(len({r["family"] for r in rows})), relative)
+    m.add("clfSynCells", fcount(len(rows)), relative)
+    m.add("clfSynComparisons", fcount(sum(r["delta_accuracy"] is not None for r in rows)),
+          relative)
+    tuning = results.rows("classifier/synthetic_tuning.csv", out, required=False)
+    if tuning:
+        source = "classifier/synthetic_tuning.csv"
+        per = defaultdict(set)
+        for row in tuning:
+            per[(row["setting"], row["family"])].add(row["candidate"])
+        m.add("clfSynCandidates", fcount(max(len(v) for v in per.values())), source)
+        m.add("clfSynTunedFamilies", fcount(len({f for (_, f), v in per.items() if len(v) > 1})),
+              source)
+        m.add("clfSynFolds", fcount(_one((r["folds"] for r in tuning), "folds")), source)
+
+
+def classifier_router(results: g.Results, out: g.Output, m: Macros) -> None:
+    """``\\clfRouter<Qty><Policy><Cap>`` from router_summary.csv (Part 2,
+    simulated): Hit, Precision, IORatio, MovedRatio, Agreement (with GNB);
+    and the paired win/loss counts of the hit-ratio comparisons."""
+    relative = "classifier/router_summary.csv"
+    rows = results.rows(relative, out, required=False)
+    for row in rows or ():
+        tail = camel(row["policy"]) + disk_capacity_word(row["capacity"])
+        for quantity, key, formatter in (("Hit", "mean_hit_ratio", fpct),
+                                         ("Precision", "mean_precision", fpct),
+                                         ("IORatio", "device_io_ratio", fratio),
+                                         ("MovedRatio", "blocks_moved_ratio", fratio),
+                                         ("Agreement", "mean_agreement_with_gnb",
+                                          lambda v: fnum(v, 2))):
+            if row[key] is not None:
+                m.add("clfRouter" + quantity + tail, formatter(row[key]), relative)
+    if rows:
+        m.add("clfRouterTraces", fcount(_one((r["n_traces"] for r in rows), "traces")), relative)
+        m.add("clfRouterClassifiers", fcount(len({r["policy"] for r in rows} - {
+            "none", "sequential", *_decisions_module().CLF_REFERENCE_POLICIES})), relative)
+        agreement = [r["mean_agreement_with_gnb"] for r in rows
+                     if r["mean_agreement_with_gnb"] is not None and r["policy"] != "gnb_online"]
+        if agreement:
+            m.add("clfRouterAgreementMin", fnum(min(agreement), 2), relative)
+            m.add("clfRouterAgreementMax", fnum(max(agreement), 2), relative)
+        reference = ("none", "sequential") + _decisions_module().CLF_REFERENCE_POLICIES
+        routed = [r for r in rows if r["policy"] not in reference]
+        for capacity in sorted({r["capacity"] for r in routed}):
+            ratios = [r["device_io_ratio"] for r in routed if r["capacity"] == capacity
+                      and r["device_io_ratio"] is not None]
+            if ratios:
+                word = disk_capacity_word(capacity)
+                m.add("clfRouterIORatioMin" + word, fratio(min(ratios)), relative)
+                m.add("clfRouterIORatioMax" + word, fratio(max(ratios)), relative)
+    comparisons = "classifier/router_comparisons.csv"
+    for row in results.rows(comparisons, out, required=False) or ():
+        if row["metric"] != "hit_ratio":
+            continue
+        stem = ("clfRouterHit" + camel(row["policy"]) + "Vs" + camel(row["baseline"])
+                + disk_capacity_word(row["capacity"]))
+        for suffix, key in (("Wins", "wins"), ("Losses", "losses"), ("N", "n")):
+            m.add(stem + suffix, fcount(row[key]), comparisons)
+
+
+def _shares(text) -> dict:
+    import json
+    if isinstance(text, dict):
+        return text
+    try:
+        return json.loads(text) if text else {}
+    except (TypeError, ValueError):
+        return {}
+
+
+def hindsight(results: g.Results, out: g.Output, m: Macros) -> None:
+    """``\\hsr<Qty><Policy><Cap>`` from hindsight/summary.csv (simulated):
+    Hit, IORatio, MovedRatio, Headroom (descriptive), DeepShare (share of
+    windows routed to the deepest action); win/loss counts of the H and S
+    comparisons; and the grouped-CV ranking of the families (descriptive)."""
+    relative = "hindsight/summary.csv"
+    rows = results.rows(relative, out, required=False)
+    for row in rows or ():
+        tail = camel(row["policy"]) + disk_capacity_word(row["capacity"])
+        for quantity, key, formatter in (("Hit", "mean_hit_ratio", fpct),
+                                         ("IORatio", "device_io_ratio", fratio),
+                                         ("MovedRatio", "blocks_moved_ratio", fratio),
+                                         ("Headroom", "headroom_captured", lambda v: fnum(v, 3))):
+            if row[key] is not None:
+                m.add("hsr" + quantity + tail, formatter(row[key]), relative)
+        shares = _shares(row["action_shares"])
+        if "deep@256" in shares:
+            m.add("hsrDeepShare" + tail, fpct(shares["deep@256"], 1), relative,
+                  raw=[shares["deep@256"]])
+    if rows:
+        m.add("hsrTraces", fcount(_one((r["n_traces"] for r in rows), "traces")), relative)
+    comparisons = "hindsight/comparisons.csv"
+    for row in results.rows(comparisons, out, required=False) or ():
+        if row["comparison"] == "D":
+            continue
+        stem = ("hsr" + camel(row["comparison"]) + camel(row["policy"]) + "Vs"
+                + camel(row["baseline"]) + camel(row["metric"])
+                + disk_capacity_word(row["capacity"]))
+        for suffix, key in (("Wins", "wins"), ("Losses", "losses"), ("Ties", "ties"),
+                            ("N", "n")):
+            m.add(stem + suffix, fcount(row[key]), comparisons)
+    selection = "hindsight/selection.csv"
+    sel = results.rows(selection, out, required=False)
+    if sel:
+        cells = defaultdict(dict)
+        for row in sel:
+            if row["family_best"]:
+                cells[(row["objective"], row["capacity"])][row["family"]] = row["cv_score"]
+        lowest_gnb = 0
+        for (objective, capacity), scores in sorted(cells.items()):
+            lowest = min(scores, key=lambda f: (scores[f], f))
+            lowest_gnb += lowest == "gnb"
+            best = max(scores, key=lambda f: (scores[f], f))
+            word = camel(objective) + disk_capacity_word(capacity)
+            m.add("hsrCvLowest" + word, g.esc(lowest), selection)
+            m.add("hsrCvBest" + word, g.esc(best), selection)
+        m.add("hsrCvCells", fcount(len(cells)), selection)
+        m.add("hsrCvGnbLowest", fcount(lowest_gnb), selection)
+        m.add("hsrCvFamilies", fcount(len({r["family"] for r in sel})), selection)
+        m.add("hsrCvConfigs", fcount(max(sum(1 for r in sel if r["family"] == f
+                                             and r["objective"] == sel[0]["objective"]
+                                             and r["capacity"] == sel[0]["capacity"])
+                                         for f in {r["family"] for r in sel})), selection)
+        m.add("hsrTrainTraces", fcount(_one((r["cv_traces_scored"] for r in sel), "traces")),
+              selection)
+
+
+def web_rankers(results: g.Results, out: g.Output, m: Macros) -> None:
+    """``\\wrk<Metric><Split><Scorer>`` ranking levels (HitAtOne, MrrAtEight,
+    NovelHitAtOne) from ranking_metrics.csv; the selected trial's tuning MRR@8
+    and the trial counts; the contended per-request scoring times (never a
+    cost); the bootstrap and session counts."""
+    relative = "web_rankers/ranking_metrics.csv"
+    for row in results.rows(relative, out, required=False) or ():
+        tail = camel(row["split"]) + camel(row["scorer"])
+        for quantity, key in (("HitAtOne", "hit_at_1"), ("MrrAtEight", "mrr_at_8"),
+                              ("NovelHitAtOne", "novel_hit_at_1")):
+            if row[key] is not None:
+                m.add("wrk" + quantity + tail, fpct(row[key]), relative)
+        if row["split"] == "test" and row["request_us"] is not None:
+            m.add("wrkRequestUs" + camel(row["scorer"]), fus(row["request_us"], 0), relative)
+    tuning = "web_rankers/tuning.csv"
+    rows = results.rows(tuning, out, required=False)
+    if rows:
+        for family in dict.fromkeys(r["family"] for r in rows):
+            items = [r for r in rows if r["family"] == family]
+            chosen = [r for r in items if r["selected"]]
+            if chosen:
+                m.add("wrkTuneMrr" + camel(family), fnum(chosen[0]["mrr_at_8"], 4), tuning)
+            searched = [r for r in items if r["trial"] >= 0]
+            if searched:
+                m.add("wrkTrials" + camel(family), fcount(len(searched)), tuning)
+        m.add("wrkTrainDecisions", fcount(max(r["train_decisions"] for r in rows)), tuning)
+        m.add("wrkTuneDecisions", fcount(_one((r["tune_decisions"] for r in rows), "tune")),
+              tuning)
+    comparisons = "web_rankers/comparisons.csv"
+    rows = results.rows(comparisons, out, required=False)
+    if rows:
+        m.add("wrkSessions", fcount(_one((r["sessions"] for r in rows), "sessions")), comparisons)
+        m.add("wrkBootstrapReps", fcount(_one((r["reps"] for r in rows), "reps")), comparisons)
+        s1 = [r for r in rows if r["comparison"] == "S1"]
+        for row in s1:
+            m.add("wrkSOneScorerCap" + camel(row["capacity"]), g.esc(row["scorer"]), comparisons)
+            m.add("wrkSOnePolicyCap" + camel(row["capacity"]), g.esc(row["policy"]),
+                  comparisons)
+
+
+def msrc_samples(results: g.Results, out: g.Output, m: Macros) -> None:
+    """E7, descriptive: the sample's size, how closely the seq flag tracks
+    address contiguity, and the majority-label balanced accuracy of each
+    protocol and classifier on the pooled, web_1 and web_3 scopes."""
+    relative = "msrc_samples/traces.csv"
+    rows = results.rows(relative, out, required=False)
+    if rows:
+        m.add("msrcTraces", fcount(len(rows)), relative)
+        match = [r["flag_matches_contiguity"] for r in rows
+                 if r["flag_matches_contiguity"] is not None]
+        if match:
+            m.add("msrcFlagContiguityMin", fnum(min(match), 3), relative)
+            m.add("msrcFlagContiguityMax", fnum(max(match), 3), relative)
+        m.add("msrcWindows", fcount(sum(r["windows"] for r in rows)), relative)
+        m.add("msrcSeqWindows", fcount(sum(r["seq_windows_majority"] for r in rows)), relative)
+        m.add("msrcSmallNTraces", fcount(sum(bool(r["small_n_majority"]) for r in rows)),
+              relative)
+    metrics = "msrc_samples/classifier_metrics.csv"
+    for row in results.rows(metrics, out, required=False) or ():
+        if (row["label_rule"] != "majority" or row["trace"] not in ("pooled", "web_1", "web_3")
+                or row["balanced_accuracy"] is None):
+            continue
+        m.add("msrcBalAcc" + camel(row["protocol"]) + camel(row["classifier"])
+              + camel(row["trace"]), facc(row["balanced_accuracy"]), metrics)
+
 
 # ---------------------------------------------------------------------------
 # Pre-registered decisions (paper/decisions.py)
@@ -966,9 +1199,15 @@ def frho(value) -> str:
     return fnum(value, 2, sign=True)
 
 
+@g.traced_formatter
+def fppfine(value) -> str:
+    """A difference in percentage points to three decimals."""
+    return fpp(value, 3)
+
+
 def _decision_formatter(statistic):
-    return {"difference": fpp, "ratio": fratio, "us": fus, "ms": fms,
-            "absolute": fabspp, "rho": frho}[statistic]
+    return {"difference": fpp, "difference_fine": fppfine, "ratio": fratio, "us": fus,
+            "ms": fms, "absolute": fabspp, "rho": frho}[statistic]
 
 
 def _decision_meta(d) -> dict:
@@ -1000,19 +1239,57 @@ TALLY_VERDICTS = {
     "R7": ("think time changes the effect", "no change by the R7 rule"),
     "R2": ("ranks consistently with measured latency", "ranks against measured latency",
            "ranking not supported", "descriptive only", "contended"),
+    # The classifier study and E7 (paper/decisions.py, after E1-E6).
+    "CLF0": ("better", "worse", "no difference detected"),
+    "CLF1": ("better", "worse", "no difference detected"),
+    "CLF2": ("better", "worse", "no difference detected"),
+    "CLF3": ("reduces device I/Os", "increases device I/Os", "no difference detected"),
+    "CLF4": ("moves fewer blocks", "moves more blocks", "no difference detected"),
+    "D": ("reduces device I/Os", "increases device I/Os", "moves fewer blocks",
+          "moves more blocks", "no difference detected"),
+    "M1": ("better", "worse", "no difference detected", "insufficient n"),
+    "M2": ("better", "worse", "no difference detected", "insufficient n"),
 }
+
+
+def _rule_word(rule: str) -> str:
+    """A rule's part of a tally name: 'CLF0' -> 'ClfZero', 'H2' -> 'HTwo'."""
+    return camel(rule.lower()) if rule.startswith("CLF") else camel(rule)
 
 
 def _tally_group(d) -> str | None:
     """The group a verdict is counted in for ``\\decTally<Rule><Group><Verdict>``
     (``None``: not tallied): C3/C4, H7 and R7 over all their comparisons, H2/H3
     per store, R2 per simulated quantity."""
+    if d.study in _decisions_module().COMPACT_STUDIES:
+        return _classifier_tally_group(d)
     if d.rule in ("C3", "C4", "H7", "R7"):
         return ""
     if d.rule in ("H2", "H3"):
         return camel(d.scope.split()[0])
     if d.rule == "R2":
         return "Hit" if "simulated hit," in d.comparison else "DeviceTime"
+    return None
+
+
+def _classifier_tally_group(d) -> str | None:
+    """The tally group of a classifier-study or E7 verdict (CLF0 per setting,
+    CLF1-CLF4 per capacity over the routed classifiers, HSR's D per capacity
+    and quantity, E7's M1/M2 per protocol and scope)."""
+    if d.rule == "CLF0":
+        setting, condition = d.scope.split(", ")
+        return camel(setting) + ("" if condition == "in_regime"
+                                 else camel(condition.replace("->", " to ")))
+    if d.rule in ("CLF1", "CLF2", "CLF3", "CLF4"):
+        # The routed classifiers only; the reference policies are not counted.
+        policy = d.comparison.split(" - ")[0].split(" / ")[0]
+        reference = _decisions_module().CLF_REFERENCE_POLICIES
+        return None if policy in reference else camel(d.scope)
+    if d.rule == "D":
+        return camel(d.scope) + ("IO" if "device I/Os" in d.comparison else "Moved")
+    if d.rule in ("M1", "M2"):
+        trace, protocol = d.scope.split(", ")
+        return camel(protocol) + camel(trace)
     return None
 
 
@@ -1030,6 +1307,9 @@ def decision_macros(results: g.Results, out: g.Output, m: Macros) -> None:
         """A verdict count: the files the decisions it counts were read from."""
         rest = name[len("dec"):]
         study = ("disk" if rest.startswith(("PFive", "TallyCThree", "TallyCFour")) else
+                 "classifier" if rest.startswith("TallyClf") else
+                 "hindsight" if rest.startswith("TallyD") else
+                 "msrc_samples" if rest.startswith("TallyM") else
                  "live" if rest.startswith(("TallyH", "CountH")) else "realio")
         return {"study": study, "files": [f for f in read if f.startswith(study + "/")],
                 "preregistered": f"results/{study}/PREREGISTERED.md"}
@@ -1037,14 +1317,23 @@ def decision_macros(results: g.Results, out: g.Output, m: Macros) -> None:
     tallies = defaultdict(int)
     reducers = defaultdict(list)
     fastest = defaultdict(lambda: [0, 0, 0])
+    module = _decisions_module()
     for d in decisions:
         stem = "dec" + d.key[:1].upper() + d.key[1:]
         meta = _decision_meta(d)
         m.add(stem + "Verdict", g.esc(d.verdict), DECISION_SOURCE, meta=meta)
         for label, estimate, lo, hi, statistic in d.intervals:
+            if d.rule in module.VERDICT_ONLY_RULES:
+                break  # numbers.py's own family prints these intervals
             name = stem + camel(label)
             formatter = _decision_formatter(statistic)
-            if estimate is not None:
+            if estimate is not None and d.study in module.COMPACT_STUDIES:
+                # The estimate and "estimate [lo, hi]" only (TeX memory).
+                m.add(name, formatter(estimate), DECISION_SOURCE, meta=meta)
+                if lo is not None and hi is not None:
+                    m.add(name + "CI", formatter(estimate) + "~" + fci(lo, hi, formatter),
+                          DECISION_SOURCE, meta=meta)
+            elif estimate is not None:
                 m.add_ci(name, estimate, lo, hi, formatter, DECISION_SOURCE, meta=meta)
             elif lo is not None and hi is not None:
                 m.add(name + "Lo", formatter(lo), DECISION_SOURCE, meta=meta)
@@ -1057,7 +1346,7 @@ def decision_macros(results: g.Results, out: g.Output, m: Macros) -> None:
             counts["decCount" + camel(d.rule) + group] += 1
         group = _tally_group(d)
         if group is not None:
-            stem_count = "decTally" + camel(d.rule) + group
+            stem_count = "decTally" + _rule_word(d.rule) + group
             tallies[stem_count] += 1
             tallies[stem_count + camel(d.verdict.split(" (")[0].split(";")[0])] += 1
         if d.rule == "R2" and d.verdict != "contended (not used)" and d.intervals:
@@ -1087,7 +1376,7 @@ def decision_macros(results: g.Results, out: g.Output, m: Macros) -> None:
     # Zero counts too, for every verdict a tallied rule can give.
     for name in [n for n in tallies if n.startswith("decTally")]:
         for rule, verdicts in TALLY_VERDICTS.items():
-            prefix = "decTally" + camel(rule)
+            prefix = "decTally" + _rule_word(rule)
             if name.startswith(prefix) and not any(
                     name.endswith(camel(v)) and len(name) > len(prefix) for v in verdicts):
                 for verdict in verdicts:
@@ -1286,7 +1575,8 @@ def host(results: g.Results, out: g.Output, m: Macros) -> None:
 
 FAMILIES = (disk_tables, disk_best_depth, disk_deltas, disk_corpora, disk_kappa, learned_depth, realio,
             web_policy_metrics, web_comparisons, web_decomposition, web_freshness, web_seq,
-            web_dataset, web_calibration, live, host, decision_macros, facts, envelopes)
+            web_dataset, web_calibration, live, classifier_synthetic, classifier_router, hindsight,
+            web_rankers, msrc_samples, host, decision_macros, facts, envelopes)
 
 
 def build(results: g.Results, *, trace: bool = True) -> tuple[Macros, g.Output]:

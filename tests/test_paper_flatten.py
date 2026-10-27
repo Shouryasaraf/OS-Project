@@ -232,8 +232,11 @@ class CommittedFlatFilesTests(unittest.TestCase):
         listed = re.findall(r"^\[(\d+)\] ", references[1], re.M)
         items = re.findall(r"\\bibitem\{", self.tex)
         self.assertEqual([int(n) for n in listed], list(range(1, len(items) + 1)))
-        cited = {int(n) for n in re.findall(r"\[(\d+)\]", references[0])}
-        for first, last in re.findall(r"\[(\d+)\]\u2013\[(\d+)\]", references[0]):
+        # Citations in the body and in the appendix (which follows the list,
+        # as in main.tex); the list's own "[n] " entry labels are not citations.
+        citing = references[0] + re.sub(r"(?m)^\[\d+\] ", "", references[1])
+        cited = {int(n) for n in re.findall(r"\[(\d+)\]", citing)}
+        for first, last in re.findall(r"\[(\d+)\]\u2013\[(\d+)\]", citing):
             cited.update(range(int(first), int(last) + 1))
         self.assertEqual(cited, set(range(1, len(items) + 1)), "every reference is cited")
 

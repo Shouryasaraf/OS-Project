@@ -16,26 +16,28 @@ School of Computer Science and Engineering
 Vellore Institute of Technology
 Vellore, India
 
-Abstract—Kernels and browsers both prefetch, spending device or network work
-now to hide latency later. We ask which decision moves the result, under rules
-fixed before any experiment ran. Disk (simulated): on 56 block traces from 4
-corpora and a 1 MiB cache, a learned workload-class router hit less often than
-plain sequential read-ahead (-0.94 pp [-1.31, -0.58]) with 1.078× the device
-I/Os of no prefetching, and a GPU-trained depth controller less often than a
-validation-chosen fixed depth (-2.50 pp [-4.30, -0.80]), while Linux-style
-window growth added +23.77 pp and cut device I/Os to 0.740× of no
-prefetching's. Real devices (measured): replaying the same plans on a hard
-disk and an SSD, the mode with the highest simulated hit ratio was fastest in
-0 of 15 cells, and with exact cache parity prefetching raised the mean
-closed-loop latency on the hard disk in 22 of 30 mode–trace cells. Web
-(simulated): on RetailRocket, transition counts beat a trained ranker
-(+0.07 pp [+0.06, +0.09]), online counts beat a GRU (-0.79 pp [-0.83, -0.76]),
-and index freshness gave +1.52 pp [+1.49, +1.56]. Live HTTP (measured,
-emulated network): every prefetching policy lowered the wait with a hard-disk
-store, by up to 8.27 ms per view against 114.11 ms without prefetching, with 0
-parity mismatches. How much to fetch and how fresh the statistics are moved
-the results; no learned predictor beat its simple baseline, and simulated hit
-ratio did not predict real-disk latency.
+Abstract—Kernels and browsers both prefetch. We ask which decision moves the
+result, under rules fixed before the experiments ran. Disk (simulated): on 56
+block traces from 4 corpora and a 1 MiB cache, a learned workload-class router
+hit less often than plain sequential read-ahead (-0.94 pp [-1.31, -0.58]) with
+1.078× the device I/Os of no prefetching, and a GPU-trained depth controller
+less often than a validation-chosen fixed depth (-2.50 pp [-4.30, -0.80]),
+while Linux-style window growth added +23.77 pp and cut device I/Os to 0.740×
+of no prefetching's. Real devices (measured): on a hard disk and an SSD, the
+mode with the highest simulated hit ratio was fastest in 0 of 15 cells, and
+with exact cache parity prefetching raised the mean closed-loop latency on the
+hard disk in 22 of 30 mode–trace cells. Web (simulated): on RetailRocket,
+transition counts beat a trained ranker (+0.07 pp [+0.06, +0.09]), online
+counts beat a GRU (-0.79 pp [-0.83, -0.76]), and index freshness gave
++1.52 pp [+1.49, +1.56]. Live HTTP (measured, emulated network): every
+prefetching policy lowered the wait with a hard-disk store, by up to 8.27 ms
+per view against 114.11 ms without prefetching, with exact simulator parity.
+Better learners (simulated): none of 15 classifiers made the router beat
+sequential read-ahead, a hindsight-trained router choosing depth did not beat
+a per-trace fixed depth, and a tuned web ranker gained +0.15 pp in utility but
+stayed below transition counts. How much to fetch and how fresh the statistics
+are moved the results; no learned predictor beat its simple baseline, and
+simulated hit ratio did not predict real-disk latency.
 
 Index Terms—prefetching, read-ahead, page cache, storage traces, web
 prefetching, cache simulation, machine learning for systems, pre-registration
@@ -57,19 +59,21 @@ comparisons, baselines, sample sizes, intervals and decision rules to the
 repository. The hypothesis was that the learned predictor is the smallest
 lever and depth, feedback and freshness the large ones. Every claim below is
 the verdict of one of those rules, computed from the results files by a script
-and listed in Table VI in the appendix.
+and listed in Table V in the appendix.
 
-The hypothesis held only in part. Every learned predictor we tried lost to its
-simple, fair baseline: the class router to sequential read-ahead, the
+The hypothesis held only in part. No learned predictor we tried beat its
+simple, fair baseline: the class router lost to sequential read-ahead, the
 GPU-trained depth controller to a validation-chosen fixed depth, the logistic
-ranker to transition counts, and the GRU sequence model to online counts. How
-much to prefetch, and how fresh the statistics were, moved the simulated hit
-ratio by far more. Yet neither study's ordering rule calls the predictor the
-smallest lever. On disk, the feedback gate, which we expected to matter, moved
-the hit ratio as little as the predictor did, or less; on the web, the
-sequence model's loss could not be separated from the depth lever's gain. And
-on a real hard disk, a higher simulated hit ratio did not mean a lower
-measured latency.
+ranker to transition counts, and the GRU sequence model to online counts. A
+follow-up study asked whether a better learner would change that; it did not,
+and its one gain, a tuned ranker's for the web controller, was small next to
+freshness. How much to prefetch, and how fresh the statistics were, moved the
+simulated hit ratio by far more. Yet neither study's ordering rule calls the
+predictor the smallest lever. On disk, the feedback gate, which we expected to
+matter, moved the hit ratio as little as the predictor did, or less; on the
+web, the sequence model's loss could not be separated from the depth lever's
+gain. And on a real hard disk, a higher simulated hit ratio did not mean a
+lower measured latency.
 
 Our contributions are:
 
@@ -88,11 +92,15 @@ Our contributions are:
   - A live HTTP replay of the validated web policies over loopback with an
     emulated network, with 0 mismatches between the live and simulated cache
     counters.
+  - A tuned comparison of 15 classifier families for the disk router, a
+    hindsight-labelled router that can choose read-ahead depth, and tuned web
+    rankers, which locates the limit in the router's action space and in index
+    freshness rather than in the choice of learner.
 
 Section II places the work. Section III defines the shared model, Section IV
 the systems and Section V the protocol. Sections VI–IX report the four
-studies, Section X compares the domains, and Sections XI and XII give the
-threats and conclusions.
+studies, Section X asks whether a better learner helps, Section XI compares
+the domains, and Sections XII and XIII give the threats and conclusions.
 
 II. Background and Related Work
 ===============================
@@ -140,15 +148,12 @@ HTTP.
 III. A Common Model of Prefetching
 ==================================
 
-Both domains share one abstraction (Fig. 1): a demand stream (the 512-byte
-blocks of each disk request, or the views of each web session) reads through a
-bounded LRU cache, and a policy issues speculative fetches into it. The policy
-decides which items to fetch (the predictor), how many (a depth or a growing
-window) and whether to fetch at all (a gate that watches its own precision).
-
-[Figure 1: The shared abstraction. The disk study counts 512-byte blocks and
-the web study counts product views; both report hits, issued, useful and
-wasted prefetches, and the utility U(c). — see paper/figures/f1_schematic.pdf]
+Both domains share one abstraction (Fig. 5 in the appendix): a demand stream
+(the 512-byte blocks of each disk request, or the views of each web session)
+reads through a bounded LRU cache, and a policy issues speculative fetches
+into it. The policy decides which items to fetch (the predictor), how many (a
+depth or a growing window) and whether to fetch at all (a gate that watches
+its own precision).
 
 Metrics. The hit ratio counts hits per read block on disk and per view on the
 web. Precision is useful over issued prefetches; the wasted share is its
@@ -302,6 +307,12 @@ emulated 50 ms round trip, a 10 Mbit/s link and lognormal object sizes of
 median 64 KiB, all ASSUMED; each store runs 3 repetitions of no prefetching,
 two fixed depths and the three controllers E4 validated at c = 0.01.
 
+Classifier study. The three experiments of Section X were pre-registered after
+E1–E6 had been run. Each tunes only on training or validation data (synthetic
+training seeds, the first disk slice with corpus-grouped folds, web split 2),
+scores its test data once, and uses the bootstraps and verdict words of the
+study it extends.
+
 Statistics. Disk intervals are 95 % percentile intervals of a paired bootstrap
 over traces and of a two-level cluster bootstrap over corpora and traces with
 twin families down-weighted (10,000 resamples, seed 42). A disk policy is
@@ -385,7 +396,7 @@ How much to prefetch. This is the largest lever (P3, P4). Fixed read-ahead
 +8.10] paired and +5.79 pp [+2.98, +8.41] cluster at 1 MiB, winning on 52 of
 56 traces). In the C2 depth sweep the deepest depth tested (512 blocks) has
 the highest mean hit ratio in 14 of the 16 corpus–cache curves; only at 1 MiB
-do Alibaba and MSR peak earlier, at 128 and 256 blocks (Fig. 5 in the
+do Alibaba and MSR peak earlier, at 128 and 256 blocks (Fig. 6 in the
 appendix). In C1, deep@256 adds +35.56 pp at 1 MiB and +49.48 pp at 64 MiB.
 Linux-style window growth gets much of that gain with far less waste:
 linux_ra@256 adds +23.77 pp [+19.47, +28.35] at 1 MiB, wins on all 56 traces,
@@ -394,7 +405,7 @@ Belady's MIN for demand paging reaches 22.79 % at 1 MiB (none: 14.85 %);
 several prefetching policies exceed it, as they may: MIN bounds replacement,
 not prefetching.
 
-Hit ratio is not device work (P5, P6; Fig. 2). At 1 MiB, deep@8 increases
+Hit ratio is not device work (P5, P6; Fig. 1). At 1 MiB, deep@8 increases
 device I/Os (1.066× [1.030×, 1.118×] of none's), and deep@256 moves 7.015× as
 many blocks. The only policies that reduce device I/Os at either capacity are
 linux_ra@64, linux_ra@256, linux_ra@1024: window growth merges its reads into
@@ -402,9 +413,9 @@ larger requests, so linux_ra@256 needs 0.740× [0.687×, 0.791×] of none's I/Os
 at 1 MiB while moving 1.086× the blocks; every prefetching policy moves more
 blocks than none. Whether that pays depends on the device: with the measured
 hard-disk κ, linux_ra@256 lowers modelled device time on 54 of 56 traces and
-deep@8 on 8 (Fig. 6 in the appendix).
+deep@8 on 8 (Fig. 7 in the appendix).
 
-[Figure 2: Simulated hit-ratio gain over none against device I/Os relative to
+[Figure 1: Simulated hit-ratio gain over none against device I/Os relative to
 none, C1, both cache sizes, with paired 95 % bootstrap intervals over the 56
 traces. Only window growth lies below one. — see
 paper/figures/f3_device_io_vs_hit.pdf]
@@ -517,7 +528,7 @@ fraction alone misses this cell's mean by -53.9 %. Through the page cache
 (Backend A) the picture is mixed: 8 of 35 cells lower the mean, and 16 raise
 it.
 
-[Figure 3: Measured mean request latency against simulated hit ratio for every
+[Figure 2: Measured mean request latency against simulated hit ratio for every
 mode with a simulator plan, per device and backend, closed loop (left) and
 spread think time on msr_hm_0 (right); bars are Student-t intervals over 3
 repeats. Higher simulated hit ratio does not mean lower latency. Measured on
@@ -532,7 +543,7 @@ for the test (Table III). Simulated device time, which charges positioning per
 I/O, ranks consistently in 2 cells (both on the FIU trace) and against
 measured latency in 1. The mode with the highest simulated hit ratio was the
 fastest in 0 of the 15 uncontended cells, and none was the fastest in 6
-(Fig. 3).
+(Fig. 2).
 
 The kernel's own read-ahead. On Backend A, the kernel's read-ahead lowered the
 mean latency against none in 4 of 10 cells: on msr_web_2 the change was
@@ -549,37 +560,9 @@ used.
 VIII. Web Results (Simulated)
 =============================
 
-TABLE IV: What moves the needle (web, simulated replay): each lever's effect
-on the test split with a 95% paired session-bootstrap CI, in percentage points
-of hit ratio (c = 0) or of utility U(c) per view.
-
-------------------------------------------------------------------------------------------------------------------------------------------------
-Lever           Policy vs baseline                       Scorer vs baseline        Cap.  Metric (c)                             Δ (pp)  Sessions
-------------------------------------------------------------------------------------------------------------------------------------------------
-ranker          fixed1 vs fixed1                         trans_s0 vs logistic         8  hit_ratio (0)            +0.07 [+0.06, +0.09]   364,364
-ranker          fixed1 vs fixed1                         trans_s0 vs logistic         8  utility_per_view (0.01)  +0.06 [+0.05, +0.08]   364,364
-freshness       fixed4 vs fixed4                         trans_online vs logistic     8  hit_ratio (0)            +1.52 [+1.49, +1.56]   364,364
-freshness       fixed4 vs fixed4                         trans_online vs logistic     8  utility_per_view (0.01)  +1.48 [+1.45, +1.52]   364,364
-depth           fixed4 vs fixed1                         logistic                     8  hit_ratio (0)            +0.80 [+0.77, +0.83]   364,364
-depth           fixed4 vs fixed1                         logistic                     8  utility_per_view (0.01)  -1.84 [-1.87, -1.81]   364,364
-controller      adaptive_0.01 vs fixed1                  logistic                     8  hit_ratio (0)            +0.26 [+0.23, +0.28]   364,364
-controller      adaptive_0.01 vs fixed1                  logistic                     8  utility_per_view (0.01)  +0.36 [+0.33, +0.38]   364,364
-controller      adaptive_ca_0.01 vs fixed1               logistic                     8  hit_ratio (0)            +0.27 [+0.25, +0.29]   364,364
-controller      adaptive_ca_0.01 vs fixed1               logistic                     8  utility_per_view (0.01)  +0.38 [+0.36, +0.41]   364,364
-controller      adaptive_0.01 vs fixed1                  logistic                    32  hit_ratio (0)            +0.45 [+0.43, +0.48]   364,364
-controller      adaptive_0.01 vs fixed1                  logistic                    32  utility_per_view (0.01)  +0.58 [+0.55, +0.61]   364,364
-controller      adaptive_ca_0.01 vs fixed1               logistic                    32  hit_ratio (0)            +0.46 [+0.43, +0.49]   364,364
-controller      adaptive_ca_0.01 vs fixed1               logistic                    32  utility_per_view (0.01)  +0.59 [+0.56, +0.62]   364,364
-feedback        feedback_0.01_eps0.005 vs adaptive_0.01  logistic                     8  hit_ratio (0)            -0.11 [-0.13, -0.10]   364,364
-feedback        feedback_0.01_eps0.005 vs adaptive_0.01  logistic                     8  utility_per_view (0.01)  -0.01 [-0.02, +0.01]   364,364
-cache_scope     fixed0 vs fixed0                         logistic                     ∞  hit_ratio (0)            +6.73 [+6.64, +6.82]   364,364
-sequence_model  fixed4 vs fixed4                         seq vs trans_online          8  hit_ratio (0)            -0.79 [-0.83, -0.76]   364,364
-sequence_model  fixed4 vs fixed4                         seq vs trans_online          8  utility_per_view (0.01)  -0.92 [-0.96, -0.88]   364,364
-------------------------------------------------------------------------------------------------------------------------------------------------
-
 All numbers here replay the RetailRocket test split (364,364 sessions) through
-per-session caches with instant prefetch, with an assumed c. Table IV isolates
-one lever per row against its pre-registered baseline.
+per-session caches with instant prefetch, with an assumed c. Table VI in the
+appendix isolates one lever per row against its pre-registered baseline.
 
 The controller. Selected on validation separately at each capacity, the
 adaptive controller (adaptive_0.01) beats the best fixed depth at the same
@@ -601,7 +584,7 @@ against -4.493 for the counts). Counts updated online as the test split
 replays are worth far more (W4, online counts minus the logistic ranker at
 depth four; +1.52 pp [+1.49, +1.56]). Descriptively, the next item is in the
 online index's top eight for 17.53 % of eligible views, against 9.08 % for the
-shipped index (Fig. 7 in the appendix).
+shipped index (Fig. 8 in the appendix).
 
 Depth. Prefetching four items instead of one raises the hit ratio (W5;
 +0.80 pp [+0.77, +0.83]) but costs more than it gains at c = 0.01
@@ -634,12 +617,12 @@ depth.
 IX. Live HTTP Results (Measured)
 ================================
 
-TABLE V: Live HTTP replay (measured on loopback with an emulated network; RTT,
-bandwidth and object sizes are ASSUMED). Milliseconds of wait saved per view
-against the no-prefetch baseline: mean over citable passes (valid, and at most
-1% foreign I/O on the store device), with the envelope of the per-pass 95%
-session-bootstrap CIs. Parity: sessions whose live counters differ from the
-simulator's.
+TABLE IV: Live HTTP replay (measured on loopback with an emulated network;
+RTT, bandwidth and object sizes are ASSUMED). Milliseconds of wait saved per
+view against the no-prefetch baseline: mean over citable passes (valid, and at
+most 1% foreign I/O on the store device), with the envelope of the per-pass
+95% session-bootstrap CIs. Parity: sessions whose live counters differ from
+the simulator's.
 
 ------------------------------------------------------------------------------------------------------------------------
 Store  Policy                     Passes  Hit (%)  Wait (ms)         Saved (ms)  Ideal saved  Wasted KiB   Bytes  Parity
@@ -674,7 +657,7 @@ over one percent foreign I/O and are not cited.
 
 Prefetching lowered the wait. With the hard-disk object store, all 5
 prefetching policies lowered the mean wait against no prefetching in every
-repetition (H2; Table V). The online-index controller
+repetition (H2; Table IV). The online-index controller
 (adaptive_0.1@trans_online) saved 8.27 ms [7.09 ms, 9.73 ms] per view and
 fixed4 8.18 ms [6.91 ms, 9.71 ms], against a no-prefetch wait of 114.11 ms;
 the bracket is the envelope of the per-repetition session-bootstrap intervals.
@@ -694,7 +677,7 @@ Bytes, scheduling and hints. The savings cost bandwidth: fixed8 transferred
 14.91× the bytes of no prefetching and saved less than fixed4; the two
 validated adaptive controllers moved 2.19× and 2.20×, and they are the only
 policies no other policy beats on both saved wait and bytes (H4, descriptive;
-Fig. 8). Demand priority on the link matters for deep prefetching: under a
+Fig. 9). Demand priority on the link matters for deep prefetching: under a
 FIFO link, fixed8's change in wait was -1.22 ms [-2.44 ms, 0.14 ms], against
 -3.38 ms [-4.14 ms, -2.64 ms] with priority, so demand priority changes the
 delta (H5); for fixed4 there was no change detected by the H5 rule.
@@ -702,8 +685,73 @@ Server-side read-ahead hints alone, with no client prefetch, lowered the wait
 in one repetition on the hard disk (H6; -1.75 ms [-2.01 ms, -1.49 ms] for
 eight hinted objects).
 
-X. Cross-Domain Discussion
-==========================
+X. Can a Better Learner Help? (Simulated)
+=========================================
+
+The disk router of Section VI uses Gaussian naive Bayes [56], [57] to put each
+32-request window in one of four classes, and each class prefetches at most
+two blocks, so even a perfect classifier can do little better than sequential.
+We tested that bound three ways, under rules committed after E1–E6 were known
+(so not blind to them): replace the classifier, give a router read-ahead depth
+as an action, and replace the web ranker.
+
+Methods. Besides the shipped online GNB and QDA we tuned 13 scikit-learn
+families [55], from discriminant analysis and logistic regression to kNN,
+SVMs, CART, forests, boosting and an MLP (the list with its citations is in
+the appendix), each with 16 random-search candidates [58] chosen on training
+seeds alone; test seeds were scored once. The fitted models then routed
+adaptive unchanged on C3's second slice of 19 traces. On synthetic windows
+(appendix, Table XV) the tree models and boosting match GNB under the
+block-size shift that made us keep it, and beat it on heavy phase blends, an
+optimistic synthetic margin.
+
+[Figure 3: The action-space ceiling (simulated, C3 slice 2, 19 traces): mean
+hit ratio against device I/Os relative to none. The 15 routed classifiers sit
+with sequential; depth, window growth and the hindsight routers move away from
+it. VCF is the validation-chosen fixed action. — see
+paper/figures/f9_action_space.pdf]
+
+Routing real traces (Fig. 3, Table XVI). By the claim rule, no routed
+classifier beats read-ahead at either capacity: all 15 show no difference
+detected against sequential at 1 MiB and all are worse at 64 MiB (the best, an
+MLP, by -0.34 pp [-0.51, -0.20]). Against the shipped GNB, only the random
+forest is better at 1 MiB (+0.25 pp [+0.07, +0.55] paired, +0.25 pp [+0.05,
++0.85] cluster), and 8 of 14 alternatives are at 64 MiB. Every routed
+classifier increases device I/Os (1.027×–1.160× of none's at 1 MiB), while
+linux_ra@256 adds +21.04 pp over sequential with 0.713× of the I/Os. The
+classifiers agree with GNB on only 0.29–0.70 of windows, yet the hit ratio
+barely moves: the class decides little when every class prefetches two blocks
+at most.
+
+Depth as an action. The hindsight router picks the next window's action among
+none, sequential, deep@8, deep@32 and deep@256. Its label is the action that
+did best on that window in its own fixed replay, a trajectory approximation in
+the spirit of hindsight-labelled caching [59] and open to the distribution
+shift of imitation learning [60]. We selected among 8 families by
+corpus-grouped cross-validation on the first slice and scored the second
+(Table XVII). Against the per-trace validation-chosen fixed action (VCF), the
+router shows no difference detected at 1 MiB (+0.027 pp [-1.995, +2.259]) and
+is worse, by a negligible -0.003 pp, at 64 MiB, where it sends 99.9 % of
+windows to deep@256, the VCF action. Its gains over sequential (+29.809 pp at
+1 MiB) and linux_ra@256 are depth's, at 3.649× the blocks moved by none. A
+device-objective router reduces device I/Os (0.976× of none's), but
+linux_ra@256 needs only 0.713×. GNB had the lowest cross-validation score in 6
+of 6 cells, yet the best family does not beat VCF; nor is the trajectory
+oracle a true ceiling, since it beats VCF at 1 MiB only.
+
+Web rankers (Table XVIII). On the same candidates and features, tuned
+boosting, forests, extra trees and an MLP rank better than the shipped
+logistic ranker (MLP: +0.23 pp [+0.20, +0.27] in MRR@8). By the primary rule,
+a tuned alternative ranker improves the controller at both capacities, the one
+learned predictor here that does: the validation-selected MLP raises U(c) per
+view at c = 0.01 by +0.15 pp [+0.13, +0.18] at capacity 8 and +0.15 pp [+0.12,
++0.17] at 32, though its hit ratio at capacity 8 is lower (-0.16 pp [-0.18,
+-0.14]). No family beats transition top-1 at depth 1, and all stay far below
+online counts (MLP: -1.41 pp [-1.45, -1.37]): a better ranker does not close
+the freshness gap.
+
+XI. Cross-Domain Discussion
+===========================
 
 [Figure 4: Simulated utility U(c) of every policy (grey) and its upper
 envelope (coloured by the winning policy) against the cost of one prefetch.
@@ -722,8 +770,8 @@ both domains the policy that wins changes with the price of a prefetch, and it
 is a choice of how much to fetch.
 
 The hypothesis, by its rules. The pre-registered hypothesis had three parts.
-The predictor is the smallest lever: not established in either study. Every
-learned predictor lost to its simple, fair baseline (the class router to
+The predictor is the smallest lever: not established in either study. No
+learned predictor beat its simple, fair baseline (the class router lost to
 sequential, the depth network to the validation-chosen depth, the logistic
 ranker to transition counts, the GRU to online counts), but on disk the
 feedback gate moved the hit ratio as little or less, and on the web the GRU's
@@ -735,6 +783,15 @@ supported. The disk gate is no better than sequential and the web gate shows
 no detectable difference from the adaptive controller; both mainly issue less.
 The one gated disk mode above sequential, depth_adaptive, also chooses its
 depth (an exploratory comparison).
+
+Is the learner the problem? No, in either domain. On disk, any of 15
+classifiers leaves the router level with or below sequential, because its
+actions prefetch two blocks at most; with depth as an action a router only
+reaches a fixed depth chosen per trace, moving 3.649× the blocks of no
+prefetching at 1 MiB. On the web a better ranker helps the controller
+slightly, but transition top-1 and online counts stay ahead. A learner matters
+only once its decision can move the result, and even then depth and freshness
+decide more.
 
 Simulation against measurement. The two real-system studies point in opposite
 directions, and both are measured. On a hard disk with O_DIRECT and a closed
@@ -750,10 +807,11 @@ For a system designer. Choose how much to prefetch per workload and per price
 of a prefetch, prefer window growth that merges reads when device operations
 are the cost, keep the statistics fresh, and validate on the real device
 before trusting a simulated hit ratio. A learned predictor must beat these
-baselines on held-out data to earn its training cost; none of ours did.
+baselines on held-out data to earn its training cost; none of ours did, tuned
+or not.
 
-XI. Threats to Validity
-=======================
+XII. Threats to Validity
+========================
 
 Trace format. The oracleGeneral records carry no read/write flag and no
 service time, and their timestamps are whole seconds; writes are replayed as
@@ -778,27 +836,36 @@ comparison had no pre-registration of its own and is read with the disk rule.
 Trained artifacts are scored only on data they were not trained or selected
 on.
 
+The classifier study was pre-registered after E1–E6 were known. Its synthetic
+accuracies favour the phase blends (a window's context comes from earlier
+windows of its class) and are never real-trace accuracies; the hindsight
+labels approximate the counterfactual by each action's own trajectory, and its
+search was cut by a dated amendment; prediction times were contended; the MSRC
+check uses seven size-selected files whose flag tracks address contiguity.
+
 Environment. The host and GPU were shared; load and foreign I/O were recorded
 for every run, contended cells and flagged passes are excluded, and no GPU
 time is quoted as a cost. Each real-device result holds for its trace, think
 model and device, not for hard disks or SSDs in general.
 
-XII. Conclusion and Future Work
-===============================
+XIII. Conclusion and Future Work
+================================
 
 Across 56 block traces and the RetailRocket sessions, under rules fixed before
 the experiments ran, the decisions that moved prefetching were how much to
 fetch and how fresh the statistics were. Window growth gained +23.77 pp of
 simulated hit ratio while reducing device I/Os, and online counts gained
-+1.52 pp [+1.49, +1.56] on the web. Every learned predictor we trained lost to
-a simple baseline, and the pre-registered feedback gates limited waste without
-adding hits; the one gated mode that did add hits also chose depth. On a real
-hard disk the simulated gains did not become lower latency in most O_DIRECT
-cells, while over emulated HTTP with a hard-disk store the measured savings
-exceeded the model's. Future work should test learned depth and admission
-against window growth on the real device rather than in simulation, measure
-the web cost c instead of assuming it, and repeat the live study on a real
-network.
++1.52 pp [+1.49, +1.56] on the web. No learned predictor we trained beat its
+simple baseline, and the pre-registered feedback gates limited waste without
+adding hits; the one gated mode that did add hits also chose depth. Tuning or
+replacing the classifier did not change this: the router's actions, not its
+learner, cap its gain, and a router given depth as an action only matched a
+fixed depth chosen per trace. On a real hard disk the simulated gains did not
+become lower latency in most O_DIRECT cells, while over emulated HTTP with a
+hard-disk store the measured savings exceeded the model's. Future work should
+test learned depth and admission against window growth on the real device
+rather than in simulation, measure the web cost c instead of assuming it, and
+repeat the live study on a real network.
 
 References
 ==========
@@ -1090,20 +1157,104 @@ References
      of Machine Learning Research, vol. 12, pp. 2825–2830, 2011. [Online].
      Available: https://jmlr.org/papers/v12/pedregosa11a.html
 
+[56] P. Domingos and M. Pazzani, “On the Optimality of the Simple Bayesian
+     Classifier under Zero-One Loss,” Machine Learning, vol. 29, no. 2–3,
+     pp. 103–130, 1997.
+
+[57] H. Zhang, “The Optimality of Naive Bayes,” in Proceedings of the
+     Seventeenth International Florida Artificial Intelligence Research
+     Society Conference (FLAIRS). AAAI Press, 2004, pp. 562–567.
+
+[58] J. Bergstra and Y. Bengio, “Random Search for Hyper-Parameter
+     Optimization,” Journal of Machine Learning Research, vol. 13,
+     pp. 281–305, 2012.
+
+[59] A. Jain and C. Lin, “Back to the Future: Leveraging Belady's Algorithm
+     for Improved Cache Replacement,” in Proc. 43rd ACM/IEEE International
+     Symposium on Computer Architecture (ISCA), 2016, pp. 78–89.
+
+[60] S. Ross, G. J. Gordon, and J. A. Bagnell, “A Reduction of Imitation
+     Learning and Structured Prediction to No-Regret Online Learning,” in
+     Proc. 14th International Conference on Artificial Intelligence and
+     Statistics (AISTATS), ser. Proceedings of Machine Learning Research,
+     vol. 15, 2011, pp. 627–635.
+
+[61] R. A. Fisher, “The Use of Multiple Measurements in Taxonomic Problems,”
+     Annals of Eugenics, vol. 7, no. 2, pp. 179–188, 1936.
+
+[62] O. Ledoit and M. Wolf, “A Well-Conditioned Estimator for
+     Large-Dimensional Covariance Matrices,” Journal of Multivariate Analysis,
+     vol. 88, no. 2, pp. 365–411, 2004.
+
+[63] T. Hastie, R. Tibshirani, and J. Friedman, The Elements of Statistical
+     Learning: Data Mining, Inference, and Prediction. New York: Springer,
+     2009.
+
+[64] D. R. Cox, “The Regression Analysis of Binary Sequences,” Journal of the
+     Royal Statistical Society, Series B, vol. 20, no. 2, pp. 215–242, 1958.
+
+[65] T. M. Cover and P. E. Hart, “Nearest Neighbor Pattern Classification,”
+     IEEE Transactions on Information Theory, vol. 13, no. 1, pp. 21–27, 1967.
+
+[66] C. Cortes and V. Vapnik, “Support-Vector Networks,” Machine Learning,
+     vol. 20, no. 3, pp. 273–297, 1995.
+
+[67] J. C. Platt, “Probabilistic Outputs for Support Vector Machines and
+     Comparisons to Regularized Likelihood Methods,” in Advances in Large
+     Margin Classifiers. MIT Press, 1999, pp. 61–74.
+
+[68] L. Breiman, J. H. Friedman, R. A. Olshen, and C. J. Stone, Classification
+     and Regression Trees. Belmont, CA: Wadsworth, 1984.
+
+[69] L. Breiman, “Random Forests,” Machine Learning, vol. 45, no. 1, pp. 5–32,
+     2001.
+
+[70] P. Geurts, D. Ernst, and L. Wehenkel, “Extremely Randomized Trees,”
+     Machine Learning, vol. 63, no. 1, pp. 3–42, 2006.
+
+[71] J. H. Friedman, “Greedy Function Approximation: A Gradient Boosting
+     Machine,” The Annals of Statistics, vol. 29, no. 5, pp. 1189–1232, 2001.
+
+[72] G. Ke, Q. Meng, T. Finley, T. Wang, W. Chen, W. Ma, Q. Ye, and T.-Y. Liu,
+     “LightGBM: A Highly Efficient Gradient Boosting Decision Tree,” in
+     Advances in Neural Information Processing Systems 30 (NIPS 2017), 2017,
+     pp. 3146–3154.
+
+[73] D. E. Rumelhart, G. E. Hinton, and R. J. Williams, “Learning
+     Representations by Back-Propagating Errors,” Nature, vol. 323, no. 6088,
+     pp. 533–536, 1986.
+
+[74] D. P. Kingma and J. Ba, “Adam: A Method for Stochastic Optimization,” in
+     International Conference on Learning Representations (ICLR), 2015.
+
+[75] L. Bottou, “Large-Scale Machine Learning with Stochastic Gradient
+     Descent,” in Proceedings of COMPSTAT'2010. Physica-Verlag HD, 2010,
+     pp. 177–186.
+
+[76] P. Domingos and G. Hulten, “Mining High-Speed Data Streams,” in
+     Proceedings of the Sixth ACM SIGKDD International Conference on Knowledge
+     Discovery and Data Mining (KDD), 2000, pp. 71–80.
+
+[77] K. H. Brodersen, C. S. Ong, K. E. Stephan, and J. M. Buhmann, “The
+     Balanced Accuracy and Its Posterior Distribution,” in Proceedings of the
+     20th International Conference on Pattern Recognition (ICPR), 2010,
+     pp. 3121–3124.
+
 Appendix A. The Pre-Registered Decisions
 ========================================
 
-Table VI lists every verdict the pre-registered rules give, as
+Table V lists every verdict the pre-registered rules give, as
 paper/decisions.py computes it from the results files. Every finding the body
 states from a pre-registered comparison is one of these rows; everything else
 is labelled descriptive or exploratory.
 
-TABLE VI: The pre-registered decisions, applied by paper/decisions.py to the
+TABLE V: The pre-registered decisions, applied by paper/decisions.py to the
 results files with each study's rule (results/*/PREREGISTERED.md). Disk and
 web rows are simulated; real-device and live rows are measured (live: loopback
 with an emulated network and assumed object sizes). Intervals are 95%: disk
 paired and corpus-cluster bootstraps over traces; web and live paired session
-bootstraps; real device Student-t over three repeats.
+bootstraps; real device Student-t over three repeats. The classifier-study
+groups (CLF, HSR, WRK, E7) were pre-registered after E1–E6 were known.
 
 -------------------------------------------------------------------------------------------------------
 Rule    Comparison (scope)                Interval(s)                         Verdict
@@ -1273,14 +1424,14 @@ Live HTTP, measured on loopback (E6; RTT, bandwidth and object sizes ASSUMED)
 -------------------------------------------------------------------------------------------------------
 H1      live counters vs simulator (all   42 pass-policy rows                 no mismatch
         passes)
-H2      each policy - fixed0, mean wait   per repetition: Table V             lowers the mean wait: 5
+H2      each policy - fixed0, mean wait   per repetition: Table IV            lowers the mean wait: 5
         (hdd store, 5 policies)
-H2      each policy - fixed0, mean wait   per repetition: Table V; 4 with     lowers the mean wait: 4;
+H2      each policy - fixed0, mean wait   per repetition: Table IV; 4 with    lowers the mean wait: 4;
         (ssd store, 5 policies)           flagged repetitions not cited       not established: 1
-H3      measured vs model-ideal delta     per repetition: Table V             the instant-prefetch
+H3      measured vs model-ideal delta     per repetition: Table IV            the instant-prefetch
         (hdd store, 5 policies)                                               model understates the
                                                                               benefit: 5
-H3      measured vs model-ideal delta     per repetition: Table V; 4 with     consistent with the
+H3      measured vs model-ideal delta     per repetition: Table IV; 4 with    consistent with the
         (ssd store, 5 policies)           flagged repetitions not cited       model: 5
 H5      fixed4: FIFO vs priority link     FIFO -4.79 [-5.99, -3.76] ms;       no change detected by the
         (ssd store, 1 repetition)         priority rep 0 -5.43 [-6.53,        H5 rule
@@ -1292,7 +1443,7 @@ H6      hint:fixed4 - fixed0, mean wait   -1.48 [-1.74, -1.24] ms             lo
         (hdd store, 1 repetition)                                             one repetition
 H6      hint:fixed8 - fixed0, mean wait   -1.75 [-2.01, -1.49] ms             lowers the mean wait in
         (hdd store, 1 repetition)                                             one repetition
-H7      SSD vs HDD store, first citable   per policy: Table V                 the store changes the
+H7      SSD vs HDD store, first citable   per policy: Table IV                the store changes the
         repetition (5 policies)                                               delta: 4; no store
                                                                               difference by the H7
                                                                               rule: 1
@@ -1301,9 +1452,300 @@ H4      not beaten on both saved wait     descriptive                         ad
 H4      not beaten on both saved wait     descriptive                         adaptive_0.01,
         and bytes (ssd store)                                                 adaptive_0.1@trans_online
 -------------------------------------------------------------------------------------------------------
+Classifier zoo, synthetic windows (CLF Part 1; accuracy vs gnb_online)
+-------------------------------------------------------------------------------------------------------
+CLF0    every family - gnb_online         better: 8; no difference detected:  better: qda_online, gnb,
+        (baseline, in_regime, 14          3; worse: 3                         lda, logreg, svm_linear,
+        families)                                                             svm_rbf, rf, extra_trees
+CLF0    every family - gnb_online         no difference detected: 11; worse:  better: none
+        (noisy, in_regime, 14 families)   3
+CLF0    every family - gnb_online         better: 8; no difference detected:  better: qda_online, gnb,
+        (overlap, in_regime, 14           5; worse: 1                         lda, logreg, svm_linear,
+        families)                                                             svm_rbf, extra_trees, hgb
+CLF0    every family - gnb_online         no difference detected: 13; worse:  better: none
+        (overlap2, in_regime, 14          1
+        families)
+CLF0    every family - gnb_online         no difference detected: 12; worse:  better: none
+        (realistic, in_regime, 14         2
+        families)
+CLF0    every family - gnb_online         no difference detected: 10; worse:  better: none
+        (transition, in_regime, 14        4
+        families)
+CLF0    every family - gnb_online         better: 9; worse: 5                 better: qda_online, gnb,
+        (transition_heavy, in_regime, 14                                      knn, svm_rbf, cart, rf,
+        families)                                                             extra_trees, hgb, mlp
+CLF0    every family - gnb_online         no difference detected: 12; worse:  better: none
+        (transfer, 1→1, 14 families)      2
+CLF0    every family - gnb_online         worse: 7; no difference detected:   better: sgd_online
+        (transfer, 1→8, 14 families)      6; better: 1
+CLF0    every family - gnb_online         no difference detected: 7; worse:   better: none
+        (transfer, 1→32, 14 families)     7
+CLF0    every family - gnb_online         no difference detected: 7; worse:   better: none
+        (transfer, 1→128, 14 families)    7
+-------------------------------------------------------------------------------------------------------
+Classifier router on real traces, simulated (CLF Part 2; C3 slice 2)
+-------------------------------------------------------------------------------------------------------
+CLF1    each routed classifier -          no difference detected: 15          none better
+        sequential, hit ratio (1 MiB, 15
+        classifiers)
+CLF1    each routed classifier -          worse: 15                           none better
+        sequential, hit ratio (64 MiB,
+        15 classifiers)
+CLF1    adaptive_evidence - sequential,   paired +0.13 [-0.42, +0.94] pp;     no difference detected
+        hit ratio (1 MiB)                 cluster +0.13 [-0.48, +1.93] pp
+CLF1    deep@8 - sequential, hit ratio    paired +4.63 [+1.37, +8.77] pp;     no difference detected
+        (1 MiB)                           cluster +4.63 [-1.42, +10.53] pp
+CLF1    linux_ra@256 - sequential, hit    paired +21.04 [+13.35, +30.14] pp;  better
+        ratio (1 MiB)                     cluster +21.04 [+12.05, +31.55] pp
+CLF1    adaptive_evidence - sequential,   paired -0.49 [-0.69, -0.30] pp;     worse
+        hit ratio (64 MiB)                cluster -0.49 [-0.82, -0.23] pp
+CLF1    deep@8 - sequential, hit ratio    paired +5.87 [+3.39, +9.56] pp;     better
+        (64 MiB)                          cluster +5.87 [+2.38, +11.52] pp
+CLF1    linux_ra@256 - sequential, hit    paired +23.59 [+15.95, +32.65] pp;  better
+        ratio (64 MiB)                    cluster +23.59 [+14.45, +33.33] pp
+CLF2    each routed classifier -          no difference detected: 13;         better: rf
+        gnb_online, hit ratio (1 MiB, 14  better: 1
+        classifiers)
+CLF2    each routed classifier -          better: 8; no difference detected:  better: gnb, lda, logreg,
+        gnb_online, hit ratio (64 MiB,    5; worse: 1                         knn, svm_linear,
+        14 classifiers)                                                       extra_trees, mlp,
+                                                                              sgd_online
+CLF3    each routed classifier / none,    increases device I/Os: 15           none better
+        device I/Os (1 MiB, 15
+        classifiers)
+CLF3    each routed classifier / none,    increases device I/Os: 15           none better
+        device I/Os (64 MiB, 15
+        classifiers)
+CLF4    each routed classifier / none,    moves more blocks: 15               none better
+        blocks moved (1 MiB, 15
+        classifiers)
+CLF4    each routed classifier / none,    moves more blocks: 15               none better
+        blocks moved (64 MiB, 15
+        classifiers)
+claim   a tuned classifier makes the      some family better than gnb_online  supported for rf
+        router better (1 MiB)             on hit ratio (device-I/O ratio
+                                          beside it)
+claim   the router beats read-ahead (1    some routed classifier better than  no routed classifier
+        MiB)                              sequential on hit ratio             beats read-ahead
+claim   a tuned classifier makes the      some family better than gnb_online  supported for gnb, lda,
+        router better (64 MiB)            on hit ratio (device-I/O ratio      logreg, knn, svm_linear,
+                                          beside it)                          extra_trees, mlp,
+                                                                              sgd_online
+claim   the router beats read-ahead (64   some routed classifier better than  no routed classifier
+        MiB)                              sequential on hit ratio             beats read-ahead
+-------------------------------------------------------------------------------------------------------
+Hindsight router, simulated (HSR; C3 slice 2, trained on slice 1)
+-------------------------------------------------------------------------------------------------------
+H1      routed_hit - vcf_hit, hit ratio   paired +0.027 [-1.995, +2.259] pp;  no difference detected
+        (1 MiB)                           cluster +0.027 [-2.144, +3.151] pp
+H1      routed_hit - vcf_hit, hit ratio   paired -0.003 [-0.005, -0.001] pp;  worse
+        (64 MiB)                          cluster -0.003 [-0.005, -0.001] pp
+H2      routed_hit - sequential, hit      paired +29.809 [+19.524, +40.904]   better
+        ratio (1 MiB)                     pp; cluster +29.809 [+14.743,
+                                          +41.598] pp
+H2      routed_hit - sequential, hit      paired +39.142 [+29.366, +49.532]   better
+        ratio (64 MiB)                    pp; cluster +39.142 [+25.684,
+                                          +50.041] pp
+H3      routed_u0.5 - vcf_u0.5, U(0.5)    paired -0.697 [-2.813, +1.430] pp;  no difference detected
+        per block (1 MiB)                 cluster -0.697 [-2.988, +1.452] pp
+H3      routed_u0.5 - vcf_u0.5, U(0.5)    paired +0.580 [-1.705, +3.049] pp;  no difference detected
+        per block (64 MiB)                cluster +0.580 [-2.211, +3.481] pp
+H4      routed_dev - vcf_dev, device      paired 0.991× [0.982×, 0.998×];     no difference detected
+        I/Os (ratio) (1 MiB)              cluster 0.991× [0.976×, 1.000×]     (paired interval only;
+                                                                              not robust to corpus
+                                                                              clustering)
+H4      routed_dev - vcf_dev, device      paired 0.983× [0.966×, 1.002×];     no difference detected
+        I/Os (ratio) (64 MiB)             cluster 0.983× [0.964×, 1.005×]
+H5      routed_hit - adaptive, hit ratio  paired +30.060 [+19.608, +41.309]   better
+        (1 MiB)                           pp; cluster +30.060 [+13.999,
+                                          +41.970] pp
+H5      routed_hit - adaptive, hit ratio  paired +39.949 [+30.135, +50.324]   better
+        (64 MiB)                          pp; cluster +39.949 [+26.252,
+                                          +50.954] pp
+H6      routed_hit_loco - vcf_hit, hit    paired -4.326 [-8.122, -1.254] pp;  worse
+        ratio (1 MiB)                     cluster -4.326 [-10.892, -0.170]
+                                          pp
+H6      routed_hit_loco - vcf_hit, hit    paired -0.028 [-0.067, -0.004] pp;  worse
+        ratio (64 MiB)                    cluster -0.028 [-0.074, -0.002] pp
+H7      routed_hit - gvcf_hit, hit ratio  paired +3.189 [-0.795, +8.289] pp;  no difference detected
+        (1 MiB)                           cluster +3.189 [-1.110, +13.015]
+                                          pp
+H7      routed_u0.5 - gvcf_u0.5, U(0.5)   paired +2.799 [-0.830, +8.076] pp;  no difference detected
+        per block (1 MiB)                 cluster +2.799 [-1.284, +9.656] pp
+H7      routed_dev - gvcf_dev, device     paired 0.976× [0.945×, 0.995×];     better
+        I/Os (ratio) (1 MiB)              cluster 0.976× [0.928×, 0.999×]
+H7      routed_hit - gvcf_hit, hit ratio  paired -0.003 [-0.005, -0.001] pp;  worse
+        (64 MiB)                          cluster -0.003 [-0.005, -0.001] pp
+H7      routed_u0.5 - gvcf_u0.5, U(0.5)   paired +4.350 [-0.822, +10.692]     no difference detected
+        per block (64 MiB)                pp; cluster +4.350 [-1.382,
+                                          +11.126] pp
+H7      routed_dev - gvcf_dev, device     paired 0.956× [0.918×, 0.989×];     better
+        I/Os (ratio) (64 MiB)             cluster 0.956× [0.910×, 0.992×]
+S1      routed_hit - deep@8, hit ratio    paired +25.178 [+15.550, +36.000]   better
+        (1 MiB)                           pp; cluster +25.178 [+13.417,
+                                          +37.157] pp
+S1      routed_hit - linux_ra@256, hit    paired +8.773 [+3.923, +14.187]     better
+        ratio (1 MiB)                     pp; cluster +8.773 [+1.397,
+                                          +15.048] pp
+S1      routed_hit - adaptive_evidence,   paired +29.674 [+19.192, +40.931]   better
+        hit ratio (1 MiB)                 pp; cluster +29.674 [+13.574,
+                                          +41.603] pp
+S1      routed_hit - deep@8, hit ratio    paired +33.274 [+23.843, +43.646]   better
+        (64 MiB)                          pp; cluster +33.274 [+21.525,
+                                          +44.023] pp
+S1      routed_hit - linux_ra@256, hit    paired +15.549 [+11.658, +19.799]   better
+        ratio (64 MiB)                    pp; cluster +15.549 [+9.582,
+                                          +20.940] pp
+S1      routed_hit - adaptive_evidence,   paired +39.632 [+29.872, +49.962]   better
+        hit ratio (64 MiB)                pp; cluster +39.632 [+26.124,
+                                          +50.562] pp
+S2      routed_hit_gnb - routed_hit, hit  paired -1.532 [-3.311, -0.071] pp;  no difference detected
+        ratio (1 MiB)                     cluster -1.532 [-4.216, +0.992] pp  (paired interval only;
+                                                                              not robust to corpus
+                                                                              clustering)
+S2      routed_hit_gnb - vcf_hit, hit     paired -1.505 [-4.510, +1.396] pp;  no difference detected
+        ratio (1 MiB)                     cluster -1.505 [-5.783, +3.381] pp
+S2      routed_hit_gnb - routed_hit, hit  paired -1.462 [-2.543, -0.666] pp;  worse
+        ratio (64 MiB)                    cluster -1.462 [-3.129, -0.508] pp
+S2      routed_hit_gnb - vcf_hit, hit     paired -1.465 [-2.545, -0.668] pp;  worse
+        ratio (64 MiB)                    cluster -1.465 [-3.133, -0.510] pp
+R       oracle_hit - vcf_hit, hit ratio   paired +3.145 [+0.732, +5.754] pp;  better
+        (1 MiB)                           cluster +3.145 [+0.237, +6.198] pp
+R       oracle_u0.5 - vcf_u0.5, U(0.5)    paired +4.159 [+0.950, +8.113] pp;  no difference detected
+        per block (1 MiB)                 cluster +4.159 [-0.197, +8.275] pp  (paired interval only;
+                                                                              not robust to corpus
+                                                                              clustering)
+R       oracle_dev - vcf_dev, device      paired 0.964× [0.937×, 0.986×];     better
+        I/Os (ratio) (1 MiB)              cluster 0.964× [0.922×, 1.000×]
+R       oracle_hit - vcf_hit, hit ratio   paired -0.378 [-0.685, -0.113] pp;  no difference detected
+        (64 MiB)                          cluster -0.378 [-0.761, +0.039] pp  (paired interval only;
+                                                                              not robust to corpus
+                                                                              clustering)
+R       oracle_u0.5 - vcf_u0.5, U(0.5)    paired +4.496 [+1.290, +8.357] pp;  no difference detected
+        per block (64 MiB)                cluster +4.496 [-0.169, +8.844] pp  (paired interval only;
+                                                                              not robust to corpus
+                                                                              clustering)
+R       oracle_dev - vcf_dev, device      paired 0.929× [0.891×, 0.967×];     better
+        I/Os (ratio) (64 MiB)             cluster 0.929× [0.890×, 0.980×]
+D       every policy / none, device I/Os  increases device I/Os: 9; no        reduce: linux_ra@256,
+        (1 MiB, 21 policies)              difference detected: 9; reduces     oracle_dev, routed_dev
+                                          device I/Os: 3
+D       every policy / none, blocks       moves more blocks: 18; no           move fewer: no policy
+        moved (1 MiB, 21 policies)        difference detected: 3
+D       every policy / none, device I/Os  increases device I/Os: 12; no       reduce: linux_ra@256,
+        (64 MiB, 21 policies)             difference detected: 5; reduces     oracle_dev, routed_dev,
+                                          device I/Os: 4                      vcf_dev
+D       every policy / none, blocks       moves more blocks: 20; no           move fewer: no policy
+        moved (64 MiB, 21 policies)       difference detected: 1
+-------------------------------------------------------------------------------------------------------
+Web rankers, simulated (WRK; RetailRocket test split, per-session cache)
+-------------------------------------------------------------------------------------------------------
+S1      adaptive_0.02@mlp -               -0.16 [-0.18, -0.14] pp             worse
+        adaptive_0.01@logistic, hit
+        ratio (cap 8)
+S1      adaptive_0.02@mlp -               +0.15 [+0.13, +0.18] pp             better
+        adaptive_0.01@logistic, U(0.01)
+        (cap 8)
+S1      adaptive_0.01@mlp -               +0.57 [+0.54, +0.59] pp             better
+        adaptive_0.01@logistic, hit
+        ratio (cap 32)
+S1      adaptive_0.01@mlp -               +0.15 [+0.12, +0.17] pp             better
+        adaptive_0.01@logistic, U(0.01)
+        (cap 32)
+K1      secondary comparisons (35 rows;   better: 28; no difference           see the rule rows
+        Table XVIII)                      detected: 4; worse: 3
+K2      secondary comparisons (20 rows;   better: 20                          see the rule rows
+        Table XVIII)
+K3      secondary comparisons (20 rows;   better: 13; worse: 7                see the rule rows
+        Table XVIII)
+K4      secondary comparisons (24 rows;   worse: 20; no difference detected:  see the rule rows
+        Table XVIII)                      4
+K5      secondary comparisons (24 rows;   worse: 24                           see the rule rows
+        Table XVIII)
+K6      secondary comparisons (24 rows;   better: 24                          see the rule rows
+        Table XVIII)
+rule 1  better ranker than the shipped    logistic_tuned                      not called a better
+        logistic                                                              ranker
+rule 1  better for prefetching than the   logistic_tuned, cap 8;              not called better for
+        shipped logistic                  logistic_tuned, cap 32              prefetching
+rule 1  better ranker than the shipped    hgb; rf; et; mlp                    better ranker
+        logistic
+rule 1  better for prefetching than the   hgb, cap 8; hgb, cap 32; rf, cap    better for prefetching
+        shipped logistic                  8; rf, cap 32; et, cap 8; et, cap
+                                          32; mlp, cap 8; mlp, cap 32
+rule 2  primary claim (S1)                cap 8; cap 32                       a tuned alternative
+                                                                              ranker improves the
+                                                                              controller
+rule 3  against transition top-1 (K4)     logistic_tuned, cap 8;              does not beat transition
+        and online counts (K5)            logistic_tuned, cap 32; hgb, cap    top-1; stays below online
+                                          8; hgb, cap 32; rf, cap 8; rf, cap  counts
+                                          32; et, cap 8; et, cap 32; mlp,
+                                          cap 8; mlp, cap 32
+-------------------------------------------------------------------------------------------------------
+MSRC light sample (E7; seven size-selected files, not representative; balanced accuracy on the seq flag)
+-------------------------------------------------------------------------------------------------------
+M1      each classifier - shipped GNB     web_1 (no difference detected 1);   descriptive; no choice
+        (shipped_synthetic)               web_3 (better 1); pooled (better    made
+                                          1)
+M1      each classifier - shipped GNB     web_1 (worse 7, better 3, no        descriptive; no choice
+        (sklearn_synthetic)               difference detected 1); web_3 (no   made
+                                          difference detected 5, worse 5,
+                                          better 1); pooled (worse 7, better
+                                          3, no difference detected 1)
+M1      each classifier - shipped GNB     web_1 (worse 9, no difference       descriptive; no choice
+        (lofo_real)                       detected 1); web_3 (worse 8,        made
+                                          better 1, no difference detected
+                                          1); pooled (worse 9, better 1)
+M2      each classifier - route_window    web_1 (better 2); web_3 (better     descriptive; no choice
+        (shipped_synthetic)               2); pooled (better 2)               made
+M2      each classifier - route_window    web_1 (better 6, worse 4, no        descriptive; no choice
+        (sklearn_synthetic)               difference detected 1); web_3       made
+                                          (better 8, worse 2, no difference
+                                          detected 1); pooled (better 8,
+                                          worse 3)
+M2      each classifier - route_window    web_1 (worse 9, no difference       descriptive; no choice
+        (lofo_real)                       detected 1); web_3 (worse 8,        made
+                                          better 2); pooled (worse 9, better
+                                          1)
+-------------------------------------------------------------------------------------------------------
 
 Appendix B. Supplementary Results
 =================================
+
+The shared abstraction and the web decomposition (Fig. 5, Table VI), moved
+here from Sections III and VIII for length.
+
+[Figure 5: The shared abstraction. The disk study counts 512-byte blocks and
+the web study counts product views; both report hits, issued, useful and
+wasted prefetches, and the utility U(c). — see paper/figures/f1_schematic.pdf]
+
+TABLE VI: What moves the needle (web, simulated replay): each lever's effect
+on the test split with a 95% paired session-bootstrap CI, in percentage points
+of hit ratio (c = 0) or of utility U(c) per view.
+
+------------------------------------------------------------------------------------------------------------------------------------------------
+Lever           Policy vs baseline                       Scorer vs baseline        Cap.  Metric (c)                             Δ (pp)  Sessions
+------------------------------------------------------------------------------------------------------------------------------------------------
+ranker          fixed1 vs fixed1                         trans_s0 vs logistic         8  hit_ratio (0)            +0.07 [+0.06, +0.09]   364,364
+ranker          fixed1 vs fixed1                         trans_s0 vs logistic         8  utility_per_view (0.01)  +0.06 [+0.05, +0.08]   364,364
+freshness       fixed4 vs fixed4                         trans_online vs logistic     8  hit_ratio (0)            +1.52 [+1.49, +1.56]   364,364
+freshness       fixed4 vs fixed4                         trans_online vs logistic     8  utility_per_view (0.01)  +1.48 [+1.45, +1.52]   364,364
+depth           fixed4 vs fixed1                         logistic                     8  hit_ratio (0)            +0.80 [+0.77, +0.83]   364,364
+depth           fixed4 vs fixed1                         logistic                     8  utility_per_view (0.01)  -1.84 [-1.87, -1.81]   364,364
+controller      adaptive_0.01 vs fixed1                  logistic                     8  hit_ratio (0)            +0.26 [+0.23, +0.28]   364,364
+controller      adaptive_0.01 vs fixed1                  logistic                     8  utility_per_view (0.01)  +0.36 [+0.33, +0.38]   364,364
+controller      adaptive_ca_0.01 vs fixed1               logistic                     8  hit_ratio (0)            +0.27 [+0.25, +0.29]   364,364
+controller      adaptive_ca_0.01 vs fixed1               logistic                     8  utility_per_view (0.01)  +0.38 [+0.36, +0.41]   364,364
+controller      adaptive_0.01 vs fixed1                  logistic                    32  hit_ratio (0)            +0.45 [+0.43, +0.48]   364,364
+controller      adaptive_0.01 vs fixed1                  logistic                    32  utility_per_view (0.01)  +0.58 [+0.55, +0.61]   364,364
+controller      adaptive_ca_0.01 vs fixed1               logistic                    32  hit_ratio (0)            +0.46 [+0.43, +0.49]   364,364
+controller      adaptive_ca_0.01 vs fixed1               logistic                    32  utility_per_view (0.01)  +0.59 [+0.56, +0.62]   364,364
+feedback        feedback_0.01_eps0.005 vs adaptive_0.01  logistic                     8  hit_ratio (0)            -0.11 [-0.13, -0.10]   364,364
+feedback        feedback_0.01_eps0.005 vs adaptive_0.01  logistic                     8  utility_per_view (0.01)  -0.01 [-0.02, +0.01]   364,364
+cache_scope     fixed0 vs fixed0                         logistic                     ∞  hit_ratio (0)            +6.73 [+6.64, +6.82]   364,364
+sequence_model  fixed4 vs fixed4                         seq vs trans_online          8  hit_ratio (0)            -0.79 [-0.83, -0.76]   364,364
+sequence_model  fixed4 vs fixed4                         seq vs trans_online          8  utility_per_view (0.01)  -0.92 [-0.96, -0.88]   364,364
+------------------------------------------------------------------------------------------------------------------------------------------------
 
 Hardware and data (Tables VII and VIII). Table VIII lists every numeric field
 of the web dataset profile, including the share of next views that repeat an
@@ -1372,12 +1814,12 @@ pair_kinds / test / kinds_share / self_repeat                 25.19 %
 pair_kinds / test / kinds_share / earlier_in_session          11.44 %
 ---------------------------------------------------------------------
 
-Disk depth, per corpus, learned depth and κ* (Fig. 5, Tables IX and X,
-Fig. 6). The validation-chosen fixed depth is the baseline for learned_depth;
+Disk depth, per corpus, learned depth and κ* (Fig. 6, Tables IX and X,
+Fig. 7). The validation-chosen fixed depth is the baseline for learned_depth;
 the oracle column is E2's hindsight same-actions reference, which is not a
 bound (it falls below the learned controller on some traces).
 
-[Figure 5: Simulated mean block hit ratio against fixed read-ahead depth per
+[Figure 6: Simulated mean block hit ratio against fixed read-ahead depth per
 corpus and cache size (C2, first 250,000 canonical requests per trace; depth 0
 is none). — see paper/figures/f2_hit_vs_depth.pdf]
 
@@ -1465,7 +1907,7 @@ tencentBlock_1894                    tencent      5    80.10  79.85 (256)   76.6
 tencentBlock_2145                    tencent      5    53.01  54.48 (256)   20.53  12.02   47.85          -1.47
 ---------------------------------------------------------------------------------------------------------------
 
-[Figure 6: Distribution over traces of κ*, the positioning-to-transfer ratio
+[Figure 7: Distribution over traces of κ*, the positioning-to-transfer ratio
 above which a policy's modelled device time falls below none's (C1, 1 MiB,
 simulated counts), with the measured κ of the two devices. — see
 paper/figures/f4_kappa_cdf.pdf]
@@ -1523,7 +1965,7 @@ pagecache  kernel_seq                –     51.29     55.78  780 [734, 826]   1
 pagecache  online-guard          36.30     25.99     39.06  769 [741, 797]   87  12529     0     161.3  -15.47
 --------------------------------------------------------------------------------------------------------------
 
-Web comparisons and freshness (Table XII, Fig. 7).
+Web comparisons and freshness (Table XII, Fig. 8).
 
 TABLE XII: Validated web controllers against the strongest fair baselines
 (test split, simulated, per-capacity selection on validation, assumed c =
@@ -1583,11 +2025,11 @@ per_capacity selection, scorer trans_online
 
 Bootstrap: 500 session resamples.
 
-[Figure 7: Share of eligible test views whose next item is among the top K
+[Figure 8: Share of eligible test views whose next item is among the top K
 candidates of the index-split counts, the counts of splits 0–2, and the online
 counts (simulated, descriptive). — see paper/figures/f6_freshness.pdf]
 
-Live ablations and the bytes trade-off (Table XIII, Fig. 8).
+Live ablations and the bytes trade-off (Table XIII, Fig. 9).
 
 TABLE XIII: Live HTTP ablations (measured, loopback, ASSUMED network): FIFO
 link, hint and sensitivity passes; milliseconds saved per view against the
@@ -1604,7 +2046,7 @@ hint        hdd / priority  hint:fixed4       1   1.48 [1.24, 1.74]   0.00
 hint        hdd / priority  hint:fixed8       1   1.75 [1.49, 2.01]   0.00
 --------------------------------------------------------------------------
 
-[Figure 8: Measured wait saved per view against wasted KiB per view, per store
+[Figure 9: Measured wait saved per view against wasted KiB per view, per store
 and policy (loopback, emulated network, assumed sizes; citable passes only). —
 see paper/figures/f7_live_saved_vs_bytes.pdf]
 
@@ -1635,3 +2077,259 @@ Web: the validation-selected controller at the smallest positive cost; gate
 column: the validated feedback gate minus the adaptive controller in U at that
 cost (W6). Live: the citable policy with the largest mean saving; gate column:
 the feedback gate's own saving per view.
+
+Appendix C. The Classifier Study in Detail
+==========================================
+
+The families. Gaussian naive Bayes [56], [57], LDA [61] with shrinkage [62],
+QDA [63], logistic regression [64], k-nearest neighbours [65], linear and RBF
+SVMs [66] with Platt probabilities [67], CART [68], random forests [69],
+extremely randomised trees [70], histogram gradient boosting [71], [72], an
+MLP [73] trained with Adam [74] and logistic SGD trained online [75], all in
+scikit-learn [55]; a streaming Hoeffding tree [76] was not run. Selection used
+12 folds over the training seeds.
+
+Synthetic windows (Table XV). Each cell is the mean test accuracy over 12
+pairs of independent training and test seeds, after selection on the training
+seeds alone. The settings are those of the earlier synthetic evaluation, on
+the twelve contextual features the router uses; the transfer columns are the
+block-size shift. Under it, 7 of 14 families, the scale-sensitive ones among
+them, are worse than GNB at the 32-block size. On the heaviest phase blend GNB
+scores 0.510 and a random forest 0.968 (+0.458 [+0.429, +0.489]), a margin
+that is optimistic because each window's context comes from earlier windows of
+the same class.
+
+TABLE XV: Classifier zoo on synthetic windows (track CLF, Part 1; synthetic
+test accuracy, mean over independent test seeds, never an accuracy on real
+traces). Every tuned family was selected by random search on training seeds
+only; gnb_online and qda_online are the shipped models, untuned. ^+/^-:
+better/worse than gnb_online by the paired bootstrap over seed pairs; no mark:
+no difference detected. Transfer: trained on single-block requests, tested at
+the request size shown (block-size covariate shift). The context features come
+from earlier windows of the same class, which favours the phase-blend
+settings.
+
+-------------------------------------------------------------------------------------------------------------------
+Family         base.    noisy     ovl.   ovl. 2    real.   trans.  trans. heavy      1→1      1→8     1→32    1→128
+-------------------------------------------------------------------------------------------------------------------
+gnb_online     0.996    0.999    0.996    0.998    1.000    0.666         0.510    1.000    0.972    1.000    1.000
+qda_online   0.999^+  0.996^-  1.000^+    1.000    1.000    0.660       0.828^+    1.000  0.868^-  0.854^-  0.854^-
+gnb          0.999^+    0.999  1.000^+    1.000    1.000    0.669       0.698^+    0.999    0.971    1.000    1.000
+lda          0.999^+    0.999  1.000^+    1.000    1.000  0.647^-       0.291^-    1.000  0.826^-  0.750^-  0.750^-
+qda          0.910^-  0.984^-  0.990^-  0.979^-  0.995^-  0.630^-       0.418^-  0.981^-    0.969    1.000    1.000
+logreg       0.999^+    0.999  1.000^+    1.000    1.000    0.652       0.288^-    0.999  0.807^-  0.750^-  0.750^-
+knn          0.990^-  0.992^-    0.998    0.998  0.997^-    0.647       0.886^+  0.992^-  0.757^-  0.750^-  0.750^-
+svm_linear   0.999^+    0.999  1.000^+    1.000    1.000    0.657       0.288^-    1.000  0.755^-  0.750^-  0.750^-
+svm_rbf      0.999^+    0.999  1.000^+    1.000    1.000    0.661       0.929^+    1.000  0.750^-  0.750^-  0.750^-
+cart           0.997    0.999    0.999    0.999    0.999  0.635^-       0.968^+    1.000    0.972    1.000    1.000
+rf           0.999^+    0.999    0.999    1.000    1.000    0.651       0.968^+    1.000    0.972    1.000    1.000
+extra_trees  1.000^+    0.998  0.999^+    1.000    1.000    0.664       0.964^+    0.998  0.963^-    1.000    1.000
+hgb            0.996    0.999  1.000^+    1.000    0.998    0.669       0.965^+    1.000    0.970    1.000    1.000
+mlp            0.998    0.999    0.998    1.000    0.999    0.664       0.946^+    0.998    0.957  0.903^-  0.903^-
+sgd_online   0.941^-    0.998    0.998    0.999    0.999  0.640^-       0.278^-    0.999  0.977^+    1.000    1.000
+-------------------------------------------------------------------------------------------------------------------
+
+12 seed pairs per cell; 10,000 bootstrap resamples.
+
+The routed classifiers (Table XVI). The shipped GNB through the
+precomputed-label replay reproduces E1's adaptive rows on every counter, and
+the reference rows are E1's own. At 64 MiB, 8 alternatives are better than the
+shipped GNB (supported for gnb, lda, logreg, knn, svm_linear, extra_trees,
+mlp, sgd_online) and every routed classifier is worse than sequential; all of
+them increase device I/Os and move more blocks than none.
+
+TABLE XVI: Routed adaptive with each classifier on real traces (track CLF,
+Part 2; simulated LRU cache, C3 slice 2, writes replay as reads). Hit ratio is
+the mean over traces; Δ in pp with the paired-bootstrap interval over traces,
+^+/^- when the paired and the corpus-cluster interval agree on better/worse;
+device-I/O and blocks-moved ratios are means over traces of the policy's count
+over none's; agreement is the share of windows given the shipped GNB's class.
+
+--------------------------------------------------------------------------------------------------------------------
+Policy             Hit (%)            Δ vs sequential            Δ vs gnb_online  Dev. I/O  Blocks  Prec. (%)  Agree
+--------------------------------------------------------------------------------------------------------------------
+1 MiB cache (2,048 blocks), n = 19 traces
+--------------------------------------------------------------------------------------------------------------------
+none                 21.75                          –                          –    1.000×  1.000×          –      –
+sequential           24.26                          –                          –    1.072×  1.070×       46.9      –
+deep@8               28.89       +4.63 [+1.37, +8.77]       +4.88 [+1.08, +9.29]    1.093×  1.261×       44.2      –
+linux_ra@256         45.29  +21.04 [+13.35, +30.14]^+  +21.29 [+13.54, +30.50]^+    0.713×  1.128×       72.7      –
+adaptive_evidence    24.39       +0.13 [-0.42, +0.94]     +0.39 [+0.17, +0.59]^+    1.131×  1.027×       53.2      –
+gnb_online           24.01       -0.25 [-0.86, +0.55]                          –    1.145×  1.023×       57.4   1.00
+qda_online           23.69       -0.56 [-1.36, +0.19]       -0.31 [-0.92, +0.13]    1.090×  1.037×       49.8   0.34
+gnb                  23.98       -0.28 [-0.90, +0.45]       -0.03 [-0.34, +0.22]    1.160×  1.031×       52.1   0.65
+lda                  24.14       -0.12 [-0.46, +0.34]       +0.13 [-0.24, +0.45]    1.081×  1.046×       49.0   0.41
+qda                  24.14       -0.12 [-0.65, +0.60]       +0.13 [-0.07, +0.32]    1.080×  1.030×       51.2   0.44
+logreg               24.02       -0.24 [-0.70, +0.36]       +0.01 [-0.25, +0.26]    1.069×  1.039×       49.7   0.44
+knn                  23.79       -0.47 [-0.83, -0.12]       -0.22 [-0.73, +0.10]    1.138×  1.040×       52.8   0.70
+svm_linear           23.99       -0.27 [-0.77, +0.34]       -0.02 [-0.31, +0.25]    1.074×  1.039×       49.9   0.46
+svm_rbf              24.07       -0.19 [-0.58, +0.37]       +0.07 [-0.20, +0.32]    1.080×  1.040×       50.0   0.43
+cart                 23.99       -0.26 [-1.14, +0.88]       -0.01 [-0.40, +0.39]    1.027×  1.015×       52.7   0.37
+rf                   24.26        0.00 [-0.73, +1.06]     +0.25 [+0.07, +0.55]^+    1.044×  1.017×       54.6   0.48
+extra_trees          24.17       -0.09 [-0.64, +0.68]        +0.16 [0.00, +0.33]    1.092×  1.029×       52.1   0.48
+hgb                  23.54       -0.71 [-2.13, +0.69]       -0.46 [-1.56, +0.27]    1.028×  1.014×       52.4   0.29
+mlp                  24.23       -0.03 [-0.37, +0.44]       +0.22 [-0.12, +0.52]    1.100×  1.048×       49.2   0.44
+sgd_online           24.13       -0.12 [-0.66, +0.61]       +0.13 [-0.04, +0.31]    1.073×  1.034×       50.1   0.44
+--------------------------------------------------------------------------------------------------------------------
+64 MiB cache (131,072 blocks), n = 19 traces
+--------------------------------------------------------------------------------------------------------------------
+none                 42.12                          –                          –    1.000×  1.000×          –      –
+sequential           44.12                          –                          –    1.038×  1.017×       67.9      –
+deep@8               49.99     +5.87 [+3.39, +9.56]^+    +6.68 [+4.03, +10.44]^+    1.029×  1.068×       67.2      –
+linux_ra@256         67.72  +23.59 [+15.95, +32.65]^+  +24.40 [+16.75, +33.48]^+    0.548×  1.066×       87.8      –
+adaptive_evidence    43.63     -0.49 [-0.69, -0.30]^-     +0.32 [+0.11, +0.54]^+    1.161×  1.009×       71.2      –
+gnb_online           43.32     -0.81 [-1.15, -0.50]^-                          –    1.165×  1.006×       70.2   1.00
+qda_online           43.47     -0.65 [-0.85, -0.46]^-       +0.16 [-0.05, +0.35]    1.078×  1.009×       69.3   0.34
+gnb                  43.50     -0.62 [-0.85, -0.42]^-     +0.18 [+0.06, +0.32]^+    1.174×  1.008×       70.0   0.65
+lda                  43.69     -0.43 [-0.61, -0.28]^-     +0.37 [+0.15, +0.61]^+    1.074×  1.011×       69.1   0.41
+qda                  43.47     -0.65 [-0.89, -0.44]^-       +0.15 [-0.06, +0.35]    1.076×  1.008×       70.8   0.44
+logreg               43.59     -0.53 [-0.73, -0.35]^-     +0.27 [+0.13, +0.44]^+    1.054×  1.010×       69.4   0.44
+knn                  43.42     -0.70 [-0.99, -0.44]^-     +0.11 [+0.03, +0.20]^+    1.133×  1.008×       72.4   0.70
+svm_linear           43.59     -0.53 [-0.74, -0.35]^-     +0.27 [+0.13, +0.44]^+    1.063×  1.010×       69.1   0.46
+svm_rbf              43.56     -0.56 [-0.74, -0.39]^-       +0.25 [+0.05, +0.44]    1.074×  1.009×       70.5   0.43
+cart                 43.25     -0.87 [-1.23, -0.56]^-        -0.07 [-0.14, 0.00]    1.052×  1.006×       64.2   0.37
+rf                   43.41     -0.71 [-1.00, -0.45]^-       +0.10 [+0.02, +0.18]    1.066×  1.006×       69.2   0.48
+extra_trees          43.55     -0.58 [-0.78, -0.38]^-     +0.23 [+0.10, +0.39]^+    1.083×  1.008×       71.0   0.48
+hgb                  43.15     -0.97 [-1.31, -0.66]^-     -0.16 [-0.27, -0.07]^-    1.056×  1.005×       64.0   0.29
+mlp                  43.78     -0.34 [-0.51, -0.20]^-     +0.46 [+0.28, +0.68]^+    1.097×  1.012×       68.7   0.44
+sgd_online           43.56     -0.56 [-0.76, -0.38]^-     +0.24 [+0.10, +0.41]^+    1.070×  1.009×       68.9   0.44
+--------------------------------------------------------------------------------------------------------------------
+
+Bootstrap: 10,000 resamples, seed 42.
+
+The hindsight router (Table XVII). Fixed-action replays equal E1's sweep rows
+on every counter. The selected families differ per objective and cache size
+(for the hit objective, hgb at 1 MiB and logreg at 64 MiB); the GNB-family
+router is worse than the selected one at 64 MiB (-1.462 pp [-2.543, -0.666]).
+
+TABLE XVII: Hindsight-labelled router with read-ahead depth in its action
+space (track HSR; simulated, C3 slice 2, trained and selected on slice 1
+only). VCF: the fixed action with the best slice-1 objective per trace; GVCF:
+one fixed action for all traces; oracle: the slice-2 hindsight labels, a
+reference under the trajectory approximation and never a policy. Δ in pp,
+ratios as multipliers; paired and corpus-cluster bootstrap intervals over
+traces. W/L/T: traces where the policy is above/below/equal to the baseline.
+
+-----------------------------------------------------------------------------------------------------------------------------------------------
+Rule  Comparison                                               Paired                     Cluster   W/L/T  Verdict
+-----------------------------------------------------------------------------------------------------------------------------------------------
+1 MiB cache (2,048 blocks), n = 19 traces
+-----------------------------------------------------------------------------------------------------------------------------------------------
+H1    routed_hit - vcf_hit, hit               +0.027 [-1.995, +2.259]     +0.027 [-2.144, +3.151]  5/12/2  no difference detected
+H2    routed_hit - sequential, hit         +29.809 [+19.524, +40.904]  +29.809 [+14.743, +41.598]  19/0/0  better
+H3    routed_u0.5 - vcf_u0.5, U(0.5)          -0.697 [-2.813, +1.430]     -0.697 [-2.988, +1.452]  8/11/0  no difference detected
+H4    routed_dev - vcf_dev, device I/Os       0.991× [0.982×, 0.998×]     0.991× [0.976×, 1.000×]  14/4/1  no difference detected (paired only)
+H5    routed_hit - adaptive, hit           +30.060 [+19.608, +41.309]  +30.060 [+13.999, +41.970]  18/1/0  better
+H6    routed_hit_loco - vcf_hit, hit          -4.326 [-8.122, -1.254]    -4.326 [-10.892, -0.170]  3/15/1  worse
+H7    routed_hit - gvcf_hit, hit              +3.189 [-0.795, +8.289]    +3.189 [-1.110, +13.015]  6/11/2  no difference detected
+H7    routed_u0.5 - gvcf_u0.5, U(0.5)         +2.799 [-0.830, +8.076]     +2.799 [-1.284, +9.656]   9/8/2  no difference detected
+H7    routed_dev - gvcf_dev, device I/Os      0.976× [0.945×, 0.995×]     0.976× [0.928×, 0.999×]  17/1/1  better
+S1    routed_hit - deep@8, hit             +25.178 [+15.550, +36.000]  +25.178 [+13.417, +37.157]  18/1/0  better
+S1    routed_hit - linux_ra@256, hit         +8.773 [+3.923, +14.187]    +8.773 [+1.397, +15.048]  14/5/0  better
+S1    routed_hit - adaptive_evidence, hit  +29.674 [+19.192, +40.931]  +29.674 [+13.574, +41.603]  18/1/0  better
+S2    routed_hit_gnb - routed_hit, hit        -1.532 [-3.311, -0.071]     -1.532 [-4.216, +0.992]  5/12/2  no difference detected (paired only)
+S2    routed_hit_gnb - vcf_hit, hit           -1.505 [-4.510, +1.396]     -1.505 [-5.783, +3.381]  6/11/2  no difference detected
+R     oracle_hit - vcf_hit, hit               +3.145 [+0.732, +5.754]     +3.145 [+0.237, +6.198]  13/4/2  better
+R     oracle_u0.5 - vcf_u0.5, U(0.5)          +4.159 [+0.950, +8.113]     +4.159 [-0.197, +8.275]  15/4/0  no difference detected (paired only)
+R     oracle_dev - vcf_dev, device I/Os       0.964× [0.937×, 0.986×]     0.964× [0.922×, 1.000×]  15/4/0  better
+D     adaptive / none, device I/Os            1.145× [1.021×, 1.322×]     1.145× [1.013×, 1.580×]  2/16/1  increases device I/Os
+D     adaptive / none, blocks moved           1.023× [1.009×, 1.041×]     1.023× [1.008×, 1.059×]  0/19/0  moves more blocks
+D     deep@256 / none, device I/Os            1.322× [1.124×, 1.555×]     1.322× [1.109×, 1.730×]  3/16/0  increases device I/Os
+D     deep@256 / none, blocks moved          9.745× [5.993×, 14.608×]    9.745× [5.623×, 19.947×]  0/19/0  moves more blocks
+D     linux_ra@256 / none, device I/Os        0.713× [0.607×, 0.817×]     0.713× [0.601×, 0.877×]  18/1/0  reduces device I/Os
+D     linux_ra@256 / none, blocks moved       1.128× [1.082×, 1.183×]     1.128× [1.081×, 1.188×]  0/19/0  moves more blocks
+D     oracle_hit / none, device I/Os          1.105× [0.984×, 1.244×]     1.105× [0.939×, 1.394×]  7/12/0  no difference detected
+D     oracle_hit / none, blocks moved         3.774× [2.823×, 4.907×]     3.774× [2.738×, 5.380×]  0/19/0  moves more blocks
+D     routed_dev / none, device I/Os          0.976× [0.945×, 0.995×]     0.976× [0.928×, 0.999×]  17/1/1  reduces device I/Os
+D     routed_dev / none, blocks moved         1.121× [1.074×, 1.176×]     1.121× [1.059×, 1.208×]  0/18/1  moves more blocks
+D     routed_hit / none, device I/Os          1.074× [0.992×, 1.162×]     1.074× [0.972×, 1.207×]  6/13/0  no difference detected
+D     routed_hit / none, blocks moved         3.649× [2.710×, 4.764×]     3.649× [2.603×, 5.069×]  0/19/0  moves more blocks
+D     routed_u0.5 / none, device I/Os         0.980× [0.949×, 1.002×]     0.980× [0.940×, 1.006×]  14/3/2  no difference detected
+D     routed_u0.5 / none, blocks moved        1.068× [1.026×, 1.120×]     1.068× [1.020×, 1.130×]  0/17/2  moves more blocks
+D     vcf_dev / none, device I/Os             0.985× [0.955×, 1.000×]     0.985× [0.943×, 1.000×]  3/1/15  no difference detected
+D     vcf_dev / none, blocks moved            1.197× [1.004×, 1.565×]     1.197× [1.000×, 1.727×]  0/4/15  no difference detected (paired only)
+D     vcf_hit / none, device I/Os             1.169× [1.058×, 1.298×]     1.169× [1.052×, 1.326×]  3/15/1  increases device I/Os
+D     vcf_hit / none, blocks moved            5.628× [3.525×, 8.055×]     5.628× [3.430×, 9.139×]  0/18/1  moves more blocks
+-----------------------------------------------------------------------------------------------------------------------------------------------
+64 MiB cache (131,072 blocks), n = 19 traces
+-----------------------------------------------------------------------------------------------------------------------------------------------
+H1    routed_hit - vcf_hit, hit               -0.003 [-0.005, -0.001]     -0.003 [-0.005, -0.001]  0/8/11  worse
+H2    routed_hit - sequential, hit         +39.142 [+29.366, +49.532]  +39.142 [+25.684, +50.041]  19/0/0  better
+H3    routed_u0.5 - vcf_u0.5, U(0.5)          +0.580 [-1.705, +3.049]     +0.580 [-2.211, +3.481]  8/11/0  no difference detected
+H4    routed_dev - vcf_dev, device I/Os       0.983× [0.966×, 1.002×]     0.983× [0.964×, 1.005×]  13/6/0  no difference detected
+H5    routed_hit - adaptive, hit           +39.949 [+30.135, +50.324]  +39.949 [+26.252, +50.954]  19/0/0  better
+H6    routed_hit_loco - vcf_hit, hit          -0.028 [-0.067, -0.004]     -0.028 [-0.074, -0.002]  0/8/11  worse
+H7    routed_hit - gvcf_hit, hit              -0.003 [-0.005, -0.001]     -0.003 [-0.005, -0.001]  0/8/11  worse
+H7    routed_u0.5 - gvcf_u0.5, U(0.5)        +4.350 [-0.822, +10.692]    +4.350 [-1.382, +11.126]  8/11/0  no difference detected
+H7    routed_dev - gvcf_dev, device I/Os      0.956× [0.918×, 0.989×]     0.956× [0.910×, 0.992×]  15/3/1  better
+S1    routed_hit - deep@8, hit             +33.274 [+23.843, +43.646]  +33.274 [+21.525, +44.023]  19/0/0  better
+S1    routed_hit - linux_ra@256, hit       +15.549 [+11.658, +19.799]   +15.549 [+9.582, +20.940]  19/0/0  better
+S1    routed_hit - adaptive_evidence, hit  +39.632 [+29.872, +49.962]  +39.632 [+26.124, +50.562]  19/0/0  better
+S2    routed_hit_gnb - routed_hit, hit        -1.462 [-2.543, -0.666]     -1.462 [-3.129, -0.508]  1/17/1  worse
+S2    routed_hit_gnb - vcf_hit, hit           -1.465 [-2.545, -0.668]     -1.465 [-3.133, -0.510]  1/17/1  worse
+R     oracle_hit - vcf_hit, hit               -0.378 [-0.685, -0.113]     -0.378 [-0.761, +0.039]  2/15/2  no difference detected (paired only)
+R     oracle_u0.5 - vcf_u0.5, U(0.5)          +4.496 [+1.290, +8.357]     +4.496 [-0.169, +8.844]  14/5/0  no difference detected (paired only)
+R     oracle_dev - vcf_dev, device I/Os       0.929× [0.891×, 0.967×]     0.929× [0.890×, 0.980×]  14/5/0  better
+D     adaptive / none, device I/Os            1.165× [1.034×, 1.354×]     1.165× [1.029×, 1.654×]  0/19/0  increases device I/Os
+D     adaptive / none, blocks moved           1.006× [1.003×, 1.010×]     1.006× [1.003×, 1.012×]  0/19/0  moves more blocks
+D     deep@256 / none, device I/Os            1.376× [1.104×, 1.718×]     1.376× [1.063×, 1.902×]  8/11/0  increases device I/Os
+D     deep@256 / none, blocks moved           2.795× [2.234×, 3.367×]     2.795× [2.108×, 3.746×]  0/19/0  moves more blocks
+D     linux_ra@256 / none, device I/Os        0.548× [0.452×, 0.640×]     0.548× [0.404×, 0.691×]  19/0/0  reduces device I/Os
+D     linux_ra@256 / none, blocks moved       1.066× [1.041×, 1.094×]     1.066× [1.029×, 1.104×]  0/19/0  moves more blocks
+D     oracle_hit / none, device I/Os          1.165× [0.948×, 1.451×]     1.165× [0.909×, 1.595×]  12/7/0  no difference detected
+D     oracle_hit / none, blocks moved         2.346× [1.945×, 2.747×]     2.346× [1.885×, 2.949×]  0/19/0  moves more blocks
+D     routed_dev / none, device I/Os          0.956× [0.918×, 0.989×]     0.956× [0.910×, 0.992×]  15/3/1  reduces device I/Os
+D     routed_dev / none, blocks moved         1.345× [1.200×, 1.511×]     1.345× [1.146×, 1.629×]  0/18/1  moves more blocks
+D     routed_hit / none, device I/Os          1.375× [1.104×, 1.717×]     1.375× [1.062×, 1.901×]  8/11/0  increases device I/Os
+D     routed_hit / none, blocks moved         2.795× [2.233×, 3.365×]     2.795× [2.108×, 3.746×]  0/19/0  moves more blocks
+D     routed_u0.5 / none, device I/Os         0.982× [0.917×, 1.051×]     0.982× [0.913×, 1.124×]  12/7/0  no difference detected
+D     routed_u0.5 / none, blocks moved        1.265× [1.177×, 1.370×]     1.265× [1.171×, 1.400×]  0/19/0  moves more blocks
+D     vcf_dev / none, device I/Os             0.972× [0.939×, 0.995×]     0.972× [0.928×, 0.998×]  7/1/11  reduces device I/Os
+D     vcf_dev / none, blocks moved            1.241× [1.048×, 1.518×]     1.241× [1.015×, 1.591×]  0/8/11  moves more blocks
+D     vcf_hit / none, device I/Os             1.376× [1.104×, 1.718×]     1.376× [1.063×, 1.902×]  8/11/0  increases device I/Os
+D     vcf_hit / none, blocks moved            2.795× [2.234×, 3.367×]     2.795× [2.108×, 3.746×]  0/19/0  moves more blocks
+-----------------------------------------------------------------------------------------------------------------------------------------------
+
+The web rankers (Table XVIII). The shipped ranker was regenerated and
+reproduces E4's test row exactly. The new families train on 100,000 split-1
+decisions and are tuned on a 100,000-decision split-2 sample; logistic_tuned
+is the same-data control, and its search chose class-balanced weights that
+rank well but feed the controller uncalibrated probabilities (K3 worse at both
+capacities).
+
+TABLE XVIII: Web ranker alternatives (track WRK; RetailRocket test split,
+simulated, per-session cache, assumed cost). Tuning: random-search trials and
+the selected trial's MRR@8 on the split-2 tuning sample. Ranking: test hit@1
+and MRR@8 over eligible next views, and the K1 difference in MRR@8 from the
+shipped logistic ranker. K3: each scorer's validated adaptive controller minus
+logistic's, ΔU(c) per view at the pre-registered c. K4: fixed depth 1 minus
+transition top-1; K5: fixed depth 4 minus online counts; Δ hit ratio. All Δ in
+pp with paired session-bootstrap intervals; ^+/^- better/worse. Scoring time
+per request is wall time on a contended shared host, never a cost.
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                    Tuning                      Test ranking                                   K3 ΔU(0.01)                                       K4 Δhit                                         K5 Δhit
+Scorer          Trials   MRR@8  Hit@1 (%)  MRR@8 (%)               K1 ΔMRR@8                   cap 8                  cap 32                   cap 8                  cap 32                   cap 8                  cap 32  μs/req.
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+logistic             –  0.0641       4.08       5.71                       –                       –                       –  -0.07 [-0.09, -0.06]^-  -0.08 [-0.10, -0.07]^-  -1.52 [-1.56, -1.48]^-  -1.81 [-1.86, -1.77]^-       27
+logistic_tuned      16  0.0643       4.08       5.71     +0.01 [0.00, +0.02]  -0.08 [-0.11, -0.06]^-  -0.31 [-0.34, -0.29]^-  -0.06 [-0.08, -0.05]^-  -0.07 [-0.08, -0.05]^-  -1.52 [-1.56, -1.48]^-  -1.80 [-1.85, -1.76]^-      186
+hgb                 24  0.0670       4.21       5.91  +0.20 [+0.17, +0.23]^+  +0.06 [+0.03, +0.08]^+  +0.16 [+0.13, +0.18]^+   -0.02 [-0.03, 0.00]^-  -0.03 [-0.04, -0.01]^-  -1.42 [-1.46, -1.38]^-  -1.70 [-1.74, -1.65]^-     6211
+rf                  12  0.0673       4.23       5.92  +0.21 [+0.18, +0.25]^+  +0.10 [+0.08, +0.12]^+  +0.13 [+0.10, +0.15]^+     -0.01 [-0.03, 0.00]   -0.02 [-0.04, 0.00]^-  -1.43 [-1.46, -1.39]^-  -1.70 [-1.74, -1.66]^-     6932
+et                  12  0.0674       4.23       5.92  +0.21 [+0.18, +0.25]^+  +0.12 [+0.10, +0.15]^+  +0.15 [+0.13, +0.18]^+    -0.01 [-0.03, +0.01]     -0.01 [-0.03, 0.00]  -1.42 [-1.46, -1.38]^-  -1.70 [-1.74, -1.65]^-     7176
+mlp                 12  0.0674       4.24       5.94  +0.23 [+0.20, +0.27]^+  +0.15 [+0.13, +0.18]^+  +0.15 [+0.12, +0.17]^+   -0.02 [-0.04, 0.00]^-  -0.02 [-0.04, -0.01]^-  -1.41 [-1.45, -1.37]^-  -1.69 [-1.74, -1.65]^-      223
+trans_s0             –       –       3.33       5.17  -0.54 [-0.59, -0.49]^-                       –                       –                       –                       –                       –                       –        –
+trans_online         –       –       6.33       9.85  +4.15 [+4.02, +4.27]^+                       –                       –                       –                       –                       –                       –        –
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Bootstrap: 10,000 session resamples, seed 42.
+
+MSRC light sample (E7). The only real workload label in the project is the seq
+flag of MSRC's .revised traces [45]. On 7 files chosen by size, the flag
+equals “starts where the previous request ended” on 0.984–1.000 of requests,
+so agreeing with it measures contiguity recovery, not workload recognition,
+and only 415 of 18,641 windows are sequential. In balanced accuracy [77], the
+shipped GNB scores 0.916 pooled and the shipped QDA 0.941, which is better
+(+2.46 pp [+1.90, +2.92]); of the synthetic-trained scikit-learn families, 3
+of 11 are better than GNB pooled and none is better on both sequential-rich
+traces and pooled. These intervals resample serially correlated windows and
+are optimistic; the rows are descriptive.

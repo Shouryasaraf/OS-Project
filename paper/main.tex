@@ -50,6 +50,12 @@
 % fair baseline while depth (or window growth) and freshness moved the
 % simulated hit ratio, and that simulated hit ratio did not rank measured
 % latency on the real disk.
+% Re-decided for paper-v2 with the classifier study (CLF, HSR, WRK): kept. No
+% routed classifier beat sequential at either capacity, the hindsight router
+% with depth as an action did not beat the per-trace fixed depth, and the
+% tuned web rankers stayed below transition top-1 and online counts; the one
+% learned gain (a tuned ranker improving the web controller's U(c)) is small
+% beside freshness, so "not learned prediction" still holds.
 \title{Depth and Freshness, Not Learned Prediction:\\
 A Pre-Registered Study of Prefetching from Disk Blocks to Product Pages}
 
@@ -81,6 +87,7 @@ Vellore, India}
 \input{sections/realio_results}
 \input{sections/web_results}
 \input{sections/live_results}
+\input{sections/classifier_results}
 \input{sections/discussion}
 \input{sections/threats}
 \input{sections/conclusion}

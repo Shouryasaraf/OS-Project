@@ -37,7 +37,7 @@ depth from the margin. The decision is therefore to throttle, not to choose
 a policy; see [DECISIONS.md](DECISIONS.md) D12 for why the target was
 inverted from "which policy is best" to "will prefetching hurt".
 
-## Fourteen policy modes
+## Fifteen policy modes
 
 `benchmark.MODES` and `sweep.RANKING_MODES`, in this order (appending a mode
 is safe; reordering breaks `test_benchmark_includes_skipped_optional_lstm`):
@@ -58,6 +58,7 @@ is safe; reordering breaks `test_benchmark_includes_skipped_optional_lstm`):
 | `deep` | Fixed read-ahead of `read_ahead_depth` blocks (`deep@N` in the sweeps) | Fixed heuristic |
 | `linux_ra` | Emulation of the Linux on-demand read-ahead policy, window ceiling `linux_ra_max_blocks` (`linux_ra@N`) | Fixed policy, reads cache state through `CacheView` |
 | `learned_depth` | Trained per-segment read-ahead depth (`depth_model.py`) | Optional artifact (`depth_model=`); otherwise `skipped:` |
+| `routed` | A router trained on real-trace hindsight labels picks the next window's action among `none`, `sequential`, `deep@8`, `deep@32`, `deep@256` (`hindsight.py`, track HSR) | Optional artifact (`router=`); otherwise `skipped:`; scored in `results/hindsight/` only |
 
 All modes use the same input requests, LRU capacity, and first-window warmup.
 The predictor objects in `baselines.py`, `lstm.py` and `depth_model.py`

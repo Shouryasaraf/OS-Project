@@ -7,8 +7,9 @@ fitted model drops into ``simulator.replay(mode="adaptive", model=...)``
 unchanged. scikit-learn (``Pedregosa et al. 2011``) is imported lazily: this
 module is optional and the disk core stays stdlib-only.
 
-Families and their canonical references (BibTeX keys in ``paper/refs.bib``
-and ``paper/refs_CLF.bib``):
+Families and their canonical references (BibTeX keys in ``paper/refs.bib``;
+``results/classifier/README.md`` names the CART book by its pre-merge key
+``breiman1984classification``):
 
 ==============  ===============================================  =====================
 family          estimator                                        reference
@@ -22,7 +23,7 @@ logreg          multinomial ``LogisticRegression`` (C, scaling)  cox1958regressi
 knn             ``KNeighborsClassifier`` (k, weights, scaling)   cover1967nearest
 svm_linear      ``SVC(kernel="linear")`` + Platt (C)             cortes1995support, platt1999probabilistic
 svm_rbf         ``SVC(kernel="rbf")`` + Platt (C, gamma)         cortes1995support, platt1999probabilistic
-cart            ``DecisionTreeClassifier`` (depth, leaf)         breiman1984classification
+cart            ``DecisionTreeClassifier`` (depth, leaf)         breiman1984cart
 rf              ``RandomForestClassifier``                       breiman2001random
 extra_trees     ``ExtraTreesClassifier``                         geurts2006extremely
 hgb             ``HistGradientBoostingClassifier``               friedman2001greedy, ke2017lightgbm
@@ -64,7 +65,7 @@ CITATIONS = {
     "knn": ("cover1967nearest",),
     "svm_linear": ("cortes1995support", "platt1999probabilistic"),
     "svm_rbf": ("cortes1995support", "platt1999probabilistic"),
-    "cart": ("breiman1984classification",),
+    "cart": ("breiman1984cart",),
     "rf": ("breiman2001random",),
     "extra_trees": ("geurts2006extremely",),
     "hgb": ("friedman2001greedy", "ke2017lightgbm"),

@@ -112,6 +112,23 @@
       "missing": [],
       "fixture": false,
       "note": "disk: C1 auto, mean over 56 paired traces; web: test split, scorer logistic, capacity 8; no measured web c in the results schema yet; width: text"
+    },
+    "figures/f9_action_space.pdf": {
+      "inputs": {
+        "classifier/router_summary.csv": {
+          "sha256": "d00f5f4d3574b7e08fdaa0a7c66330d3c6f51aa7e89779088743172728d6ba58",
+          "provenance_git_sha": "96b4dd8e21f56d38edcadb93e0866ac042873fa7",
+          "provenance_match": true
+        },
+        "hindsight/summary.csv": {
+          "sha256": "62bccb440efaa9aaf90ea71cfc13ab0b1fdc7423b70d30ffaf4b1830aae486b3",
+          "provenance_git_sha": "32f8bdda76f2615e24e7e014f406f2a59ab0dbcb",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
+      "fixture": false,
+      "note": "width: column"
     }
   }
 }

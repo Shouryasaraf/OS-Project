@@ -53,6 +53,12 @@ of median \liveSizeMedianKiB, all ASSUMED; each store runs
 \liveHeadlineReps{} repetitions of no prefetching, two fixed depths and the
 three controllers E4 validated at $c$ = \webHeadlineCost.
 
+\textbf{Classifier study.} The three experiments of
+Section~\ref{sec:classifiers} were pre-registered after E1--E6 had been run.
+Each tunes only on training or validation data (synthetic training seeds, the
+first disk slice with corpus-grouped folds, web split 2), scores its test data
+once, and uses the bootstraps and verdict words of the study it extends.
+
 \textbf{Statistics.} Disk intervals are \ciLevel{} percentile intervals of a
 paired bootstrap over traces and of a two-level cluster bootstrap over corpora
 and traces with twin families down-weighted (\diskBootstrapReps{} resamples,

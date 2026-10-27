@@ -1,25 +1,17 @@
 % III. A common model of prefetching. Definitions only; no measured numbers.
 % The disk break-even is a property of the per-block, no-merge cost model,
 % not of hardware (constraint 6). Source: src/prefetch_common/utility.py.
-% Figure F1 (schematic) comes from paper/figures/make_figures.py.
+% Figure F1 (schematic) comes from paper/figures/make_figures.py; it sits in
+% the appendix (page budget, paper/README.md "Length").
 
 \section{A Common Model of Prefetching}\label{sec:model}
 
-Both domains share one abstraction (Fig.~\ref{fig:f1}): a demand stream (the
+Both domains share one abstraction (Fig.~\ref{fig:f1} in the appendix): a demand stream (the
 512-byte blocks of each disk request, or the views of each web session) reads
 through a bounded LRU cache, and a policy issues speculative fetches into it.
 The policy decides \emph{which} items to fetch (the predictor), \emph{how
 many} (a depth or a growing window) and \emph{whether to fetch at all} (a gate
 that watches its own precision).
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{figures/f1_schematic}
-\caption{The shared abstraction. The disk study counts 512-byte blocks and the
-web study counts product views; both report hits, issued, useful and wasted
-prefetches, and the utility $U(c)$.}
-\label{fig:f1}
-\end{figure}
 
 \textbf{Metrics.} The \emph{hit ratio} counts hits per read block on disk and
 per view on the web. \emph{Precision} is useful over issued prefetches; the

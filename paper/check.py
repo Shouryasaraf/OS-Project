@@ -128,7 +128,7 @@ _ENVIRONMENT = re.compile(r"\\(begin|end)\s*\{([^{}]+)\}")
 _TODO = re.compile(r"\\todo\s*\{")
 # Control words of the numbers.py families (paper/numbers.py docstring).
 NUMBER_MACRO = re.compile(
-    r"\\((?:disk|dec|web|live|realio|ld|lstm|corpus|device|host|ci)[A-Z][A-Za-z]*)")
+    r"\\((?:disk|dec|web|live|realio|ld|lstm|corpus|device|host|ci|clf|hsr|wrk|msrc)[A-Z][A-Za-z]*)")
 _NEWCOMMAND = re.compile(r"^\\newcommand\{\\([A-Za-z]+)\}\{(.*)\}$", re.M)
 _MATH_ENVIRONMENTS = (
     "equation", "equation*", "align", "align*", "gather", "gather*",

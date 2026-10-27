@@ -371,6 +371,37 @@ Vellore Institute of Technology, Vellore, India}
 \end{frame}
 
 % ---------------------------------------------------------------- 15
+\begin{frame}{Would a better learner help?}
+  \begin{columns}[T]
+    \begin{column}{0.46\textwidth}
+      \small Pre-registered after E1--E6 were known.
+      \begin{itemize}
+        \item \pnum{clfSynTunedFamilies} tuned classifier families in the
+              router: \pnum{decClfClaimBeatsReadAheadOneMiBVerdict}
+              (vs \texttt{sequential}, 64\,MiB, best:
+              \pnum{decClfOneMlpSixtyFourMiBPairedCI}); device I/Os
+              \pnum{clfRouterIORatioMinOneMiB}--\pnum{clfRouterIORatioMaxOneMiB}
+              of \texttt{none}'s
+        \item depth as an action, hindsight labels: vs a fixed depth chosen per
+              trace, \pnum{decHsrHOneHitRatioRoutedHitVsVcfHitOneMiBPairedCI}
+              (\pnum{decHsrHOneHitRatioRoutedHitVsVcfHitOneMiBVerdict})
+        \item web: tuned MLP ranker raises the controller's $U(c)$ by
+              \pnum{decWrkSOneMlpUtilityPerViewCapEightCI}, still below online
+              counts (\pnum{decWrkKFiveMlpHitRatioCapEightCI} hit ratio)
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.54\textwidth}
+      \fig[0.6\textheight]{f9_action_space.pdf}
+    \end{column}
+  \end{columns}
+  \note{The router's four classes each prefetch at most two blocks, so any
+  classifier is capped near sequential; the classifiers disagree with GNB on
+  most windows yet the hit ratio barely moves. Give a router depth as an
+  action and it only matches a fixed depth chosen per trace. On the web a
+  better ranker helps a little; freshness still decides (D22, W5).}
+\end{frame}
+
+% ---------------------------------------------------------------- 16
 \begin{frame}{Across both domains}
   \begin{columns}[T]
     \begin{column}{0.42\textwidth}

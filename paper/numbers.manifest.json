@@ -5,6 +5,26 @@
   "outputs": {
     "numbers.tex": {
       "inputs": {
+        "classifier/router_comparisons.csv": {
+          "sha256": "70581a0184460fe344cdf8c55cb8cdaaa6586ec39c75976ec25c5466b38d0974",
+          "provenance_git_sha": "96b4dd8e21f56d38edcadb93e0866ac042873fa7",
+          "provenance_match": true
+        },
+        "classifier/router_summary.csv": {
+          "sha256": "d00f5f4d3574b7e08fdaa0a7c66330d3c6f51aa7e89779088743172728d6ba58",
+          "provenance_git_sha": "96b4dd8e21f56d38edcadb93e0866ac042873fa7",
+          "provenance_match": true
+        },
+        "classifier/synthetic_eval.csv": {
+          "sha256": "e933abccb36ad546376601233c937a34a9d003384ffb042ee2576dffe359d96c",
+          "provenance_git_sha": "96b4dd8e21f56d38edcadb93e0866ac042873fa7",
+          "provenance_match": true
+        },
+        "classifier/synthetic_tuning.csv": {
+          "sha256": "486bfc5b6e5860f935a40821649d2c56882c2d15e5e127b91d328b8fed5d7775",
+          "provenance_git_sha": "96b4dd8e21f56d38edcadb93e0866ac042873fa7",
+          "provenance_match": true
+        },
         "disk/corpus_profile.csv": {
           "sha256": "6c3ecb9f31eb58df545f6fa2b7d0c0eeb35ea2b69ba8715416de52d60f0f0d1d",
           "provenance_git_sha": "beea45c3007ddbc62e3390095a0a0fa92e319a85",
@@ -45,6 +65,21 @@
           "provenance_git_sha": "f44afe72efdb05479603c9270d6ad710f3eadde9",
           "provenance_match": true
         },
+        "hindsight/comparisons.csv": {
+          "sha256": "1b33495f11318e2cfa4d6dca648167c309766e94632b48e7afc5ec760a11f453",
+          "provenance_git_sha": "32f8bdda76f2615e24e7e014f406f2a59ab0dbcb",
+          "provenance_match": true
+        },
+        "hindsight/selection.csv": {
+          "sha256": "c88dbfecc096a1135b41c4c37a53c76aa0e1e92493b4594908315e10f97fc4a7",
+          "provenance_git_sha": "32f8bdda76f2615e24e7e014f406f2a59ab0dbcb",
+          "provenance_match": true
+        },
+        "hindsight/summary.csv": {
+          "sha256": "62bccb440efaa9aaf90ea71cfc13ab0b1fdc7423b70d30ffaf4b1830aae486b3",
+          "provenance_git_sha": "32f8bdda76f2615e24e7e014f406f2a59ab0dbcb",
+          "provenance_match": true
+        },
         "live/live_metrics.csv": {
           "sha256": "4a3675e9c4eddd70a0ff333277adb524ef7bf66e05cb0d02531019c2bf79fd89",
           "provenance_git_sha": "ae492d5dfa6fd8ad06bc3c85adcdfe6c48db0fa7",
@@ -53,6 +88,21 @@
         "live/live_parity.csv": {
           "sha256": "8415a58f52be84ab05c86aad5eb7bc2239599bbb49790363fca636afbddb079b",
           "provenance_git_sha": "ae492d5dfa6fd8ad06bc3c85adcdfe6c48db0fa7",
+          "provenance_match": true
+        },
+        "msrc_samples/classifier_deltas.csv": {
+          "sha256": "4353d5ac7beacb671eb2922771dd2a3e1351bc0dc2c9bb20f3859b723af0e2a4",
+          "provenance_git_sha": "9b8410bcea108fa69a34d696e6e72f2602b73c4a",
+          "provenance_match": true
+        },
+        "msrc_samples/classifier_metrics.csv": {
+          "sha256": "b745a72c47d1bbf33403450f5845bf52a14e3495cfdc7cadd224bce7d8bf4988",
+          "provenance_git_sha": "9b8410bcea108fa69a34d696e6e72f2602b73c4a",
+          "provenance_match": true
+        },
+        "msrc_samples/traces.csv": {
+          "sha256": "82a5bfc3fa79b07b460f6e150b34575ecbc65341980e5d46b8dbb4a08c6b765e",
+          "provenance_git_sha": "9b8410bcea108fa69a34d696e6e72f2602b73c4a",
           "provenance_match": true
         },
         "realio/device_sdb.json": {
@@ -109,11 +159,26 @@
           "sha256": "095b306c0e6c0ae134c6c44e7e1c6128ce60fbd8961422892933ccb4daea5a37",
           "provenance_git_sha": "6de973bf2dd315e21b3c857481af3d56ff795654",
           "provenance_match": true
+        },
+        "web_rankers/comparisons.csv": {
+          "sha256": "5d35a6a5888535fab759d2c5e0f48e5559cf0ff7f27e253702b76e317cafc70a",
+          "provenance_git_sha": "45eeb0515831d1731c6f8c0183676c09e2114d57",
+          "provenance_match": true
+        },
+        "web_rankers/ranking_metrics.csv": {
+          "sha256": "5826fa1739aad0d239513ca6dcd7487ca8ba75636e20d87c44c04de017a6adad",
+          "provenance_git_sha": "45eeb0515831d1731c6f8c0183676c09e2114d57",
+          "provenance_match": true
+        },
+        "web_rankers/tuning.csv": {
+          "sha256": "e59e79cb630271e70526517c359fb753542ee37d34ab831f2d49f3325f59842b",
+          "provenance_git_sha": "45eeb0515831d1731c6f8c0183676c09e2114d57",
+          "provenance_match": true
         }
       },
       "missing": [],
       "fixture": false,
-      "note": "21651 macros"
+      "note": "25576 macros"
     }
   }
 }
