@@ -185,6 +185,7 @@ a `skipped:` row with `None` metrics, never a substitute.
 | `simulator.py` | `replay`, `replay_capacities`, `paired_bootstrap`, calibration and break-even helpers |
 | `parallel.py` | session-sharded replay with exact counts; feedback and online-index state replayed in global time order |
 | `benchmark.py` | validation search **per capacity**, frozen test replay, comparisons against best fixed / `fixed0` / transition top-1, decomposition, freshness, learning curve |
+| `rankers.py` | track WRK, optional: tuned alternative rankers (`logistic_tuned`, `hgb`, `rf`, `et`, `mlp`) over the shipped candidates and features; random search on split 1 / split 2, `ArrayScorer` batch rankings that replay exactly what per-request `ModelScorer` returns; writes `results/web_rankers/` (`python -m webprefetch.rankers run`) |
 | `seqmodel.py` | GRU (optionally SASRec) next-view model, chronological protocols, no-pickle artifacts, `SequenceScorer.precompute` |
 | `diagnostics.py` | model comparisons, calibration, pair kinds, think time |
 | `demo_server.py`, `demo/` | local API and static demo; `adaptive` = the validated policy, `adaptive_cost` = penalty equals cost; `session_parity` |

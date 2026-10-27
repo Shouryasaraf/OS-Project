@@ -1,0 +1,487 @@
+{
+  "families": [
+    "logistic_tuned",
+    "hgb",
+    "rf",
+    "et",
+    "mlp"
+  ],
+  "baselines": [
+    "logistic",
+    "trans_s0",
+    "trans_online"
+  ],
+  "capacities": [
+    8,
+    32
+  ],
+  "trials": {
+    "logistic_tuned": 16,
+    "hgb": 24,
+    "rf": 12,
+    "et": 12,
+    "mlp": 12
+  },
+  "search_seed": 42,
+  "train_decisions": 100000,
+  "tune_decisions": 100000,
+  "train_positives": 5327,
+  "train_candidate_rows": 1374810,
+  "tune_positives": 3921,
+  "tune_candidate_rows": 1318063,
+  "validation_views": 532843,
+  "test_views": 532844,
+  "partial_run": false,
+  "selection": {
+    "logistic": {
+      "8": {
+        "0.0": {
+          "fixed": "fixed4",
+          "adaptive": "adaptive_0.002",
+          "adaptive_ca": "adaptive_ca_0.005",
+          "gate": "gate_0.01"
+        },
+        "0.01": {
+          "fixed": "fixed1",
+          "adaptive": "adaptive_0.01",
+          "adaptive_ca": "adaptive_ca_0.01",
+          "gate": "gate_0.01"
+        },
+        "0.05": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.05",
+          "adaptive_ca": "adaptive_ca_0.05",
+          "gate": "gate_0.1"
+        },
+        "0.25": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.2",
+          "adaptive_ca": "adaptive_ca_0.2",
+          "gate": "gate_0.1"
+        }
+      },
+      "32": {
+        "0.0": {
+          "fixed": "fixed8",
+          "adaptive": "adaptive_0.002",
+          "adaptive_ca": "adaptive_ca_0.002",
+          "gate": "gate_0.01"
+        },
+        "0.01": {
+          "fixed": "fixed1",
+          "adaptive": "adaptive_0.01",
+          "adaptive_ca": "adaptive_ca_0.01",
+          "gate": "gate_0.01"
+        },
+        "0.05": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.05",
+          "adaptive_ca": "adaptive_ca_0.05",
+          "gate": "gate_0.1"
+        },
+        "0.25": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.2",
+          "adaptive_ca": "adaptive_ca_0.2",
+          "gate": "gate_0.1"
+        }
+      }
+    },
+    "logistic_tuned": {
+      "8": {
+        "0.0": {
+          "fixed": "fixed4",
+          "adaptive": "adaptive_0.002",
+          "adaptive_ca": "adaptive_ca_0.005",
+          "gate": "gate_0.1"
+        },
+        "0.01": {
+          "fixed": "fixed1",
+          "adaptive": "adaptive_0.2",
+          "adaptive_ca": "adaptive_ca_0.2",
+          "gate": "gate_0.1"
+        },
+        "0.05": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.2",
+          "adaptive_ca": "adaptive_ca_0.2",
+          "gate": "gate_0.1"
+        },
+        "0.25": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.2",
+          "adaptive_ca": "adaptive_ca_0.2",
+          "gate": "gate_0.1"
+        }
+      },
+      "32": {
+        "0.0": {
+          "fixed": "fixed8",
+          "adaptive": "adaptive_0.002",
+          "adaptive_ca": "adaptive_ca_0.002",
+          "gate": "gate_0.05"
+        },
+        "0.01": {
+          "fixed": "fixed1",
+          "adaptive": "adaptive_0.1",
+          "adaptive_ca": "adaptive_ca_0.2",
+          "gate": "gate_0.1"
+        },
+        "0.05": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.2",
+          "adaptive_ca": "adaptive_ca_0.2",
+          "gate": "gate_0.1"
+        },
+        "0.25": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.2",
+          "adaptive_ca": "adaptive_ca_0.2",
+          "gate": "gate_0.1"
+        }
+      }
+    },
+    "hgb": {
+      "8": {
+        "0.0": {
+          "fixed": "fixed4",
+          "adaptive": "adaptive_0.005",
+          "adaptive_ca": "adaptive_ca_0.005",
+          "gate": "gate_0.01"
+        },
+        "0.01": {
+          "fixed": "fixed1",
+          "adaptive": "adaptive_0.01",
+          "adaptive_ca": "adaptive_ca_0.01",
+          "gate": "gate_0.01"
+        },
+        "0.05": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.05",
+          "adaptive_ca": "adaptive_ca_0.05",
+          "gate": "gate_0.1"
+        },
+        "0.25": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.2",
+          "adaptive_ca": "adaptive_ca_0.2",
+          "gate": "gate_0.1"
+        }
+      },
+      "32": {
+        "0.0": {
+          "fixed": "fixed8",
+          "adaptive": "adaptive_0.002",
+          "adaptive_ca": "adaptive_ca_0.002",
+          "gate": "gate_0.01"
+        },
+        "0.01": {
+          "fixed": "fixed1",
+          "adaptive": "adaptive_0.01",
+          "adaptive_ca": "adaptive_ca_0.01",
+          "gate": "gate_0.01"
+        },
+        "0.05": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.05",
+          "adaptive_ca": "adaptive_ca_0.05",
+          "gate": "gate_0.1"
+        },
+        "0.25": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.2",
+          "adaptive_ca": "adaptive_ca_0.2",
+          "gate": "gate_0.1"
+        }
+      }
+    },
+    "rf": {
+      "8": {
+        "0.0": {
+          "fixed": "fixed4",
+          "adaptive": "adaptive_0.005",
+          "adaptive_ca": "adaptive_ca_0.005",
+          "gate": "gate_0.01"
+        },
+        "0.01": {
+          "fixed": "fixed1",
+          "adaptive": "adaptive_0.02",
+          "adaptive_ca": "adaptive_ca_0.02",
+          "gate": "gate_0.02"
+        },
+        "0.05": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.05",
+          "adaptive_ca": "adaptive_ca_0.05",
+          "gate": "gate_0.1"
+        },
+        "0.25": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.2",
+          "adaptive_ca": "adaptive_ca_0.2",
+          "gate": "gate_0.1"
+        }
+      },
+      "32": {
+        "0.0": {
+          "fixed": "fixed8",
+          "adaptive": "adaptive_0.002",
+          "adaptive_ca": "adaptive_ca_0.002",
+          "gate": "gate_0.01"
+        },
+        "0.01": {
+          "fixed": "fixed1",
+          "adaptive": "adaptive_0.01",
+          "adaptive_ca": "adaptive_ca_0.01",
+          "gate": "gate_0.01"
+        },
+        "0.05": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.05",
+          "adaptive_ca": "adaptive_ca_0.05",
+          "gate": "gate_0.1"
+        },
+        "0.25": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.2",
+          "adaptive_ca": "adaptive_ca_0.2",
+          "gate": "gate_0.1"
+        }
+      }
+    },
+    "et": {
+      "8": {
+        "0.0": {
+          "fixed": "fixed4",
+          "adaptive": "adaptive_0.005",
+          "adaptive_ca": "adaptive_ca_0.005",
+          "gate": "gate_0.01"
+        },
+        "0.01": {
+          "fixed": "fixed1",
+          "adaptive": "adaptive_0.02",
+          "adaptive_ca": "adaptive_ca_0.02",
+          "gate": "gate_0.02"
+        },
+        "0.05": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.05",
+          "adaptive_ca": "adaptive_ca_0.05",
+          "gate": "gate_0.1"
+        },
+        "0.25": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.2",
+          "adaptive_ca": "adaptive_ca_0.2",
+          "gate": "gate_0.1"
+        }
+      },
+      "32": {
+        "0.0": {
+          "fixed": "fixed8",
+          "adaptive": "adaptive_0.002",
+          "adaptive_ca": "adaptive_ca_0.002",
+          "gate": "gate_0.01"
+        },
+        "0.01": {
+          "fixed": "fixed1",
+          "adaptive": "adaptive_0.01",
+          "adaptive_ca": "adaptive_ca_0.01",
+          "gate": "gate_0.01"
+        },
+        "0.05": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.05",
+          "adaptive_ca": "adaptive_ca_0.05",
+          "gate": "gate_0.1"
+        },
+        "0.25": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.2",
+          "adaptive_ca": "adaptive_ca_0.2",
+          "gate": "gate_0.1"
+        }
+      }
+    },
+    "mlp": {
+      "8": {
+        "0.0": {
+          "fixed": "fixed4",
+          "adaptive": "adaptive_0.005",
+          "adaptive_ca": "adaptive_ca_0.005",
+          "gate": "gate_0.01"
+        },
+        "0.01": {
+          "fixed": "fixed1",
+          "adaptive": "adaptive_0.02",
+          "adaptive_ca": "adaptive_ca_0.02",
+          "gate": "gate_0.02"
+        },
+        "0.05": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.05",
+          "adaptive_ca": "adaptive_ca_0.05",
+          "gate": "gate_0.1"
+        },
+        "0.25": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.2",
+          "adaptive_ca": "adaptive_ca_0.2",
+          "gate": "gate_0.1"
+        }
+      },
+      "32": {
+        "0.0": {
+          "fixed": "fixed8",
+          "adaptive": "adaptive_0.002",
+          "adaptive_ca": "adaptive_ca_0.002",
+          "gate": "gate_0.01"
+        },
+        "0.01": {
+          "fixed": "fixed1",
+          "adaptive": "adaptive_0.01",
+          "adaptive_ca": "adaptive_ca_0.01",
+          "gate": "gate_0.01"
+        },
+        "0.05": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.05",
+          "adaptive_ca": "adaptive_ca_0.05",
+          "gate": "gate_0.1"
+        },
+        "0.25": {
+          "fixed": "fixed0",
+          "adaptive": "adaptive_0.2",
+          "adaptive_ca": "adaptive_ca_0.2",
+          "gate": "gate_0.1"
+        }
+      }
+    }
+  },
+  "selected_family": {
+    "8": "mlp",
+    "32": "mlp"
+  },
+  "bootstrap": {
+    "reps": 10000,
+    "seed": 42,
+    "sessions": 364364
+  },
+  "search_s": 874.6,
+  "costs": {
+    "logistic_tuned": {
+      "train_s": 53.539108546450734,
+      "train_threads": 1,
+      "train_load": 138.28,
+      "params": {
+        "C": 0.001267425589893723,
+        "class_weight": "balanced",
+        "l1_ratio": 1.0
+      },
+      "refit_matches_trial": true,
+      "batch_us_per_request": 1.0792174293357455,
+      "batch_load": 72.92,
+      "request_us": 185.72470359504223,
+      "request_load": 47.32
+    },
+    "hgb": {
+      "train_s": 105.77824679762125,
+      "train_threads": 1,
+      "train_load": 134.83,
+      "params": {
+        "l2_regularization": 0.01444525102276306,
+        "learning_rate": 0.02692655251486473,
+        "max_iter": 400,
+        "max_leaf_nodes": 31,
+        "min_samples_leaf": 50
+      },
+      "refit_matches_trial": true,
+      "batch_us_per_request": 24.630396326562977,
+      "batch_load": 69.67,
+      "request_us": 6211.351713165641,
+      "request_load": 44.96
+    },
+    "rf": {
+      "train_s": 477.14060998521745,
+      "train_threads": 1,
+      "train_load": 99.93,
+      "params": {
+        "max_depth": 16,
+        "max_features": "sqrt",
+        "max_samples": 0.25,
+        "min_samples_leaf": 50,
+        "n_estimators": 200
+      },
+      "refit_matches_trial": true,
+      "batch_us_per_request": 94.1218091010454,
+      "batch_load": 63.65,
+      "request_us": 6932.270100340247,
+      "request_load": 42.8
+    },
+    "et": {
+      "train_s": 839.223039444536,
+      "train_threads": 1,
+      "train_load": 81.6,
+      "params": {
+        "max_depth": 20,
+        "max_features": 0.5,
+        "min_samples_leaf": 50,
+        "n_estimators": 200
+      },
+      "refit_matches_trial": true,
+      "batch_us_per_request": 156.23959072704446,
+      "batch_load": 58.9,
+      "request_us": 7175.86974427104,
+      "request_load": 40.57
+    },
+    "mlp": {
+      "train_s": 90.25122935324907,
+      "train_threads": 1,
+      "train_load": 136.65,
+      "params": {
+        "alpha": 0.00019762189340280086,
+        "batch_size": 256,
+        "hidden_layer_sizes": [
+          64,
+          32
+        ],
+        "learning_rate_init": 0.0016738085788752138
+      },
+      "refit_matches_trial": true,
+      "batch_us_per_request": 5.073087442018867,
+      "batch_load": 61.6,
+      "request_us": 222.56353870034218,
+      "request_load": 40.57
+    },
+    "logistic": {
+      "train_s": null,
+      "train_threads": null,
+      "train_load": null,
+      "params": {
+        "C": 10.0
+      },
+      "request_us": 27.300594374537468,
+      "request_load": 47.32,
+      "sklearn_request_us": 190.01492485404015
+    }
+  },
+  "load_avg": {
+    "start": 43.75,
+    "replay": 56.71
+  },
+  "e4_check": {
+    "hits": 65944,
+    "issued": 445796,
+    "expected": {
+      "views": 532844,
+      "capacity": 8,
+      "policy": "fixed1",
+      "hits": 65944,
+      "issued": 445796
+    },
+    "match": true
+  },
+  "workers": 16,
+  "wall_s": 2734.8,
+  "timing_note": "every timing is wall time on a contended shared host"
+}

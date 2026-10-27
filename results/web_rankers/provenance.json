@@ -1,0 +1,49 @@
+{
+  "format": "prefetch_common.provenance/1",
+  "study": "web_rankers",
+  "command": [
+    "reproduce.py",
+    "web_rankers",
+    "--workers",
+    "16"
+  ],
+  "git_sha": "45eeb0515831d1731c6f8c0183676c09e2114d57",
+  "git_dirty": true,
+  "created_utc": "2026-10-27T04:48:23+00:00",
+  "host": {
+    "hostname": "antpc",
+    "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+    "kernel": "6.14.0-37-generic",
+    "python": "3.12.3",
+    "cpu_count": 128
+  },
+  "load_avg": {
+    "start": [
+      43.2,
+      40.07,
+      31.61
+    ],
+    "end": [
+      29.47,
+      57.99,
+      77.68
+    ]
+  },
+  "wall_s": 2736.277,
+  "gpu": null,
+  "inputs": {
+    "data/processed/views.csv.gz": "20fe01a8bf4783da4d0f9dc0480935306387f6f5b1b8ea092e3dd9198a4e0a1d",
+    "models/web/ranker.joblib": "fbb743a077c06b5f1ea73e39b7c17ef9b8515d3bb8205d07ec59964a16d20142",
+    "models/web/candidate_index.joblib": "a92f9e663b05d2c1941d1d6f0f5771447a8541e71458d6c5bd5834c12667c476"
+  },
+  "outputs": {
+    "PREREGISTERED.md": "331aa3494c52e055112f26db2aac8d0fa81d7c6f09e6ebeb08816f3e5ba2f6f8",
+    "README.md": "f0e5b428a3b5a3759ea452e6089527cbc522aa60d62b2b2362a0452448bbb495",
+    "comparisons.csv": "5d35a6a5888535fab759d2c5e0f48e5559cf0ff7f27e253702b76e317cafc70a",
+    "policy_metrics.csv": "c6a291d12f37ce226782773f99e884375559ee0d0af18f195ec51318d19c8804",
+    "ranking_metrics.csv": "5826fa1739aad0d239513ca6dcd7487ca8ba75636e20d87c44c04de017a6adad",
+    "summary.json": "25c2cbcbb6e0938330d12c32b2bc4417c6f9b454ac3de986cecc5f42b48d19e1",
+    "tuning.csv": "e59e79cb630271e70526517c359fb753542ee37d34ab831f2d49f3325f59842b"
+  },
+  "notes": "WRK: ranker families tuned on split 1/2, policies selected on split 2, split 3 replayed once; simulated hit ratios, assumed costs; timings contended"
+}

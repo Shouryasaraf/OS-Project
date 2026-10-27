@@ -1,0 +1,152 @@
+comparison,headline,scorer,policy,baseline_scorer,baseline_policy,split,capacity,metric,cost,estimate,ci_lo,ci_hi,sessions,verdict,label,reps,seed,note
+S1,True,mlp,adaptive_0.02,logistic,adaptive_0.01,test,8,hit_ratio,0.0,-0.0016346247682248463,-0.0018409751526619795,-0.0014315865993645878,364364,worse,,10000,42,validation-selected scorer's validated adaptive minus the shipped logistic's
+S1,True,mlp,adaptive_0.02,logistic,adaptive_0.01,test,8,utility_per_view,0.01,0.0015389870205913924,0.0013253378731885909,0.0017513864489681976,364364,better,,10000,42,validation-selected scorer's validated adaptive minus the shipped logistic's
+S1,True,mlp,adaptive_0.01,logistic,adaptive_0.01,test,32,hit_ratio,0.0,0.005686467333778742,0.005436885144633431,0.005937687451392435,364364,better,,10000,42,validation-selected scorer's validated adaptive minus the shipped logistic's
+S1,True,mlp,adaptive_0.01,logistic,adaptive_0.01,test,32,utility_per_view,0.01,0.001466751994955371,0.0012195691666803822,0.0017149720896723385,364364,better,,10000,42,validation-selected scorer's validated adaptive minus the shipped logistic's
+K4,False,logistic,fixed1,trans_s0,fixed1,test,8,hit_ratio,0.0,-0.0007375517036881338,-0.0008836961583650989,-0.0005962022893370863,364364,worse,,10000,42,
+K4,False,logistic,fixed1,trans_s0,fixed1,test,8,utility_per_view,0.01,-0.0006134440849479397,-0.0007590385139414358,-0.00047228627124504664,364364,worse,,10000,42,
+K5,False,logistic,fixed4,trans_online,fixed4,test,8,hit_ratio,0.0,-0.01522584471252374,-0.015619467782785685,-0.014831440445998234,364364,worse,,10000,42,
+K5,False,logistic,fixed4,trans_online,fixed4,test,8,utility_per_view,0.01,-0.014843687833587317,-0.01524273346241747,-0.01444821097102411,364364,worse,,10000,42,
+K6,False,logistic,adaptive_0.01,logistic,fixed1,test,8,utility_per_view,0.01,0.0035759997297520477,0.003337160221379667,0.0038163209708805593,364364,better,adaptive wins,10000,42,"validated adaptive minus validated best fixed depth (same scorer, capacity)"
+K6,False,logistic,adaptive_0.01,logistic,fixed0,test,8,utility_per_view,0.01,0.004441243590994738,0.004115157713199633,0.004768807469679532,364364,better,adaptive wins,10000,42,validated adaptive minus no prefetching (decision rule 1)
+K4,False,logistic,fixed1,trans_s0,fixed1,test,32,hit_ratio,0.0,-0.0008051136918122377,-0.0009580351401488813,-0.0006575026631914104,364364,worse,,10000,42,
+K4,False,logistic,fixed1,trans_s0,fixed1,test,32,utility_per_view,0.01,-0.0006926229815856048,-0.0008449649802687658,-0.0005461332387148094,364364,worse,,10000,42,
+K5,False,logistic,fixed4,trans_online,fixed4,test,32,hit_ratio,0.0,-0.018117873148613853,-0.018568909115695025,-0.017676231404160105,364364,worse,,10000,42,
+K5,False,logistic,fixed4,trans_online,fixed4,test,32,utility_per_view,0.01,-0.017164348289555667,-0.017607738976831676,-0.016726621903063444,364364,worse,,10000,42,
+K6,False,logistic,adaptive_0.01,logistic,fixed1,test,32,utility_per_view,0.01,0.005813502638670981,0.005559816717400172,0.0060738024487249935,364364,better,adaptive wins,10000,42,"validated adaptive minus validated best fixed depth (same scorer, capacity)"
+K6,False,logistic,adaptive_0.01,logistic,fixed0,test,32,utility_per_view,0.01,0.007680071465569659,0.007288007063284935,0.00808739121929986,364364,better,adaptive wins,10000,42,validated adaptive minus no prefetching (decision rule 1)
+K2,True,logistic_tuned,fixed1,logistic,fixed1,test,8,hit_ratio,0.0,0.00012574036678652663,7.125947445728932e-05,0.0001808471905669134,364364,better,,10000,42,
+K2,True,logistic_tuned,fixed1,logistic,fixed1,test,8,utility_per_view,0.01,0.00012048554548798524,6.562950307598951e-05,0.0001757144452442332,364364,better,,10000,42,
+K3,True,logistic_tuned,adaptive_0.2,logistic,adaptive_0.01,test,8,hit_ratio,0.0,-0.0006662362717793575,-0.0009176168806151564,-0.00041941177884464255,364364,worse,,10000,42,
+K3,True,logistic_tuned,adaptive_0.2,logistic,adaptive_0.01,test,8,utility_per_view,0.01,-0.0008091486438807605,-0.0010700026485202057,-0.0005537737647573342,364364,worse,,10000,42,
+K4,True,logistic_tuned,fixed1,trans_s0,fixed1,test,8,hit_ratio,0.0,-0.0006118113369016072,-0.0007602021508267667,-0.0004701196245667877,364364,worse,,10000,42,
+K4,True,logistic_tuned,fixed1,trans_s0,fixed1,test,8,utility_per_view,0.01,-0.0004929585394599545,-0.0006407948485881962,-0.00035207967800660956,364364,worse,,10000,42,
+K5,True,logistic_tuned,fixed4,trans_online,fixed4,test,8,hit_ratio,0.0,-0.015165789611968981,-0.01555934022271323,-0.014769316970479214,364364,worse,,10000,42,
+K5,True,logistic_tuned,fixed4,trans_online,fixed4,test,8,utility_per_view,0.01,-0.014785115343327503,-0.015179569909688337,-0.014386887195311322,364364,worse,,10000,42,
+K6,True,logistic_tuned,adaptive_0.2,logistic_tuned,fixed1,test,8,utility_per_view,0.01,0.0026463655403833014,0.002528902060538948,0.0027647254773160994,364364,better,adaptive wins,10000,42,"validated adaptive minus validated best fixed depth (same scorer, capacity)"
+K6,True,logistic_tuned,adaptive_0.2,logistic_tuned,fixed0,test,8,utility_per_view,0.01,0.0036320949471139764,0.0033257434293204467,0.00394422751122577,364364,better,adaptive wins,10000,42,validated adaptive minus no prefetching (decision rule 1)
+K2,True,logistic_tuned,fixed1,logistic,fixed1,test,32,hit_ratio,0.0,0.00013887742003288017,8.253143059890049e-05,0.0001956881905624679,364364,better,,10000,42,
+K2,True,logistic_tuned,fixed1,logistic,fixed1,test,32,utility_per_view,0.01,0.00013416684808311626,7.768596886510276e-05,0.0001911296994350138,364364,better,,10000,42,
+K3,True,logistic_tuned,adaptive_0.1,logistic,adaptive_0.01,test,32,hit_ratio,0.0,-0.000987155715368851,-0.0012504773036784503,-0.000731269623820905,364364,worse,,10000,42,
+K3,True,logistic_tuned,adaptive_0.1,logistic,adaptive_0.01,test,32,utility_per_view,0.01,-0.0031249671573668845,-0.0033856928420951987,-0.002867698965049643,364364,worse,,10000,42,
+K4,True,logistic_tuned,fixed1,trans_s0,fixed1,test,32,hit_ratio,0.0,-0.0006662362717793575,-0.0008166242385976055,-0.0005180375025103639,364364,worse,,10000,42,
+K4,True,logistic_tuned,fixed1,trans_s0,fixed1,test,32,utility_per_view,0.01,-0.0005584561335024885,-0.000708411787537397,-0.0004108678116880085,364364,worse,,10000,42,
+K5,True,logistic_tuned,fixed4,trans_online,fixed4,test,32,hit_ratio,0.0,-0.018048434438597414,-0.018500208521534493,-0.017604792110922717,364364,worse,,10000,42,
+K5,True,logistic_tuned,fixed4,trans_online,fixed4,test,32,utility_per_view,0.01,-0.017096955206401875,-0.017545108050706002,-0.01665748509319459,364364,worse,,10000,42,
+K6,True,logistic_tuned,adaptive_0.1,logistic_tuned,fixed1,test,32,utility_per_view,0.01,0.00255436863322098,0.0023852705608678345,0.0027256512786195696,364364,better,adaptive wins,10000,42,"validated adaptive minus validated best fixed depth (same scorer, capacity)"
+K6,True,logistic_tuned,adaptive_0.1,logistic_tuned,fixed0,test,32,utility_per_view,0.01,0.004555104308202776,0.0042009484607577734,0.004917741881774091,364364,better,adaptive wins,10000,42,validated adaptive minus no prefetching (decision rule 1)
+K2,True,hgb,fixed1,logistic,fixed1,test,8,hit_ratio,0.0,0.0005592631239161931,0.0003930682360526415,0.0007303314957882948,364364,better,,10000,42,
+K2,True,hgb,fixed1,logistic,fixed1,test,8,utility_per_view,0.01,0.0004229568128758136,0.00025692964869356244,0.000594253157749262,364364,better,,10000,42,
+K3,True,hgb,adaptive_0.01,logistic,adaptive_0.01,test,8,hit_ratio,0.0,0.002756904459841905,0.0025122220474503134,0.0029972556672324237,364364,better,,10000,42,
+K3,True,hgb,adaptive_0.01,logistic,adaptive_0.01,test,8,utility_per_view,0.01,0.0005644616435579644,0.000315478537895707,0.000809451826060741,364364,better,,10000,42,
+K4,True,hgb,fixed1,trans_s0,fixed1,test,8,hit_ratio,0.0,-0.00017828857977194077,-0.0003418570012322429,-1.5024304421067075e-05,364364,worse,,10000,42,
+K4,True,hgb,fixed1,trans_s0,fixed1,test,8,utility_per_view,0.01,-0.00019048727207212618,-0.0003538836083229352,-2.8696113770878397e-05,364364,worse,,10000,42,
+K5,True,hgb,fixed4,trans_online,fixed4,test,8,hit_ratio,0.0,-0.014195524393631156,-0.014585489119108341,-0.013803988088993054,364364,worse,,10000,42,
+K5,True,hgb,fixed4,trans_online,fixed4,test,8,utility_per_view,0.01,-0.01439348101883478,-0.014786849473484352,-0.014000304518293965,364364,worse,,10000,42,
+K6,True,hgb,adaptive_0.01,hgb,fixed1,test,8,utility_per_view,0.01,0.003717504560434198,0.003464860230181987,0.003973886764792134,364364,better,adaptive wins,10000,42,"validated adaptive minus validated best fixed depth (same scorer, capacity)"
+K6,True,hgb,adaptive_0.01,hgb,fixed0,test,8,utility_per_view,0.01,0.005005705234552703,0.004657401916003858,0.005361500541923727,364364,better,adaptive wins,10000,42,validated adaptive minus no prefetching (decision rule 1)
+K2,True,hgb,fixed1,logistic,fixed1,test,32,hit_ratio,0.0,0.0005404959049928309,0.00036844418648854135,0.0007166422692651104,364364,better,,10000,42,
+K2,True,hgb,fixed1,logistic,fixed1,test,32,utility_per_view,0.01,0.00039253515100104344,0.00022070420340915468,0.0005688144156437647,364364,better,,10000,42,
+K3,True,hgb,adaptive_0.01,logistic,adaptive_0.01,test,32,hit_ratio,0.0,0.003625826695993574,0.0033826911840047014,0.0038667811401352026,364364,better,,10000,42,
+K3,True,hgb,adaptive_0.01,logistic,adaptive_0.01,test,32,utility_per_view,0.01,0.0015652423598651762,0.0013185600671071927,0.0018052782717199352,364364,better,,10000,42,
+K4,True,hgb,fixed1,trans_s0,fixed1,test,32,hit_ratio,0.0,-0.0002646177868194068,-0.0004335611626152857,-9.566406422675096e-05,364364,worse,,10000,42,
+K4,True,hgb,fixed1,trans_s0,fixed1,test,32,utility_per_view,0.01,-0.00030008783058456135,-0.0004689090748537588,-0.00013127565070724306,364364,worse,,10000,42,
+K5,True,hgb,fixed4,trans_online,fixed4,test,32,hit_ratio,0.0,-0.016956182297257733,-0.017395117546965613,-0.016512263645468348,364364,worse,,10000,42,
+K5,True,hgb,fixed4,trans_online,fixed4,test,32,utility_per_view,0.01,-0.016767947091456414,-0.01720242605185665,-0.016329610953636768,364364,worse,,10000,42,
+K6,True,hgb,adaptive_0.01,hgb,fixed1,test,32,utility_per_view,0.01,0.0069862098475351134,0.006696969920149347,0.00727864043992525,364364,better,adaptive wins,10000,42,"validated adaptive minus validated best fixed depth (same scorer, capacity)"
+K6,True,hgb,adaptive_0.01,hgb,fixed0,test,32,utility_per_view,0.01,0.009245313825434835,0.008812404410942628,0.009689050790140626,364364,better,adaptive wins,10000,42,validated adaptive minus no prefetching (decision rule 1)
+K2,True,rf,fixed1,logistic,fixed1,test,8,hit_ratio,0.0,0.0006043044493322623,0.0004328919931386031,0.0007819558315383707,364364,better,,10000,42,
+K2,True,rf,fixed1,logistic,fixed1,test,8,utility_per_view,0.01,0.00039360488247967514,0.00022150866735612116,0.0005701133164718712,364364,better,,10000,42,
+K3,True,rf,adaptive_0.02,logistic,adaptive_0.01,test,8,hit_ratio,0.0,-0.003490702719745366,-0.003721045159174464,-0.0032627946245874784,364364,worse,,10000,42,
+K3,True,rf,adaptive_0.02,logistic,adaptive_0.01,test,8,utility_per_view,0.01,0.0009938368453055678,0.0007558070748404193,0.001228163347935229,364364,better,,10000,42,
+K4,True,rf,fixed1,trans_s0,fixed1,test,8,hit_ratio,0.0,-0.0001332472543558715,-0.00030455119894016747,3.746682666831347e-05,364364,no difference detected,,10000,42,
+K4,True,rf,fixed1,trans_s0,fixed1,test,8,utility_per_view,0.01,-0.00021983920246826464,-0.00039137902026229306,-5.0018315141459614e-05,364364,worse,,10000,42,
+K5,True,rf,fixed4,trans_online,fixed4,test,8,hit_ratio,0.0,-0.014251826050401243,-0.014648858953664658,-0.013856802992334912,364364,worse,,10000,42,
+K5,True,rf,fixed4,trans_online,fixed4,test,8,utility_per_view,0.01,-0.014410540420836117,-0.01480662515731958,-0.01401433091233406,364364,worse,,10000,42,
+K6,True,rf,adaptive_0.02,rf,fixed1,test,8,utility_per_view,0.01,0.004176231692577941,0.00395118103688173,0.004403195766627871,364364,better,adaptive wins,10000,42,"validated adaptive minus validated best fixed depth (same scorer, capacity)"
+K6,True,rf,adaptive_0.02,rf,fixed0,test,8,utility_per_view,0.01,0.005435080436300306,0.005167234185014375,0.00571949692202257,364364,better,adaptive wins,10000,42,validated adaptive minus no prefetching (decision rule 1)
+K2,True,rf,fixed1,logistic,fixed1,test,32,hit_ratio,0.0,0.0006230716682556246,0.0004463199979560196,0.000801777482689489,364364,better,,10000,42,
+K2,True,rf,fixed1,logistic,fixed1,test,32,utility_per_view,0.01,0.00040165601939779746,0.00022509464046637363,0.0005794956689452419,364364,better,,10000,42,
+K3,True,rf,adaptive_0.01,logistic,adaptive_0.01,test,32,hit_ratio,0.0,0.003357455465389495,0.0031217103835050955,0.003598801472198051,364364,better,,10000,42,
+K3,True,rf,adaptive_0.01,logistic,adaptive_0.01,test,32,utility_per_view,0.01,0.0012800557011057644,0.0010456929140272204,0.0015184515460340854,364364,better,,10000,42,
+K4,True,rf,fixed1,trans_s0,fixed1,test,32,hit_ratio,0.0,-0.0001820420235566132,-0.00035544597602981786,-5.662975363192496e-06,364364,worse,,10000,42,
+K4,True,rf,fixed1,trans_s0,fixed1,test,32,utility_per_view,0.01,-0.00029096696218780727,-0.00046408665522127866,-0.00011571087390625888,364364,worse,,10000,42,
+K5,True,rf,fixed4,trans_online,fixed4,test,32,hit_ratio,0.0,-0.017001223622673804,-0.017449550841809592,-0.016555655030718885,364364,worse,,10000,42,
+K5,True,rf,fixed4,trans_online,fixed4,test,32,utility_per_view,0.01,-0.016773483421038803,-0.01721781575546456,-0.01633537752155224,364364,worse,,10000,42,
+K6,True,rf,adaptive_0.01,rf,fixed1,test,32,utility_per_view,0.01,0.006691902320378947,0.006408503306983073,0.00698826729501468,364364,better,adaptive wins,10000,42,"validated adaptive minus validated best fixed depth (same scorer, capacity)"
+K6,True,rf,adaptive_0.01,rf,fixed0,test,32,utility_per_view,0.01,0.008960127166675423,0.008533147762108123,0.009401575120112905,364364,better,adaptive wins,10000,42,validated adaptive minus no prefetching (decision rule 1)
+K2,True,et,fixed1,logistic,fixed1,test,8,hit_ratio,0.0,0.0006230716682556246,0.000451014975823021,0.0007993740152911193,364364,better,,10000,42,
+K2,True,et,fixed1,logistic,fixed1,test,8,utility_per_view,0.01,0.0003419950304404291,0.00017035190189614862,0.0005177805473208153,364364,better,,10000,42,
+K3,True,et,adaptive_0.02,logistic,adaptive_0.01,test,8,hit_ratio,0.0,-0.003284263311588382,-0.0035190223216467267,-0.0030522434299954816,364364,worse,,10000,42,
+K3,True,et,adaptive_0.02,logistic,adaptive_0.01,test,8,utility_per_view,0.01,0.0012243545953412253,0.0009807883586868285,0.0014661266818110496,364364,better,,10000,42,
+K4,True,et,fixed1,trans_s0,fixed1,test,8,hit_ratio,0.0,-0.00011448003543250933,-0.00029148163263774423,6.181338571503622e-05,364364,no difference detected,,10000,42,
+K4,True,et,fixed1,trans_s0,fixed1,test,8,utility_per_view,0.01,-0.0002714490545075106,-0.0004484774770631442,-9.53400284037091e-05,364364,worse,,10000,42,
+K5,True,et,fixed4,trans_online,fixed4,test,8,hit_ratio,0.0,-0.014234935553370217,-0.014628730830622967,-0.013840030439993831,364364,worse,,10000,42,
+K5,True,et,fixed4,trans_online,fixed4,test,8,utility_per_view,0.01,-0.014562686264647816,-0.014956938280252182,-0.014167292765051423,364364,worse,,10000,42,
+K6,True,et,adaptive_0.02,et,fixed1,test,8,utility_per_view,0.01,0.004458359294652844,0.004227001332954382,0.004685176666728116,364364,better,adaptive wins,10000,42,"validated adaptive minus validated best fixed depth (same scorer, capacity)"
+K6,True,et,adaptive_0.02,et,fixed0,test,8,utility_per_view,0.01,0.005665598186335963,0.00539299723095687,0.005954660767340471,364364,better,adaptive wins,10000,42,validated adaptive minus no prefetching (decision rule 1)
+K2,True,et,fixed1,logistic,fixed1,test,32,hit_ratio,0.0,0.00066998971556403,0.0004939023137874283,0.0008463392161536951,364364,better,,10000,42,
+K2,True,et,fixed1,logistic,fixed1,test,32,utility_per_view,0.01,0.00037555081787540065,0.0001988754843849411,0.0005515881002092358,364364,better,,10000,42,
+K3,True,et,adaptive_0.01,logistic,adaptive_0.01,test,32,hit_ratio,0.0,0.003858540210643265,0.003627269006301959,0.004091852339485256,364364,better,,10000,42,
+K3,True,et,adaptive_0.01,logistic,adaptive_0.01,test,32,utility_per_view,0.01,0.001526150242847813,0.0012964908763315065,0.0017587776267119757,364364,better,,10000,42,
+K4,True,et,fixed1,trans_s0,fixed1,test,32,hit_ratio,0.0,-0.00013512397624820772,-0.0003150748276681961,4.5082999564231366e-05,364364,no difference detected,,10000,42,
+K4,True,et,fixed1,trans_s0,fixed1,test,32,utility_per_view,0.01,-0.0003170721637102041,-0.0004970814692418053,-0.0001368731344610279,364364,worse,,10000,42,
+K5,True,et,fixed4,trans_online,fixed4,test,32,hit_ratio,0.0,-0.01699371673510446,-0.01744183672111558,-0.01654961377397062,364364,worse,,10000,42,
+K5,True,et,fixed4,trans_online,fixed4,test,32,utility_per_view,0.01,-0.016959429026131474,-0.017402273541548476,-0.016518974360412924,364364,worse,,10000,42,
+K6,True,et,adaptive_0.01,et,fixed1,test,32,utility_per_view,0.01,0.006964102063643392,0.006679441558503648,0.007261385344136351,364364,better,adaptive wins,10000,42,"validated adaptive minus validated best fixed depth (same scorer, capacity)"
+K6,True,et,adaptive_0.01,et,fixed0,test,32,utility_per_view,0.01,0.009206221708417473,0.008773257063794978,0.009656323339891944,364364,better,adaptive wins,10000,42,validated adaptive minus no prefetching (decision rule 1)
+K2,True,mlp,fixed1,logistic,fixed1,test,8,hit_ratio,0.0,0.0005386191831004947,0.0003753488874583132,0.0007011535220572186,364364,better,,10000,42,
+K2,True,mlp,fixed1,logistic,fixed1,test,8,utility_per_view,0.01,0.0004713387032602413,0.00030766522167148915,0.0006338096596343064,364364,better,,10000,42,
+K3,True,mlp,adaptive_0.02,logistic,adaptive_0.01,test,8,hit_ratio,0.0,-0.0016346247682248463,-0.0018409751526619795,-0.0014315865993645878,364364,worse,,10000,42,
+K3,True,mlp,adaptive_0.02,logistic,adaptive_0.01,test,8,utility_per_view,0.01,0.0015389870205913924,0.0013253378731885909,0.0017513864489681976,364364,better,,10000,42,
+K4,True,mlp,fixed1,trans_s0,fixed1,test,8,hit_ratio,0.0,-0.00019893252058763916,-0.0003701621683869071,-3.384588540246567e-05,364364,worse,,10000,42,
+K4,True,mlp,fixed1,trans_s0,fixed1,test,8,utility_per_view,0.01,-0.00014210538168769847,-0.00031245521952396504,2.258951777980947e-05,364364,no difference detected,,10000,42,
+K5,True,mlp,fixed4,trans_online,fixed4,test,8,hit_ratio,0.0,-0.014058523695490613,-0.01445545740019062,-0.013664149804716986,364364,worse,,10000,42,
+K5,True,mlp,fixed4,trans_online,fixed4,test,8,utility_per_view,0.01,-0.013945563804790896,-0.014341556995693656,-0.013549575968548456,364364,worse,,10000,42,
+K6,True,mlp,adaptive_0.02,mlp,fixed1,test,8,utility_per_view,0.01,0.0046436480470831995,0.004425333174128021,0.004866275673431249,364364,better,adaptive wins,10000,42,"validated adaptive minus validated best fixed depth (same scorer, capacity)"
+K6,True,mlp,adaptive_0.02,mlp,fixed0,test,8,utility_per_view,0.01,0.005980230611586129,0.005682297774679734,0.006287135043647385,364364,better,adaptive wins,10000,42,validated adaptive minus no prefetching (decision rule 1)
+K2,True,mlp,fixed1,logistic,fixed1,test,32,hit_ratio,0.0,0.0005799070647318916,0.00041158454510787935,0.0007477336507241699,364364,better,,10000,42,
+K2,True,mlp,fixed1,logistic,fixed1,test,32,utility_per_view,0.01,0.0005093986232368198,0.00034069885973227117,0.000677371850392008,364364,better,,10000,42,
+K3,True,mlp,adaptive_0.01,logistic,adaptive_0.01,test,32,hit_ratio,0.0,0.005686467333778742,0.005436885144633431,0.005937687451392435,364364,better,,10000,42,
+K3,True,mlp,adaptive_0.01,logistic,adaptive_0.01,test,32,utility_per_view,0.01,0.001466751994955371,0.0012195691666803822,0.0017149720896723385,364364,better,,10000,42,
+K4,True,mlp,fixed1,trans_s0,fixed1,test,32,hit_ratio,0.0,-0.0002252066270803462,-0.00040021470978520134,-5.4382224210141734e-05,364364,worse,,10000,42,
+K4,True,mlp,fixed1,trans_s0,fixed1,test,32,utility_per_view,0.01,-0.000183224358348785,-0.0003579749657664296,-1.2496529387044549e-05,364364,worse,,10000,42,
+K5,True,mlp,fixed4,trans_online,fixed4,test,32,hit_ratio,0.0,-0.01690363408427232,-0.017355857348593903,-0.016459411383158158,364364,worse,,10000,42,
+K5,True,mlp,fixed4,trans_online,fixed4,test,32,utility_per_view,0.01,-0.016298410041212814,-0.01674563664564307,-0.01585683556044987,364364,worse,,10000,42,
+K6,True,mlp,adaptive_0.01,mlp,fixed1,test,32,utility_per_view,0.01,0.0067708560103895326,0.006461364742378762,0.00709198854774912,364364,better,adaptive wins,10000,42,"validated adaptive minus validated best fixed depth (same scorer, capacity)"
+K6,True,mlp,adaptive_0.01,mlp,fixed0,test,32,utility_per_view,0.01,0.009146823460525031,0.008696073612895917,0.00961235799851844,364364,better,adaptive wins,10000,42,validated adaptive minus no prefetching (decision rule 1)
+K1,True,logistic_tuned,ranking,logistic,ranking,test,,hit_at_1,0.0,1.1870845204178537e-05,-0.00018891856831270573,0.00020259784080769398,72966,no difference detected,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,True,logistic_tuned,ranking,logistic,ranking,test,,coverage_at_8,0.0,-0.00010090218423551757,-0.000284856156859681,7.719939632787261e-05,72966,no difference detected,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,True,logistic_tuned,ranking,logistic,ranking,test,,mrr_at_8,0.0,8.869217202550532e-05,-2.905435567754551e-05,0.00020160691230728222,72966,no difference detected,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,True,logistic_tuned,ranking,logistic,ranking,test,,novel_hit_at_1,0.0,0.0006275464805882078,0.0003773604488335623,0.0008743075112217595,72966,better,,10000,42,per novel eligible next view; sessions with at least one eligible next view
+K1,True,logistic_tuned,ranking,logistic,ranking,test,,novel_coverage_at_8,0.0,-0.00011239638458296258,-0.0003931147830716603,0.0001610535578886267,72966,no difference detected,,10000,42,per novel eligible next view; sessions with at least one eligible next view
+K1,True,hgb,ranking,logistic,ranking,test,,hit_at_1,0.0,0.0013414055080721748,0.0008353968920301808,0.0018423340320850828,72966,better,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,True,hgb,ranking,logistic,ranking,test,,coverage_at_8,0.0,0.002035849952516619,0.0015815460448445184,0.002483575947738228,72966,better,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,True,hgb,ranking,logistic,ranking,test,,mrr_at_8,0.0,0.001998145887034776,0.0016632395734058124,0.002334551387386956,72966,better,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,True,hgb,ranking,logistic,ranking,test,,novel_hit_at_1,0.0,0.001929471268674191,0.0011634854748009868,0.0026811053891992506,72966,better,,10000,42,per novel eligible next view; sessions with at least one eligible next view
+K1,True,hgb,ranking,logistic,ranking,test,,novel_coverage_at_8,0.0,0.0030440687491219034,0.0023757155921041583,0.0037066438437337547,72966,better,,10000,42,per novel eligible next view; sessions with at least one eligible next view
+K1,True,rf,ranking,logistic,ranking,test,,hit_at_1,0.0,0.0014838556505223173,0.0009596776941541103,0.00199640070070165,72966,better,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,True,rf,ranking,logistic,ranking,test,,coverage_at_8,0.0,0.0022851377018043685,0.001815654358816926,0.0027433976908133825,72966,better,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,True,rf,ranking,logistic,ranking,test,,mrr_at_8,0.0,0.0021358264934653822,0.0017848470830205236,0.002483477602057795,72966,better,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,True,rf,ranking,logistic,ranking,test,,novel_hit_at_1,0.0,0.0018264412494731418,0.0010391668524075293,0.002600854961940409,72966,better,,10000,42,per novel eligible next view; sessions with at least one eligible next view
+K1,True,rf,ranking,logistic,ranking,test,,novel_coverage_at_8,0.0,0.0033718915374888773,0.002677424434921989,0.004067754583508321,72966,better,,10000,42,per novel eligible next view; sessions with at least one eligible next view
+K1,True,et,ranking,logistic,ranking,test,,hit_at_1,0.0,0.0015372744539411205,0.0010131697096431363,0.002061637953676186,72966,better,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,True,et,ranking,logistic,ranking,test,,coverage_at_8,0.0,0.0023504273504273503,0.0018941118246799443,0.0027957105554146863,72966,better,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,True,et,ranking,logistic,ranking,test,,mrr_at_8,0.0,0.002123793130737575,0.001779399914152237,0.002477389078258584,72966,better,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,True,et,ranking,logistic,ranking,test,,novel_hit_at_1,0.0,0.0018920058071465369,0.00109728225943898,0.0026821491355690933,72966,better,,10000,42,per novel eligible next view; sessions with at least one eligible next view
+K1,True,et,ranking,logistic,ranking,test,,novel_coverage_at_8,0.0,0.0034655551913080128,0.0028000381416299247,0.004141933068419755,72966,better,,10000,42,per novel eligible next view; sessions with at least one eligible next view
+K1,True,mlp,ranking,logistic,ranking,test,,hit_at_1,0.0,0.0016263057929724596,0.0011434798304719666,0.002105846214815583,72966,better,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,True,mlp,ranking,logistic,ranking,test,,coverage_at_8,0.0,0.002629392212725546,0.00216465033932227,0.0031000022215717017,72966,better,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,True,mlp,ranking,logistic,ranking,test,,mrr_at_8,0.0,0.0023401746144801703,0.002016014579446219,0.0026677944367499928,72966,better,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,True,mlp,ranking,logistic,ranking,test,,novel_hit_at_1,0.0,0.001966936730201845,0.0012424985732022835,0.0026892672688928827,72966,better,,10000,42,per novel eligible next view; sessions with at least one eligible next view
+K1,True,mlp,ranking,logistic,ranking,test,,novel_coverage_at_8,0.0,0.003858942537348382,0.0031552667316321705,0.004557754639417424,72966,better,,10000,42,per novel eligible next view; sessions with at least one eligible next view
+K1,False,trans_s0,ranking,logistic,ranking,test,,hit_at_1,0.0,-0.007508309591642925,-0.008224887176217333,-0.006796419168225851,72966,worse,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,False,trans_s0,ranking,logistic,ranking,test,,coverage_at_8,0.0,-0.0012167616334283,-0.001609261619953418,-0.0008345578508728564,72966,worse,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,False,trans_s0,ranking,logistic,ranking,test,,mrr_at_8,0.0,-0.005373747908470131,-0.005880870567561982,-0.004864254999538632,72966,worse,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,False,trans_s0,ranking,logistic,ranking,test,,novel_hit_at_1,0.0,0.0038308434412026413,0.003175397437227658,0.004467512360425743,72966,better,,10000,42,per novel eligible next view; sessions with at least one eligible next view
+K1,False,trans_s0,ranking,logistic,ranking,test,,novel_coverage_at_8,0.0,0.0012363602304125885,0.0007941747912938225,0.0016804860481309926,72966,better,,10000,42,per novel eligible next view; sessions with at least one eligible next view
+K1,False,trans_online,ranking,logistic,ranking,test,,hit_at_1,0.0,0.022459639126305792,0.021233226262330335,0.023715769579771638,72966,better,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,False,trans_online,ranking,logistic,ranking,test,,coverage_at_8,0.0,0.08330365622032289,0.08145723145275692,0.08515491247943215,72966,better,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,False,trans_online,ranking,logistic,ranking,test,,mrr_at_8,0.0,0.041451069506625055,0.040227806164517814,0.04269306311638145,72966,better,,10000,42,per eligible next view; sessions with at least one eligible next view
+K1,False,trans_online,ranking,logistic,ranking,test,,novel_hit_at_1,0.0,0.037418629700744624,0.03594604935474618,0.038894492745972536,72966,better,,10000,42,per novel eligible next view; sessions with at least one eligible next view
+K1,False,trans_online,ranking,logistic,ranking,test,,novel_coverage_at_8,0.0,0.10051046691331429,0.0982479974819013,0.10283880662846367,72966,better,,10000,42,per novel eligible next view; sessions with at least one eligible next view
