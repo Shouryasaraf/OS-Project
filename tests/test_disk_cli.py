@@ -269,6 +269,19 @@ class ReportTests(unittest.TestCase):
         self.assertIn("pooled ALL_REAL", text)
         self.assertNotIn("  ALL_REAL ", text.split("vs none   =")[0])
 
+    def test_interpretation_labels_pooled_rows_and_lists_them_last(self):
+        from adaptive_prefetch.benchmark import aggregate_results, analyze_results
+        pooled = aggregate_results(self.rows, "ALL_REAL")
+        text = analyze_results(pooled + self.rows)
+        self.assertNotIn("- **ALL_REAL**", text)
+        self.assertIn("pooled ALL_REAL (request-weighted", text)
+        datasets = {str(row["dataset"]) for row in self.rows}
+        last_dataset = max(text.index(f"**{name}**") for name in datasets)
+        self.assertGreater(text.index("pooled ALL_REAL"), last_dataset)
+        # Wording only: the pooled section is the one the pooled rows give alone.
+        alone = analyze_results(pooled).split("\n", 2)[2]
+        self.assertTrue(text.endswith(alone))
+
 
 class EdaReferenceTests(unittest.TestCase):
     def test_eda_no_longer_calls_read_reuse_an_upper_bound(self):

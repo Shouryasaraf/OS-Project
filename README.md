@@ -1,327 +1,214 @@
-# ML-Based Adaptive Disk I/O Prefetching
+# Prefetching from disk blocks to product pages: two studies
 
-A user-space, simulation-first prototype for **Machine Learning-Based Adaptive
-Disk I/O Prefetching Using Workload Pattern Classification**. The central path
-is: trace requests → window features → online-capable classifier → pattern-based
-prefetch policy → LRU cache simulation. It does **not** modify the operating
-system or perform physical disk reads.
+Ashvik Mishra and Shourya Saraf, School of Computer Science and Engineering,
+Vellore Institute of Technology. Operating Systems course project and the
+source of one IEEE conference paper (`paper/`).
 
-This `master` branch also carries a second study, adaptive **web
-product-page** prefetching on the RetailRocket clickstream
-(`src/webprefetch`); see [docs/web/README.md](docs/web/README.md) and
-[NOTICE.md](NOTICE.md) for its data attribution. The rest of this README
-describes the disk study. `python reproduce.py --help` lists the per-study
-reproduce commands (being filled in study by study).
+Prefetching guesses what will be read next and fetches it before it is asked
+for. This repository asks the same question in two places an operating
+system meets it, and answers it with simulation **and** with real I/O:
+
+- **Disk study** (`src/adaptive_prefetch`): block read-ahead for a page cache,
+  replayed causally over 56 public block traces from four corpora (MSR
+  Cambridge, FIU, Alibaba, Tencent), then re-run on a real HDD and SSD with
+  the kernel page cache, `O_DIRECT` and `posix_fadvise`.
+- **Web study** (`src/webprefetch`): product-page prefetching into a browser
+  cache, replayed over the RetailRocket clickstream, then re-run as real HTTP
+  fetches with exact parity to the simulator.
+
+Both studies use one cache abstraction, one objective
+`U(c) = (hits - c * issued) / requests`, one statistics module and one
+results contract (`src/prefetch_common`). The question each tests, fixed in
+advance in `results/*/PREREGISTERED.md`, is whether a *learned predictor*
+matters as much as *how much* to prefetch, *feedback* on observed precision,
+and (on the web) *freshness* of the statistics.
+
+## What we found
+
+Every number below is read from a file under `results/` named next to it,
+and `tools/check_doc_numbers.py` verifies that. Simulated numbers are cache
+statistics; latency is measured only on the real systems.
+
+**Disk, simulated** (C1: first 1,000,000 canonical requests of each of 56
+traces; block hit ratio; paired bootstrap over traces;
+`results/disk/table_main.csv`).
+
+<!-- source: results/disk/table_main.csv config=C1 merge=auto latency=assumed corpus=all capacity=2048 -->
+| Policy, 1 MiB cache | Mean hit ratio | vs `none` (pp) | Precision | Device I/Os vs `none` | Blocks moved vs `none` |
+|---|---:|---:|---:|---:|---:|
+| `none` | 14.85% | | | | |
+| `sequential` (2-block read-ahead) | 16.71% | +1.86 | 49.00% | 1.055x | 1.042x |
+| `adaptive` (trained classifier router) | 15.77% | +0.92 | 59.16% | 1.078x | 1.008x |
+| `guard` (feedback gate) | 16.26% | +1.40 | 51.47% | 1.026x | 1.010x |
+| `deep@8` (fixed depth 8) | 21.03% | +6.17 | 47.76% | 1.066x | 1.169x |
+| `deep@256` | 50.41% | +35.56 | 19.28% | 1.309x | 7.015x |
+| `linux_ra@256` (Linux read-ahead policy) | 38.62% | +23.77 | 76.98% | 0.740x | 1.086x |
+| `belady_min` (demand paging only; not a prefetch bound) | 22.79% | | | | |
+<!-- source: none -->
+
+- **The trained classifier is worse than plain read-ahead.**
+  <!-- source: results/disk/deltas.csv config=C1 corpus=all latency=assumed metric=hit_ratio policy=adaptive baseline=sequential -->
+  `adaptive` minus `sequential` is -0.94 pp [-1.31, -0.58] at 1 MiB and
+  -1.21 pp [-1.52, -0.92] at 64 MiB; the cluster intervals over corpora also
+  exclude 0.
+  <!-- source: none -->
+- **Depth buys hit ratio with device work.** Deeper fixed read-ahead raises
+  the hit ratio steadily, but `deep@8` issues *more* device I/Os than `none`
+  at 1 MiB and `deep@256` moves seven times the blocks. Only the Linux
+  read-ahead window (`linux_ra`) raises hit ratio *and* cuts device I/Os
+  (`docs/DECISIONS.md` D18, D20).
+- **The predictor is not the smallest lever on disk.** It is smaller than
+  depth and window growth, but at 64 MiB the feedback gate's effect is
+  smaller still (D20). The learned depth model (`learned_depth`, GPU, 5
+  seeds) did worse than a validation-chosen fixed depth on most of 21 traces
+  (D19, `results/gpu/disk_learned_depth.csv`).
+
+**Disk, real device** (`results/realio/`; HDD `sdb` is the headline device,
+20,000-request prefixes of 5 traces, 3 repeats, Backend B parity held on
+every run): in **none** of the 16 measured cells was the mode with the
+highest simulated hit ratio the fastest, and doing nothing (`none`) was the
+fastest in 6. Simulated hit ratio did not rank policies by measured latency
+in any HDD cell (D21).
+
+**Web, simulated** (test split, per-session cache of 8 objects, 95% paired
+session-bootstrap intervals as pre-registered in `results/web/PREREGISTERED.md`;
+`results/web/decomposition.csv`):
+
+<!-- source: results/web/decomposition.csv metric=hit_ratio -->
+| Lever (hit ratio) | Difference [interval] |
+|---|---|
+| freshness: causal online transition counts vs the split-0 logistic ranker | +1.52 pp [+1.49, +1.56] |
+| depth: best fixed depth at no cost vs depth 1 | +0.80 pp [+0.77, +0.83] |
+| ranker: transition counting vs the trained logistic ranker | +0.07 pp [+0.06, +0.09] |
+| GRU sequence model vs online counts | -0.79 pp [-0.83, -0.76] |
+| feedback gate vs the validated adaptive controller | -0.11 pp [-0.13, -0.10] |
+<!-- source: none -->
+
+On the web the learned ranker **is** the smallest lever, a GPU sequence model
+is worse than counting, and the validated adaptive controller beats the best
+fixed depth at capacities 8 and 32 at an assumed cost of 0.01 per prefetch
+(`results/web/comparisons.csv`; `docs/web/WEB_DECISIONS.md` W1-W3).
+
+**Web, real HTTP** (`results/live/`): 42 replay passes, all valid, with 0
+sessions whose live counters differ from the simulator's. Over loopback with
+an emulated network (RTT 50 ms, 10 Mbps, assumed object sizes) the online-index
+controller saved about 8 ms per view at 2.20x the bytes, where fixed depth 4
+saved about the same at 6.71x (W4).
+
+## Install
+
+Python 3.10 or newer. The disk core needs only the standard library.
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e ".[all]"        # or pick extras: traces, web, gpu, paper
+export PYTHONPATH=src                     # if you do not install
+```
+
+On this machine `.venv/` already has every extra (numpy, pandas,
+scikit-learn, joblib, zstandard, torch with CUDA, matplotlib, scipy) and the
+package is not installed, so every command below runs with `PYTHONPATH=src`.
+No LaTeX is installed: the paper and the slides compile on Overleaf.
+
+The data is not in git. Put the 56 `*.oracleGeneral.zst` block traces under
+`data/block-traces/<corpus>/` and RetailRocket's `events.csv` (Kaggle,
+version 2; its SHA-256 is checked) at `data/raw/events.csv`. Sources and
+licences are in `NOTICE.md`.
+
+## Reproduce
+
+One command per study; each prints its runtime estimate first and records a
+`provenance.json` (command, commit, host load, input and output hashes).
+`--quick` runs are smoke tests that write to `outputs/`, never to `results/`.
+Measured wall times of the committed runs are in `docs/REPRODUCE.md`.
+
+```bash
+PY=.venv/bin/python
+PYTHONPATH=src $PY -m unittest discover -s tests   # the test suite (about 90 s)
+$PY reproduce.py disk --quick              # minutes: tests, main.py --quick, 3-trace sweep
+$PY reproduce.py disk --workers 64         # E1: multi-corpus sweep and analysis (about 70 min here)
+$PY reproduce.py disk --gpu                # E2: learned_depth and LSTM on the GPU (about 80 min)
+$PY reproduce.py realio --device DIR       # E0+E3: calibrate and run the real-device grid
+$PY reproduce.py web                       # E4: RetailRocket benchmark (about 22 min)
+$PY reproduce.py web --gpu                 # E5: GRU sequence model (about 2 h on a shared GPU)
+$PY reproduce.py live --store-dir DIR      # E6: real HTTP replay (about 3 h)
+$PY reproduce.py paper                     # figures, tables, numbers.tex (under a minute)
+python3 paper/check.py --final             # paper lint
+python3 tools/check_doc_numbers.py         # docs quote only numbers in results/
+```
+
+E3 and E6 need Linux, a quiet host (they wait while the load average is
+above 32) and a directory on the device under test; they never write to any
+disk except the SSD and the HDD `sdb`.
 
 ## Repository layout
 
-| Location | Contents |
-| --- | --- |
-| `src/adaptive_prefetch/` | Trace loading, features, models, policies, replay, benchmark, and CLI |
-| `src/adaptive_prefetch/guard.py` | Feedback-gated policies: observed prefetch precision vs break-even |
-| `src/webprefetch/` | Web study: RetailRocket replay, ranker, controllers, demo server |
-| `tests/` | Automated checks: `test_project.py` (disk, 131), `test_web_*.py` (web), `test_repro_smoke.py` |
-| `data/samples/` | Small demonstration traces and format notes |
-| `data/MSRC-trace-003/final-trace/` | The 32-file, 11.86 GB collection (gitignored) |
-| `docs/` | Pipeline, architecture, decision log, classifier analysis, presentation outline; `docs/web/` for the web study |
-| `docs/reference/` | Original lab brief |
-| `presentation/` | Points to `docs/PRESENTATION.md` (the stale `.pptx` decks were removed) |
-| `results/` | Tracked result aggregates; `results/pivot_original/` is the web study's original run, verbatim |
-| `repro/`, `reproduce.py` | One reproduce module per study |
-| `outputs/` | Generated results (gitignored; the web study uses `outputs/web/`) |
+| Path | What |
+|---|---|
+| `src/adaptive_prefetch/` | disk study: trace loaders, causal simulator (14 modes), multi-corpus sweep and analysis, learned depth, LSTM, `realio/` real-device testbed |
+| `src/webprefetch/` | web study: data preparation, scorers, browser-cache core, benchmark, GRU, demo, `live/` HTTP replay |
+| `src/prefetch_common/` | `U(c)`, bootstraps, provenance, results schemas |
+| `reproduce.py`, `repro/` | one reproduce module per study |
+| `results/` | **tracked** aggregates the paper reads, one directory per study, each with `PREREGISTERED.md` and `provenance.json`; `results/pivot_original/` is the web branch's original run, verbatim |
+| `paper/` | IEEEtran paper, generators for `numbers.tex`, tables and figures, `check.py` |
+| `presentation/` | Beamer deck reusing the paper's numbers and figures |
+| `docs/` | architecture, metrics, reproduction, decision logs, presentation outline |
+| `tests/` | the unit suite and synthetic results fixtures |
+| `tools/` | `check_doc_numbers.py` |
+| `main.py`, `sweep_modes.py` | the disk study's original entry points (see below) |
+| `demo/`, `audit/` | web demo page; the web branch's audit log |
+| `data/samples/` | small committed samples; the large data directories are gitignored |
+| `outputs/`, `models/` | gitignored scratch output and trained artifacts (`models/msr_sample_gnb.json` is tracked) |
 
-Run commands below from the repository root. Keep new trace datasets under
-`data/` and generated benchmark outputs under `outputs/` (create that ignored
-folder before writing results there). Only the named large-data folders
-(`data/block-traces`, `data/raw`, `data/processed`, `data/MSRC-trace-003`)
-are gitignored, so a new dataset elsewhere under `data/` needs its own
-`.gitignore` entry.
+## Documentation
 
-## What is implemented
+| Document | Read it for |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | how every component works, module by module, and the data flow |
+| [docs/METRICS.md](docs/METRICS.md) | the definition and limits of every metric |
+| [docs/REPRODUCE.md](docs/REPRODUCE.md) | every command, runtime, requirement and output |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | disk decision log: D1-D17 (history on `main`), D18-D21 (corrections from the multi-corpus and real-device results) |
+| [docs/web/WEB_DECISIONS.md](docs/web/WEB_DECISIONS.md) | web decision log W0-W4 |
+| [docs/PRESENTATION.md](docs/PRESENTATION.md) | slide-by-slide outline, speaker notes and viva questions |
+| [AGENTS.md](AGENTS.md) | the invariants and claim rules for anyone (or any agent) changing the code |
+| [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md) | the work plan this branch was built to |
+| [paper/README.md](paper/README.md), [presentation/README.md](presentation/README.md) | building the paper and the deck on Overleaf |
 
-- Reproducible synthetic sequential, strided, random, and mixed I/O traces.
-- Validated CSV trace import and export.
-- Window-level, size-aware sequentiality and stride features. The jump and
-  short-run features are measured *relative to the request size*, so the same
-  access pattern classifies identically on devices with different block sizes.
-- A supervised Gaussian Naive Bayes model with incremental updates, plus an
-  optional shrinkage-regularized online QDA (`--classifier qda`) for
-  workloads whose classes overlap in correlated feature space.
-- Class-to-policy routing, LRU cache replay, and **twelve comparison modes**
-  in four families:
-  - *fixed* -- `none`, `sequential`, `deep` (depth-8 read-ahead), `strided`
-  - *online per-request* -- `stride`, `markov`, optional offline `lstm`
-  - *classifier-routed* -- `adaptive`
-  - *evidence-routed* -- `adaptive_evidence` (no trained model)
-  - *feedback-gated* -- `guard`, `depth_adaptive`, `correlate`, which set
-    read-ahead depth from the **realised** precision of their own prefetches.
-    Causal, needs no model and no future knowledge.
-- Configurable decision cadence (`policy_interval`) so the gate can react
-  inside a classifier window, and a configurable read-ahead depth for `deep`.
-- Benchmark tables with oracle re-access recall, configurable modelled latency
-  (calibrated from each trace's own recorded service times), inference timing,
-  synthetic drift comparison, and optional pseudo-label tests.
-- A memory-bounded streaming sweep (`sweep_modes.py`) over the whole MSRC
-  collection, bit-identical to the in-memory replay across chunk boundaries.
-- Exploratory data analysis: trace profiling, locality and reuse ceilings,
-  cluster structure, and domain-shift measurement against the synthetic
-  training region.
-- Held-out synthetic classification test, confusion matrix, workload-transition
-  demonstration, cache hit ratio, prefetch precision, and unused-prefetch count.
-- Standard-library unit tests. No packages need to be downloaded to run from
-  source. The core is stdlib-only by design; `torch` is installed here, so the
-  LSTM path is live, but `models/lstm_delta.pt` is gitignored and must be
-  trained before that row reports anything other than `skipped`.
+## The disk study's original entry points
 
-## Run
+`main.py` is the end-to-end run of the original disk study: EDA,
+classifier selection, domain shift, the policy benchmark against a
+perfect-predictor reference, and the drift report, on the bundled samples
+and synthetic traces. It writes raw rows to `outputs/` and prints
+conclusions. `sweep_modes.py` sweeps the MSRC-trace-003 `.revised`
+collection, which is not on this machine. Their figures are not results of
+the paper.
 
-From the repository root. The **complete research run** — no prompts. It
-profiles every dataset, evaluates the classifier against alternative models,
-measures domain shift, replays all twelve policies against a perfect-predictor
-bound, and reports drift adaptation. The console shows conclusions; every raw
-row goes to `outputs/`:
-
-```powershell
-python main.py                          # full run, ~6 min (11 datasets)
-python main.py --quick                  # skip LSTM training + regime sweep
-python main.py --interactive            # guided dataset/LSTM picker
-python main.py --cost-model assumed     # compare vs the 5/100/50 us model
-python main.py --prefetch-multiple 0.5   # model overlapped prefetch
+```bash
+python main.py --quick                   # skips LSTM training and the regime sweep
+python main.py                           # full run
+python main.py --cost-model assumed      # the 5/100/50 us model instead of measured service times
+PYTHONPATH=src python -m adaptive_prefetch demo            # synthetic classifier demo
+PYTHONPATH=src python -m adaptive_prefetch benchmark       # every mode on synthetic traces
+PYTHONPATH=src python -m adaptive_prefetch replay data/samples/msr-cambridge1-sample.csv --format msr
+PYTHONPATH=src python -m adaptive_prefetch evaluate        # classifier x regime accuracy (synthetic)
+PYTHONPATH=src python -m webprefetch serve                 # local web demo (needs prepared data and a model)
 ```
 
-The default run calibrates the cost model from the traces' own recorded device
-service times (`.revised` columns 6-8) and prints a `COST MODEL` section with
-the break-even precision **before** any cost table.
+`main.py`'s modelled-cost column is degenerate at the default
+`--prefetch-multiple 1.0` (no prefetcher can reach the break-even precision);
+read its hit ratio, precision and wasted I/O instead.
 
-**At the default `--prefetch-multiple 1.0` the modelled-cost column is
-degenerate.** A speculative read does the same device work as the demand read
-it replaces and saves strictly less (the hit still costs a cache lookup), so
-break-even precision is 1.0101 and no prefetcher can reach it. `none` wins that
-column by arithmetic, not by result. Values below 1.0 model *overlapped*
-prefetch -- identical device work, requester not blocked -- which is an
-assumption these traces cannot support, since they record demand-read service
-time only. Use `--prefetch-multiple` to explore it. See `docs/DECISIONS.md` D11.
+## Limits, stated once
 
-**Read hit ratio, precision and wasted I/O; treat modelled cost as degenerate
-unless the break-even is printed.**
-
-### What wins across the whole collection
-
-Full MSRC sweep, 32 traces x 250,000 requests, 12 modes, 384 rows. Unweighted
-mean hit ratio per trace, so one huge trace cannot dominate:
-
-| mode | mean hit | vs `none` |
-| --- | ---: | ---: |
-| `deep` (fixed depth-8 read-ahead) | 49.87% | **+4.94 pp** |
-| `sequential` (depth-2 read-ahead) | 45.45% | +0.52 pp |
-| ... eight other modes | 44.96-45.13% | +0.02 to +0.20 pp |
-| `none` | 44.93% | - |
-| `adaptive` (trained classifier) | 44.89% | **-0.04 pp** |
-
-**All eleven non-deep modes fall within 0.55 points of each other, and the
-trained classifier is the worst of them.** `deep` sits 4.42 points above the
-best of them -- eight times the entire spread of policy choice. Per-trace
-winners: `deep` 29, `none` 2, `adaptive` 1.
-
-Choosing *which* prefetching heuristic to apply is worth at most half a
-point. Choosing how *deep* to prefetch is worth five. Every earlier
-conclusion in this project was measured correctly but against a degenerate
-baseline that prefetched 2 blocks.
-
-The caveat is that `deep` issues 11.2 million prefetches across the sweep, of
-which 5.86 million are never read, and its modelled us/read is 4952 against
-`none`'s 4105. The hit-ratio win is real; the claim that it is worth having
-is not supported. Report both. See `docs/DECISIONS.md` D17.
-
-### What actually wins on real traces
-
-Measured over 8 real traces capped at 40k requests (`docs/DECISIONS.md` D14):
-
-* **`deep`** (fixed depth-8 read-ahead) has the highest hit ratio on 6 of 8,
-  and is by far the most wasteful. Read-ahead *depth* is worth **+4.10
-  points** of mean hit ratio on its own -- an order of magnitude more than the
-  entire policy-selection question, because every earlier mode prefetched at
-  most 2 blocks. (Depth 16 scores +4.66 on the mean but issues 4x the
-  prefetches and loses 7.2 points on `rsrch_2`, which is why 8 is the
-  default and not the argmax.)
-* **The feedback gate** (`guard`, `depth_adaptive`, `correlate`) wins on
-  exactly one trace: `web_3`, where read-ahead wrecks the cache. It takes
-  +18.99 points of hit ratio over `sequential` and cuts wasted I/O 86.9%. It
-  does not beat `none` there (50.61%). On the other seven traces it *loses* to
-  `sequential` by 0.00-3.00 points, in exchange for 12-19% of its wasted I/O
-  on five of them.
-* **`none`** still wins on `web_3` and `msrc_hm_1`.
-* Note that `depth_adaptive` is byte-identical to `guard` at the default cost
-  model, because break-even 1.0101 exceeds any achievable precision. It
-  diverges only under `--prefetch-multiple 0.5`. See `DECISIONS.md` D14.1.
-
-This is a targeted result, not a general win for adaptive prefetching. The
-trained `adaptive` classifier remains behind fixed read-ahead; see
-`docs/DECISIONS.md` D9-D10 for why, and D12-D14 for the inverted target and
-the depth finding.
-
-| Output file | Contents |
-| --- | --- |
-| `outputs/results.csv` | every benchmark row (all datasets × all modes) |
-| `outputs/results.md` | narrative report with the full 12-mode table and interpretation |
-| `outputs/eda.md` | per-trace request stream, locality, feature distributions, cluster structure |
-| `outputs/classifier_eval.csv` | classifier × regime accuracy, spread, predict and train cost |
-| `outputs/domain_shift.csv` | per-feature shift and coverage vs the synthetic training region |
-| `outputs/drift.csv` | frozen vs online switch lag per phase |
-| `outputs/label_support.md` | which classes the labelled population actually covers |
-
-For specific tasks, call the modules directly (set `PYTHONPATH=src` first,
-or install with `pip install -e .`):
-
-```powershell
-$env:PYTHONPATH='src'
-python -m unittest discover -s tests -v          # unit tests
-python -m adaptive_prefetch demo                 # classifier accuracy + confusion matrix
-python -m adaptive_prefetch benchmark            # 12-mode comparison matrix
-python -m adaptive_prefetch replay path\to\trace.csv
-python -m adaptive_prefetch replay path\to\trace.csv --format alibaba
-python -m adaptive_prefetch replay data/samples/msr-cambridge1-sample.csv --model-path models/msr_sample_gnb.json
-python -m adaptive_prefetch train-msr-sample     # weakly adapt classifier on the MSR sample
-python -m adaptive_prefetch normalize --input trace.csv --format alibaba --output normalized.csv
-python -m adaptive_prefetch export-demo demo.csv # export a synthetic transition trace
-```
-
-Full-collection sweep (every MSRC trace, every mode, streamed so memory stays
-flat regardless of file size):
-
-```powershell
-python sweep_modes.py                    # 250k requests x 32 traces, all modes
-python sweep_modes.py --full             # every request in every file (hours)
-python sweep_modes.py --per-trace 50000  # cheaper sample
-python sweep_modes.py --modes none sequential adaptive adaptive_evidence
-```
-
-Writes `outputs/msrc_sweep.csv` (per-trace rows) and
-`outputs/msrc_sweep.md` (winner table plus the full per-trace matrix).
-Prefetch recall is omitted on streamed runs because it needs whole-stream
-future knowledge; every other metric is exact.
-
-Research and analysis commands:
-
-```powershell
-python -m adaptive_prefetch evaluate            # classifier x regime accuracy + cost table
-python -m adaptive_prefetch evaluate --classifier qda --regime transition_heavy
-python -m adaptive_prefetch eda data\samples\msr-cambridge1-sample.csv --format msr
-python -m adaptive_prefetch shift data\samples\msr-cambridge1-sample.csv --format msr
-python -m adaptive_prefetch benchmark --classifier qda
-python -m adaptive_prefetch replay trace.csv --smoothing 3   # consecutive-run policy hysteresis
-```
-
-On macOS/Linux, prefix the same way
-(`PYTHONPATH=src python -m adaptive_prefetch demo` or `python main.py`).
-
-## Trace data format
-
-The normalized CSV format has one request per row:
-
-```csv
-timestamp_ms,lba,size_blocks,operation,stream_id
-0.25,1000,2,R,process_A
-0.91,1002,1,R,process_A
-1.20,2000,1,W,process_B
-```
-
-`timestamp_ms` is a non-negative millisecond timestamp in ascending order.
-`lba` is a **block index**, not a byte offset. `size_blocks` is the positive
-number of contiguous blocks in that request. `operation` is `R` or `W`.
-`stream_id` is optional and retained for future per-process/per-volume analysis;
-the current model classifies the **aggregate** request stream. A real dataset
-must be converted to these units before replay. The repository includes a
-1,000-request MSR-format sample; it does not bundle complete MSR Cambridge or
-SNIA IOTTA trace collections. The sample's provenance has not been
-independently verified here.
-
-The included `data/samples/msr-cambridge1-sample.csv` uses the original MSR headers
-`Timestamp,Hostname,DiskNumber,Type,Offset,Size,ResponseTime`. The loader
-converts its byte offsets and sizes to 512-byte blocks, timestamps to elapsed
-milliseconds, and `Read`/`Write` to `R`/`W` automatically.
-
-`train-msr-sample` creates a small, reproducible JSON classifier artifact at
-`models/msr_sample_gnb.json`. The four-class model is first trained on the
-labelled synthetic generator. From the unlabelled MSR sample, it then learns
-only from read-heavy windows with a conservative **random-like proxy label**.
-This is weakly supervised adaptation, not four-class training from real ground
-truth. The model can be loaded with `--model-path` for replay; replaying the
-same sample is an in-sample demonstration, not an unbiased performance
-evaluation.
-See [the training record](docs/MSR_SAMPLE_TRAINING.md) for exact counts and
-limitations.
-
-`normalize` also supports two explicit IOTTA-related profiles: `alibaba`
-(`device_id,opcode,offset,length,timestamp`; byte offsets/lengths and
-microsecond timestamps) and `iotta8`
-(`device,sector,size,op,offset,timestamp,lifetime,count`; sector indices/counts
-and microsecond timestamps). The latter is the format proposed in the Stage 2
-plan, **not** a universal SNIA IOTTA format. Check the particular trace's
-metadata and units before selecting either profile. Headerless `iotta8` needs
-`--format iotta8`. No full public IOTTA trace is bundled or benchmarked.
-
-For the optional offline LSTM baseline, install the extra with
-`python -m pip install -e ".[lstm]"` in a suitable Python environment, then
-run `python -m adaptive_prefetch train-lstm --save models/lstm_delta.pt` and
-`python -m adaptive_prefetch benchmark --lstm-model models/lstm_delta.pt`.
-The core project and all other modes work without PyTorch; an unavailable
-LSTM is shown as *skipped*, not silently replaced by another predictor. The
-delta model must be trained on the distribution it will be scored against:
-`main.py` trains it on the traces in the current run rather than mixing a
-real-trace artifact into a synthetic comparison table.
-
-## How the demonstration avoids a timing mistake
-
-A window is classified only after all its requests have occurred. Its policy
-can affect the **next** requests, never earlier ones. The first window uses no
-prefetch. The model is trained on generated examples from one random seed and
-tested on independently generated examples from another seed. Those results
-describe the synthetic generator, not accuracy on production workloads.
-
-Incremental updates require a trustworthy label. The demonstration provides
-labels because it generated the workload. On real unlabelled CSV traces,
-classifier updates are disabled; successful prefetches are not treated as
-proof that a workload label was correct.
-
-## Interpretation and limits
-
-Hit ratio is read-block cache hits divided by requested read blocks. Prefetch
-precision is prefetched blocks subsequently read divided by prefetches issued.
-Oracle re-access recall divides useful prefetches by useful prefetches plus
-read misses that are accessed again later; future-read information is used
-only after replay for measurement, never for candidate generation. It is a
-specialized diagnostic, not workload-classification recall.
-`unused` counts all prefetches not used during the replay, including those still
-resident at the end. Writes use a simplified write-allocate cache model but
-never trigger prefetch. Every policy receives the same request stream, cache
-capacity, first-window observation period, and LRU rules. The latency column
-is a *configured cost model* (defaults: 5 µs hit, 100 µs demand miss, 50 µs
-prefetch), including prefetch cost; its speedup is relative to no prefetch
-under those assumptions. The simulation still omits queueing, prefetch
-completion time, and bandwidth, and reports no measured device speedup.
-
-`--online-real` adds an opt-in confidence-gated self-training row. Its model
-updates from its own predictions, not verified labels, so it cannot establish
-real-trace classification accuracy. The default real-trace adaptive model is
-frozen. Synthetic drift results separately compare frozen with genuinely
-labelled incremental updates; they do not automatically prove faster
-adaptation. The LSTM predicts address deltas, not workload classes, so its
-cache outcomes and compute cost can be compared, but classification accuracy
-cannot be compared directly.
-
-See the [presentation outline](docs/PRESENTATION.md) for the Review 2
-architecture, module completion, demonstration steps, and discussion
-questions. See the
-[architecture document](docs/architecture.md) for the module map, data flow,
-and design principles. See
-[docs/DECISIONS.md](docs/DECISIONS.md) for the decision log: what was tried,
-what the measurement said, and why the default classifier is still Naive
-Bayes despite QDA being available and better on some regimes. See
-[docs/CLASSIFIER_EVAL.md](docs/CLASSIFIER_EVAL.md) for the detailed
-classifier comparison, the LSTM rework, the bug list, and the measured limits
-of what the available data can support. Rerun the benchmark before presenting
-any numbers. The
-[pipeline guide](docs/PIPELINE.md) and [Stage 2 plan](docs/implementation-stage2.md)
-are kept under `docs/`; sample traces and their format notes are under
-`data/samples/`.
+- Simulated hit ratios are cache statistics. The oracle traces carry no
+  read/write flag, so writes replay as reads; they carry no service times.
+- Classifier accuracy exists only on synthetic windows; the real traces have
+  no workload labels.
+- Real-device results are one HDD and one shared SSD, five trace prefixes,
+  one think model per cell, on a shared host. They are per trace and device,
+  not properties of HDDs or SSDs.
+- Web costs, object sizes, RTT and bandwidth are assumed; one retailer; a
+  per-session cache.
+- No number in this README, the docs or the paper is typed by hand; each is
+  regenerated from `results/`.

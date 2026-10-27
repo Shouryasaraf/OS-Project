@@ -1,4 +1,4 @@
-# ML pipeline and Stage 2 comparison
+# Disk pipeline and the policy modes
 
 This is a user-space **simulation** of adaptive disk-I/O prefetching, not an
 OS modification or physical disk benchmark.
@@ -12,7 +12,8 @@ Feedback gate: observed prefetch precision -> read-ahead depth --^ (self-tuning)
 ```
 
 `trace.py` loads normalized CSV, MSR-format CSV, an Alibaba EBS schema, and
-the explicitly selected eight-column profile from the Stage 2 plan. The two
+the explicitly selected eight-column profile from the Stage 2 plan, the
+MSRC `.revised` format and libCacheSim `oracleGeneral` block traces. The two
 IOTTA-related profiles require checking source metadata for field units; SNIA
 IOTTA itself has no single universal CSV layout. The current classifier uses
 the aggregate request stream, not separate per-device models.
@@ -36,36 +37,42 @@ depth from the margin. The decision is therefore to throttle, not to choose
 a policy; see [DECISIONS.md](DECISIONS.md) D12 for why the target was
 inverted from "which policy is best" to "will prefetching hurt".
 
-## Twelve policy rows
+## Fourteen policy modes
+
+`benchmark.MODES` and `sweep.RANKING_MODES`, in this order (appending a mode
+is safe; reordering breaks `test_benchmark_includes_skipped_optional_lstm`):
 
 | Mode | Source of candidates | Learning/availability |
 | --- | --- | --- |
 | `none` | No candidates | Control |
 | `sequential` | Fixed two-block read-ahead | Fixed heuristic |
-| `deep` | Fixed `DEFAULT_READ_AHEAD_DEPTH` (8) read-ahead | Fixed heuristic |
 | `strided` | Window-derived stride, one block | Fixed heuristic |
 | `stride` | Consecutive-delta detection, two blocks | Online per-request baseline |
 | `markov` | Observed delta-transition probabilities, top two | Online per-request baseline |
-| `lstm` | Offline LSTM next-delta prediction, top two | Optional PyTorch + saved artifact; otherwise skipped |
+| `lstm` | Offline LSTM next-delta prediction, top two | Optional artifact; otherwise `skipped:` |
 | `adaptive` | Classifier chooses a policy after each window | Frozen on unlabelled traces by default |
-| `adaptive_evidence` | Window's own features route a policy | No model, thresholds calibrated on real feature distribution |
-| `guard` | Depth 2 while observed precision clears break-even | Self-tuning, no model |
+| `adaptive_evidence` | Window's own features route a policy | No model |
+| `guard` | Read-ahead while observed precision clears break-even | Self-tuning, no model |
 | `depth_adaptive` | Depth 0-8 scaled by the margin above break-even | Self-tuning, no model |
 | `correlate` | `guard` plus a stride confirmed over a longer history | Self-tuning, no model |
+| `deep` | Fixed read-ahead of `read_ahead_depth` blocks (`deep@N` in the sweeps) | Fixed heuristic |
+| `linux_ra` | Emulation of the Linux on-demand read-ahead policy, window ceiling `linux_ra_max_blocks` (`linux_ra@N`) | Fixed policy, reads cache state through `CacheView` |
+| `learned_depth` | Trained per-segment read-ahead depth (`depth_model.py`) | Optional artifact (`depth_model=`); otherwise `skipped:` |
 
 All modes use the same input requests, LRU capacity, and first-window warmup.
-The predictor objects in `baselines.py` and `lstm.py` expose
-`next_candidates(request)`. Unlike the classifier, the LSTM predicts *deltas*,
-not workload classes. Compare them using cache behavior and compute time, not
-the four-class accuracy metric.
+The predictor objects in `baselines.py`, `lstm.py` and `depth_model.py`
+expose `next_candidates(request)`; `linux_ra` is cache-aware and is driven
+through `observe(request, missed_blocks, cache_view)`. Unlike the
+classifier, the LSTM predicts *deltas*, not workload classes. Compare them
+using cache behaviour, device work and compute time, not the four-class
+accuracy metric.
 
-**Read-ahead depth matters more than policy choice.** Every mode that existed
-before `deep` prefetched at most 2 blocks, which is why a perfect window
-router could find only +0.4 points of headroom. Fixed read-ahead at depth 8
-gives **+4.10 points of *mean* hit ratio** over that depth-2 baseline across
-8 real traces, up to +11.05 on `src2_2` ([DECISIONS.md](DECISIONS.md) D13).
-`deep` exists to make that lever visible in the shipped benchmark; the gate
-has to beat it.
+**Read-ahead depth matters more than policy choice, and depth is not free.**
+Every mode that existed before `deep` prefetched at most 2 blocks. On the
+multi-corpus block traces the hit ratio keeps rising with depth far past 8,
+but blocks moved and (for fixed depth) device I/Os rise with it; only the
+growing `linux_ra` window cuts device I/Os. See
+[DECISIONS.md](DECISIONS.md) D18 and D20 for the measured figures.
 
 ## What the benchmark measures
 
@@ -77,15 +84,20 @@ future knowledge is for scoring only. It can look high even when the overall
 hit ratio is low, so interpret it together with hit ratio and wasted work.
 
 `LatencyModel.measured()` calibrates hit, demand-miss and prefetch cost
-from the trace's own recorded device service times (means of 260-5491 µs),
-falling back to the original assumed 5/100/50 µs model when unavailable. The
-**hit** cost is still an approximation — 1% of mean service — because these
+from the trace's own recorded device service times (MSRC `.revised` files),
+falling back to the original assumed 5/100/50 µs model when unavailable.
+Oracle block traces have no service times, so every multi-corpus row names
+its latency model explicitly. Device work is counted separately
+(`device_ios`, `blocks_moved`) and costed by `IOCostModel` from a measured
+device calibration (D18). The
+**hit** cost is still an approximation (`mean_service * 0.01` in
+`LatencyModel.measured`) because these
 traces record device time only, never cache service time. Prefetches are
 inserted immediately; queueing, bandwidth, asynchronous completion and device
 scheduling are not modelled. The reported speedup is *modelled*.
 
 **The modelled-cost column is degenerate at the default
-`prefetch_multiple=1.0`.** Break-even precision is `1.0101`, so no prefetcher
+`prefetch_multiple=1.0`.** Break-even precision is above 1, so no prefetcher
 can pay for itself and `none` wins that column by arithmetic rather than by
 result. Only `--prefetch-multiple < 1.0` makes prefetching feasible, and that
 models overlapped prefetch — an assumption these traces cannot support. Read
@@ -110,7 +122,6 @@ python -m adaptive_prefetch replay .\data\samples\msr-cambridge1-sample.csv
 ```
 
 For custom datasets, normalization, latency parameters, CSV export, and the
-optional LSTM commands, see [README.md](../README.md). The bundled MSR-format
-sample has unverified provenance. No full IOTTA trace has been supplied, so
-full-trace outcome claims remain open. The Review 2 slide deck predates this
-Stage 2 benchmark; refresh its numbers from a current run before presenting.
+optional LSTM commands, see [README.md](../README.md) and
+[REPRODUCE.md](REPRODUCE.md). The bundled MSR-format sample has unverified
+provenance.

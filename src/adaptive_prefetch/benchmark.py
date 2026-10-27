@@ -6,6 +6,7 @@ import csv
 import random
 from pathlib import Path
 
+from .datasets import is_aggregate
 from .features import FEATURE_NAMES, extract
 from .model import DEFAULT_CLASSIFIER, make_classifier
 from .simulator import DEFAULT_CAPACITY, LatencyModel, replay
@@ -267,14 +268,20 @@ def analyze_results(rows: list[dict[str, object]]) -> str:
     Groups rows by dataset, identifies the winning mode (highest
     ``speedup_vs_none`` among completed rows), and calculates relative percentage
     gains for adaptive prefetching against traditional and deep learning baselines.
+
+    Pooled rows (``ALL_SYNTHETIC``, ``ALL_REAL``; ``datasets.is_aggregate``)
+    are interpreted the same way but listed after the datasets and labelled
+    as request-weighted pools, so they never read as one more dataset.
     """
     by_dataset: dict[str, list[dict[str, object]]] = {}
     for row in rows:
         by_dataset.setdefault(str(row["dataset"]), []).append(row)
 
     lines = ["## Result interpretation", ""]
-    for name in sorted(by_dataset):
+    for name in sorted(by_dataset, key=lambda n: (is_aggregate(n), n)):
         group = by_dataset[name]
+        if is_aggregate(name):
+            name = f"pooled {name} (request-weighted over the datasets above, not a dataset)"
         baseline = next((row for row in group if row["mode"] == "none"
                          and row["status"] == "ok"), None)
         completed = [row for row in group if row["status"] == "ok"

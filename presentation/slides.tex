@@ -1,0 +1,397 @@
+% slides.tex -- Beamer deck for the final review (MASTER_PLAN lead decision L5).
+%
+% It follows docs/PRESENTATION.md slide by slide; the speaker notes there are
+% the long form of the \note{} text here. Rules, as for the paper:
+%   - every number on a slide is a macro from paper/numbers.tex, which
+%     paper/numbers.py writes from results/ (run `python reproduce.py paper`
+%     first); none is typed by hand, and tools/check_doc_numbers.py lints
+%     this file for hand-typed figures;
+%   - every figure is a PDF from paper/figures/, by relative path.
+% No LaTeX is installed locally (L6): compile on Overleaf with pdfLaTeX, the
+% main document set to presentation/slides.tex (presentation/README.md).
+%
+% \pnum{name} prints the numbers.tex macro \name, or a bold ?? if it is not
+% defined. The headline macros (\diskAdaptiveVsSeqCI, \ldVsVcfCI, ...) are
+% always defined by numbers.tex and are used directly; \pnum guards the
+% systematic families, whose names depend on which rows exist.
+
+\documentclass[aspectratio=169,11pt]{beamer}
+\usetheme{default}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+\setbeamerfont{note page}{size=\small}
+% Uncomment to print the speaker notes after each slide:
+% \setbeameroption{show notes}
+
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+
+% Overleaf compiles from the project root or from this file's folder,
+% depending on the project layout; accept both.
+\graphicspath{{../paper/figures/}{paper/figures/}}
+\IfFileExists{../paper/numbers.tex}{\input{../paper/numbers.tex}}{%
+  \IfFileExists{paper/numbers.tex}{\input{paper/numbers.tex}}{%
+    \typeout{paper/numbers.tex not found: run python reproduce.py paper}}}
+\providecommand{\missingnumber}{\textbf{??}}
+\newcommand{\pnum}[1]{\ifcsname #1\endcsname\csname #1\endcsname\else\textbf{??}\fi}
+\newcommand{\fig}[2][0.62\textheight]{\centering\includegraphics[height=#1,width=\linewidth,keepaspectratio]{#2}}
+
+\title{What Makes Prefetching Pay?}
+\subtitle{Disk blocks and product pages, simulated and measured}
+\author{Ashvik Mishra (24BAI0342) \and Shourya Saraf (24BDS0391)}
+\institute{School of Computer Science and Engineering\\
+Vellore Institute of Technology, Vellore, India}
+\date{Operating Systems course project}
+
+\begin{document}
+
+% ---------------------------------------------------------------- 1
+\begin{frame}
+  \titlepage
+  \note{Prefetching fetches data before it is asked for: kernel read-ahead
+  for files, browsers and proxies for web pages. Learning is often proposed
+  to predict what to fetch. We tested, on public data and on real hardware,
+  whether the prediction is what matters.}
+\end{frame}
+
+% ---------------------------------------------------------------- 2
+\begin{frame}{The question, fixed before the experiments}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      Four levers of a prefetcher:
+      \begin{enumerate}
+        \item \textbf{how much} to prefetch (depth, or a growing window)
+        \item \textbf{feedback} on its observed precision
+        \item \textbf{freshness} of the statistics (web)
+        \item the \textbf{learned predictor}
+      \end{enumerate}
+      \medskip
+      Hypothesis: the predictor is the smallest lever.\\
+      Comparisons and decision rules were pre-registered in
+      \texttt{results/*/PREREGISTERED.md}.
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \fig[0.6\textheight]{f1_schematic.pdf}
+    \end{column}
+  \end{columns}
+  \note{Every claim follows the pre-registered rules: better, worse, or no
+  difference detected, and when one lever may be called smaller than another.
+  Including the claims that went against our hypothesis.}
+\end{frame}
+
+% ---------------------------------------------------------------- 3
+\begin{frame}{One model for both studies}
+  \begin{columns}[T]
+    \begin{column}{0.48\textwidth}
+      \begin{itemize}
+        \item a cache of fixed capacity, a demand stream, a policy that
+              issues speculative fetches
+        \item hit ratio, precision, issued prefetches
+        \item one objective:
+              \[ U(c) = \frac{\mathit{hits} - c\cdot\mathit{issued}}{\mathit{requests}} \]
+              with $c$ the cost of a prefetch in hits
+        \item the classic disk cost model is $U$ at a $c$ above one: an
+              artefact of charging every block as a device read
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.52\textwidth}
+      \fig[0.55\textheight]{f8_utility_envelopes.pdf}
+    \end{column}
+  \end{columns}
+  \note{The disk cost model and the web cost per prefetch are both U at some
+  c, so one formula ranks policies in both domains. Definitions are in
+  docs/METRICS.md.}
+\end{frame}
+
+% ---------------------------------------------------------------- 4
+\begin{frame}{Disk data: real block traces, reconstructed carefully}
+  \begin{columns}[T]
+    \begin{column}{0.45\textwidth}
+      \begin{itemize}
+        \item \diskTraces{} traces from \diskCorpora{} corpora: MSR Cambridge,
+              FIU, Alibaba, Tencent (libCacheSim \texttt{oracleGeneral})
+        \item offsets in bytes; FIU records are pages, merged back into
+              requests
+        \item no read/write flag, no service times: writes replay as reads,
+              and every replay names its cost model
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.55\textwidth}
+      \fig[0.6\textheight]{f2_hit_vs_depth.pdf}
+    \end{column}
+  \end{columns}
+  \note{Our own early notes described the format as one record per block. It
+  is one record per request (per page for FIU). The loader detects units per
+  file and every result names its reconstruction rule (DECISIONS D20).}
+\end{frame}
+
+% ---------------------------------------------------------------- 5
+\begin{frame}{The disk simulator and its policies}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      Causal loop: demand $\rightarrow$ propose $\rightarrow$ prefetch;
+      the first window never prefetches.
+      \begin{itemize}
+        \item fixed: \texttt{none}, \texttt{sequential}, \texttt{deep@N}
+        \item per request: \texttt{stride}, \texttt{markov}, \texttt{lstm}
+        \item trained classifier router: \texttt{adaptive}
+        \item feedback gate: \texttt{guard}, \texttt{depth\_adaptive},
+              \texttt{correlate}
+        \item Linux read-ahead policy: \texttt{linux\_ra@N}
+        \item learned depth: \texttt{learned\_depth}
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \fig[0.55\textheight]{f1_schematic.pdf}
+    \end{column}
+  \end{columns}
+  \note{Same requests, cache and warm-up for every policy. For the Linux
+  read-ahead policy and the learned depth model the tests replace the future
+  with random requests and get every prefix outcome unchanged; the streamed
+  replay equals the in-memory one bit for bit.}
+\end{frame}
+
+% ---------------------------------------------------------------- 6
+\begin{frame}{Disk result 1: how much to prefetch dominates}
+  \begin{columns}[T]
+    \begin{column}{0.42\textwidth}
+      Mean block hit ratio, 1\,MiB cache:
+      \begin{itemize}
+        \item \texttt{none}: \pnum{diskHitNoneOneMiB}
+        \item \texttt{deep@8} vs \texttt{none}: \diskDeepEightVsNoneCI
+        \item \texttt{deep@256} vs \texttt{none}:
+              \pnum{diskDeltaHitRatioDeepAtTwoHundredFiftySixVsNoneOneMiBCI}
+        \item \texttt{linux\_ra@256} vs \texttt{none}: \diskLinuxRaVsNoneCI
+        \item Belady MIN (demand only, \emph{not} a prefetch bound):
+              \pnum{diskHitBeladyMinOneMiB}
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.58\textwidth}
+      \fig{f2_hit_vs_depth.pdf}
+    \end{column}
+  \end{columns}
+  \note{Hit ratio keeps climbing with depth well past 8, and does not
+  saturate with cache size (D20 corrects both earlier claims). Belady MIN is
+  optimal demand replacement without prefetching; deep read-ahead exceeds it.}
+\end{frame}
+
+% ---------------------------------------------------------------- 7
+\begin{frame}{Disk result 2: hit ratio is not device work}
+  \begin{columns}[T]
+    \begin{column}{0.42\textwidth}
+      Device I/Os relative to \texttt{none}, 1\,MiB:
+      \begin{itemize}
+        \item \texttt{deep@8}: \diskDeepEightIORatioCI
+        \item \texttt{linux\_ra@256}: \diskLinuxRaIORatioCI
+      \end{itemize}
+      Blocks moved:
+      \begin{itemize}
+        \item \texttt{deep@256}:
+              \pnum{diskDeltaBlocksMovedDeepAtTwoHundredFiftySixVsNoneOneMiBCI}
+        \item \texttt{linux\_ra@256}:
+              \pnum{diskDeltaBlocksMovedLinuxRaAtTwoHundredFiftySixVsNoneOneMiBCI}
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.58\textwidth}
+      \fig{f3_device_io_vs_hit.pdf}
+    \end{column}
+  \end{columns}
+  \note{Fixed-depth read-ahead raises hit ratio while issuing more device I/Os
+  than doing nothing; only the growing Linux-style window raises hit ratio and
+  lowers I/Os. Every hit ratio is shown with these two ratios.}
+\end{frame}
+
+% ---------------------------------------------------------------- 8
+\begin{frame}{Disk result 3: the learned models}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      Hit ratio against \texttt{sequential}:
+      \begin{itemize}
+        \item classifier router, 1\,MiB: \diskAdaptiveVsSeqCI
+        \item classifier router, 64\,MiB:
+              \pnum{diskDeltaHitRatioAdaptiveVsSequentialSixtyFourMiBCI}
+        \item feedback gate, 1\,MiB: \diskGuardVsSeqCI
+      \end{itemize}
+      Learned depth against a validation-chosen fixed depth
+      (\ldVsVcfN{} traces, \pnum{ldSeedsCapTwoHundredFiftySix} seeds): \ldVsVcfCI; it won on \ldVsVcfWins.
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \fig[0.55\textheight]{f3_device_io_vs_hit.pdf}
+    \end{column}
+  \end{columns}
+  \note{The trained router loses to two-block read-ahead. The GPU depth model
+  loses to the strongest fair baseline. The predictor is smaller than depth
+  and window growth but not the smallest lever: at 64 MiB the feedback gate's
+  effect is smaller still (D20).}
+\end{frame}
+
+% ---------------------------------------------------------------- 9
+\begin{frame}{When does a policy pay on a device? $\kappa^*$}
+  \begin{columns}[T]
+    \begin{column}{0.42\textwidth}
+      \begin{itemize}
+        \item device time $T = N_{io}\,t_{pos} + N_{blk}\,t_{xfer}$
+        \item measured $\kappa = t_{pos}/t_{xfer}$:
+              HDD \pnum{deviceSdbKappa}, SSD \pnum{deviceSsdKappa} blocks
+        \item $\kappa^*$: the device ratio above which a policy costs less
+              device time than \texttt{none}
+        \item more I/Os than \texttt{none}: it never pays
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.58\textwidth}
+      \fig{f4_kappa_cdf.pdf}
+    \end{column}
+  \end{columns}
+  \note{The vertical lines are the two drives we calibrated. At 1\,MiB the
+  Linux-style window is cheaper than doing nothing on both, on almost every
+  trace; fixed depth 8 on very few (DECISIONS D18).}
+\end{frame}
+
+% ---------------------------------------------------------------- 10
+\begin{frame}{The real Linux testbed}
+  \begin{columns}[T]
+    \begin{column}{0.55\textwidth}
+      The simulator decides; the testbed does the I/O.
+      \begin{itemize}
+        \item Backend B: user-space LRU, \texttt{O\_DIRECT}, asynchronous
+              prefetch; hit/miss asserted equal to the simulator on every
+              request
+        \item Backend A: kernel page cache in a memory cgroup, chunked
+              \texttt{POSIX\_FADV\_WILLNEED}; \texttt{kernel\_ra} measures
+              Linux's own read-ahead
+        \item fresh process per run, file dropped from the page cache,
+              drive cache displaced, shuffled repeats, quiet host only
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.45\textwidth}
+      \fig[0.55\textheight]{f5_sim_vs_measured.pdf}
+    \end{column}
+  \end{columns}
+  \note{Kernel facts measured first: a WILLNEED hint is truncated to the
+  device's request limit, so hints are chunked; pages charged to another
+  cgroup are not re-charged, so the file is dropped before every run;
+  cachestat plus a non-blocking read separate ready hits from late ones.}
+\end{frame}
+
+% ---------------------------------------------------------------- 11
+\begin{frame}{Real device: the simulator's favourite was never the fastest}
+  \begin{columns}[T]
+    \begin{column}{0.42\textwidth}
+      \begin{itemize}
+        \item in no measured cell did the highest simulated hit ratio give
+              the lowest measured latency
+        \item doing nothing was often the fastest
+        \item simulated hit ratio did not rank policies by measured latency
+              on the HDD
+      \end{itemize}
+      Per trace, think model and device; never a property of all disks.
+    \end{column}
+    \begin{column}{0.58\textwidth}
+      \fig{f5_sim_vs_measured.pdf}
+    \end{column}
+  \end{columns}
+  \note{A prefetch still in flight when it is needed, or one that queues in
+  front of a demand read, costs time the simulator never charges. Example and
+  per-cell values: docs/PRESENTATION.md slide 11 and paper Table 3.}
+\end{frame}
+
+% ---------------------------------------------------------------- 12
+\begin{frame}{Web study: RetailRocket, and the stale index}
+  \begin{columns}[T]
+    \begin{column}{0.42\textwidth}
+      \begin{itemize}
+        \item per-session browser cache, four chronological splits: index,
+              ranker, validation, test
+        \item every policy selected on validation \emph{at each cache size}
+        \item freshness lever, causal online counts vs the frozen logistic
+              ranker: \webFreshnessLeverCI
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.58\textwidth}
+      \fig{f6_freshness.pdf}
+    \end{column}
+  \end{columns}
+  \note{The original branch's candidate index came from the oldest data only;
+  most of its "coverage ceiling" was staleness. Selecting at one cache size
+  and reusing the choice hid losses to no prefetching (W1, W2).}
+\end{frame}
+
+% ---------------------------------------------------------------- 13
+\begin{frame}{Web result: what moves the needle}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      Hit ratio, cache of 8 objects:
+      \begin{itemize}
+        \item depth:
+              \pnum{webLeverDepthFixedFourFixedOneLogisticLogisticEightZeroPointZeroCI}
+        \item ranker, counting vs logistic:
+              \pnum{webLeverRankerFixedOneFixedOneTransSZeroLogisticEightZeroPointZeroCI}
+        \item GRU vs online counting:
+              \pnum{webLeverSequenceModelFixedFourFixedFourSeqTransOnlineEightZeroPointZeroCI}
+      \end{itemize}
+      Validated adaptive vs best fixed depth (utility):
+      \webControllerVsBestFixedCI
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \fig[0.55\textheight]{f6_freshness.pdf}
+    \end{column}
+  \end{columns}
+  \note{On the web the learned ranker is the smallest lever by the
+  pre-registered rule, and the GPU sequence model is worse than counting
+  transitions. The adaptive controller still beats the best fixed depth at
+  caches 8 and 32 for an assumed cost per prefetch.}
+\end{frame}
+
+% ---------------------------------------------------------------- 14
+\begin{frame}{Live HTTP replay: measured waits, exact parity}
+  \begin{columns}[T]
+    \begin{column}{0.42\textwidth}
+      \begin{itemize}
+        \item sessions whose counters differ from the simulator:
+              \liveParityMismatches; invalid passes: \liveInvalidPasses
+        \item HDD store, online-index controller: saved
+              \pnum{liveSavedHddAdaptiveZeroPointOneAtTransOnlineCI} per
+              view at \pnum{liveBytesXHddAdaptiveZeroPointOneAtTransOnline}
+              the bytes
+        \item fixed depth 4: \pnum{liveSavedHddFixedFourCI} at
+              \pnum{liveBytesXHddFixedFour}
+      \end{itemize}
+      Network emulated, object sizes assumed, waits measured.
+    \end{column}
+    \begin{column}{0.58\textwidth}
+      \fig{f7_live_saved_vs_bytes.pdf}
+    \end{column}
+  \end{columns}
+  \note{Each emulated browser's cache is the simulator's cache class, so the
+  counts must match exactly, and they did. With a FIFO link (SSD store, one
+  repetition) depth 8's saving was no longer detectable: speculative bytes
+  queued in front of demand fetches (W4).}
+\end{frame}
+
+% ---------------------------------------------------------------- 15
+\begin{frame}{Across both domains}
+  \begin{columns}[T]
+    \begin{column}{0.42\textwidth}
+      \begin{enumerate}
+        \item how much to prefetch, and in what shape, mattered more than
+              any learned predictor we tried
+        \item a simulated hit ratio is neither latency nor device work
+        \item on the web, freshness beat sophistication
+      \end{enumerate}
+      \medskip
+      \small Limits: writes replayed as reads; one HDD and a shared SSD;
+      emulated network; assumed web costs.
+    \end{column}
+    \begin{column}{0.58\textwidth}
+      \fig{f8_utility_envelopes.pdf}
+    \end{column}
+  \end{columns}
+  \note{Read the envelope left to right: at low cost per prefetch deep
+  policies win; as the cost rises the best policy issues less, until doing
+  nothing wins. Where a domain sits on that axis decides which policy pays.
+  Every number is generated from results/, every comparison pre-registered,
+  and the negative results are reported as found.}
+\end{frame}
+
+\end{document}
