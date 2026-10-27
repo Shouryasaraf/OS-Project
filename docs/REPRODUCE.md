@@ -79,7 +79,7 @@ under `outputs/` and never touches `results/`: a smoke run is not a result.
 | `python reproduce.py web` | **E4**: prepare, train, per-capacity benchmark, freshness, decomposition, parity, learning curve | `results/web/`, `models/web/`, `outputs/web/` | `events.csv`, `[web]` |
 | `python reproduce.py web --gpu` | **E5**: GRU sequence model, 5 seeds, and the decomposition `sequence_model` lever | `results/web/seq_metrics.csv`, `results/web/seq/` | E4's prepared views, CUDA |
 | `python reproduce.py live --store-dir DIR` | **E6**: real HTTP replay with simulator parity | `results/live/` | E4's `comparisons.csv`, prepared views and ranker; a quiet host |
-| `python reproduce.py paper` | figures, tables and `numbers.tex` from `results/` (no experiment) | `paper/` | `[paper]` for figures |
+| `python reproduce.py paper` | figures, tables and `numbers.tex` from `results/` (no experiment), then the claims ledger | `paper/`, `results/claims/` | `[paper]` for figures |
 | `python reproduce.py notebook` | rebuilds and executes `notebooks/walkthrough.ipynb` from `results/` and `paper/decisions.py` (no experiment, under a minute; exit 4 without nbformat, pandas or matplotlib) | `notebooks/walkthrough.ipynb` | `[web,paper]`, nbformat |
 | `python reproduce.py all [--quick]` | every study above in order; a step that cannot run here is passed over and the exit status says so | as above | |
 
@@ -147,9 +147,14 @@ invocations' commands, times and git states are kept under
   parity mismatch and 2 when the planned request rate is refused.
 - **paper** (`repro/paper.py`): `paper/numbers.py`,
   `paper/tables/make_tables.py` and `paper/figures/make_figures.py` (sharing
-  `paper/genlib.py`, loaded by path), then `paper/check.py --strict`. With
+  `paper/genlib.py`, loaded by path), then the claims ledger
+  (`paper/claims.py`: `results/claims/paper_claims.csv`, `CLAIMS.md` and
+  `provenance.json`, every macro and table cell the paper and slides use
+  traced to its results row; deterministic, and refused when `numbers.tex` or
+  a table is stale), then `paper/check.py --strict`. With
   `--fixtures` it reads the synthetic `tests/fixtures/results/` tree and
-  writes `outputs/paper-fixture/`, never `paper/`.
+  writes `outputs/paper-fixture/` (its ledger in
+  `outputs/paper-fixture/claims/`), never `paper/` or `results/`.
 
 ## 5. Rules every run follows
 
@@ -176,6 +181,10 @@ PYTHONPATH=src .venv/bin/python reproduce.py paper   # under 1 min
 python3 paper/check.py --final                       # submission gate
 python3 tools/check_doc_numbers.py                   # also lints presentation/slides.tex
 ```
+
+`results/claims/CLAIMS.md` lists every number and verdict the paper and the
+slides print, by section and sentence, with the results file, row, column and
+raw value each comes from (`paper_claims.csv` is the same, machine-readable).
 
 After the paper step, `python reproduce.py notebook` rebuilds the
 walkthrough notebook (`notebooks/README.md`). `tests/test_notebook.py` fails

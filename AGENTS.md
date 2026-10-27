@@ -28,10 +28,17 @@ of it). How components work: `docs/architecture.md`. Metric definitions:
   `provenance.json`. `results/pivot_original/` is the web branch's original
   run kept verbatim: never edit it.
 - **Never hand-edit a results file.** Every file is written through
-  `prefetch_common.schemas.write_rows` (exact columns and types; 29 schemas)
+  `prefetch_common.schemas.write_rows` (exact columns and types; 30 schemas)
   and hashed in its directory's `provenance.json`;
   `provenance.verify_provenance` detects an edit. A results file changes only
   when its full reproduce command re-runs.
+- **`results/claims/` is the one derived results directory.** It holds the
+  claims ledger (`paper_claims.csv`, `CLAIMS.md`, `provenance.json`), written
+  only by `reproduce.py paper` (`paper/claims.py`) from the committed
+  `results/` and `paper/` sources. It runs no experiment and is
+  deterministic (`tests/test_claims.py` regenerates it byte for byte); its
+  `provenance.json` is rewritten only when the ledger changes. It has no
+  `PREREGISTERED.md`. Never edit it by hand: re-run `reproduce.py paper`.
 - **Bounded runs never write `results/`.** `--quick`, smoke runs and tests
   write under `outputs/` (`outputs/disk-quick/`, `outputs/web/quick/`,
   `outputs/realio-quick/`, `outputs/web/live/`). A smoke number is never
@@ -64,7 +71,7 @@ of it). How components work: `docs/architecture.md`. Metric definitions:
 ## Commands
 
 ```bash
-PYTHONPATH=src .venv/bin/python -m unittest discover -s tests   # 609 tests at this commit, about 115 s on a quiet host
+PYTHONPATH=src .venv/bin/python -m unittest discover -s tests   # 614 tests at this commit, about 130 s on a quiet host
 PYTHONPATH=src python3 -m unittest discover -s tests            # stdlib only; web/GPU tests skip
 PYTHONPATH=src .venv/bin/python -m unittest tests.test_project.SimulatorTests   # one class
 python3 tools/check_doc_numbers.py        # every number in the docs is in results/
@@ -440,11 +447,29 @@ requests.
   shadow the stdlib module). A missing input gives a "MISSING" placeholder.
   `reproduce.py paper --fixtures` writes `outputs/paper-fixture/`, never
   `paper/`.
+- **The claims ledger: every claim is traced to `results/`.** `reproduce.py
+  paper` writes `results/claims/paper_claims.csv` (schema
+  `claims/paper_claims.csv`) and `results/claims/CLAIMS.md`: for every number
+  macro used in `main.tex`, `sections/*.tex`, the generated tables or
+  `presentation/slides.tex`, the results file, the row selector (key=value
+  of its identifying columns, or the rows a derived value aggregates), the
+  column, the raw value and the formatter; every `\dec` verdict with its rule,
+  intervals and `PREREGISTERED.md`; and every number cell of every generated
+  table. Tracing is automatic (`genlib.TRACE`): a family reads rows through
+  `results.rows`/`json_object`/`provenance`, prints through a genlib
+  formatter (or one wrapped in `genlib.traced_formatter`) and passes the
+  results-relative file as `source`; otherwise `numbers.Macros.add` raises
+  `UntracedMacro` (paper/README.md, "The claims ledger"). `tests/test_claims.py`
+  re-reads every raw value from its file, re-formats it, and fails on a used
+  macro without a row; `check.py --strict` fails on one too.
 - `paper/check.py` is the local gate (no LaTeX here, L6): `--strict` after
   generation, `--final` for submission (no `\todo`). It fails on a
-  hand-typed number in `sections/*.tex`, on adjacent `$$`, under `--strict`
-  on an undefined number macro, and under `--final` on a macro that prints
-  `\missingnumber`. The committed paper must pass `--final`
+  hand-typed number in `sections/*.tex` (abstract and appendix included;
+  `main.tex`, the title block, is deliberately not linted), on adjacent `$$`, under `--strict` on an undefined number macro
+  or a used macro the claims ledger does not trace (or traces to another
+  value), and under `--final` on a macro that prints `\missingnumber`. Under
+  `--strict` it warns on a figure typed into a generated table caption
+  (`tables/make_tables.py`). The committed paper must pass `--final`
   (`tests/test_paper_check.py`).
 - `paper/decisions.py` applies every `results/*/PREREGISTERED.md` rule to
   `results/` (disk P1-P6, lever ordering, C3/C4; realio R1-R7; web W1-W8 and

@@ -135,15 +135,18 @@ CURATED_DISK = {
 }
 
 
+@g.traced_formatter
 def fus(value, digits: int = 1) -> str:
     """Microseconds."""
     return fnum(value, digits) + (r"\,$\mu$s" if g.finite(value) else "")
 
 
+@g.traced_formatter
 def fms(value, digits: int = 2) -> str:
     return fnum(value, digits) + (r"\,ms" if g.finite(value) else "")
 
 
+@g.traced_formatter
 def fsignedpct(fraction, digits: int = 1) -> str:
     """A signed relative change as a percentage: -0.2 -> ``$-20.0$\\,\\%``."""
     if not g.finite(fraction):
@@ -151,6 +154,7 @@ def fsignedpct(fraction, digits: int = 1) -> str:
     return fnum(100.0 * fraction, digits, sign=True) + r"\,\%"
 
 
+@g.traced_formatter
 def fpvalue(p) -> str:
     if p is None:
         return g.DASH
@@ -159,39 +163,137 @@ def fpvalue(p) -> str:
     return f"${p:.2g}$" if p < 0.01 else f"${p:.3f}$"
 
 
+#: Sources that are code constants, not results files (the cost model's own
+#: parameters). Their macros are ledger rows of kind ``constant``.
+CODE_SOURCES = ("prefetch_common.utility", "prefetch_common.stats")
+
+
+def _jsonable(value):
+    if callable(value):
+        return {"fn": getattr(value, "__name__", repr(value))}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    return value
+
+
+class UntracedMacro(ValueError):
+    """A macro whose value cannot be traced to a results file."""
+
+
 class Macros:
-    """An ordered set of macro definitions, each tagged with its source file."""
+    """An ordered set of macro definitions, each tagged with its source.
+
+    Every macro also gets a **trace** (``self.traces[name]``) for the claims
+    ledger (``paper/claims.py``): the results file, row and column(s) its raw
+    value was read from, the raw value(s) and the formatter that printed
+    them. The trace is collected automatically while tracing is on (``build``
+    switches it on): read rows from ``results.rows``/``json_object``/
+    ``provenance`` (they are :class:`genlib.TracedRow`), print through a
+    genlib formatter (or one wrapped in ``genlib.traced_formatter``), and pass
+    the results-relative file as ``source``. A macro that prints no traced
+    value, or names a source that was never read from the results tree,
+    raises :class:`UntracedMacro`; pass ``raw=[...]`` to record a value that
+    no traced formatter printed.
+    """
 
     def __init__(self, fixture: bool):
         self.fixture = fixture
         self.values: dict[str, str] = {}
         self.sources: dict[str, str] = {}
+        self.traces: dict[str, dict] = {}
+        self._last_window = (set(), set(), set())
 
-    def add(self, name: str, text: str, source: str) -> None:
+    def add(self, name: str, text: str, source: str, *, raw=None, meta: dict | None = None,
+            _copy: dict | None = None) -> None:
+        taken = g.TRACE.take() if g.TRACE.active else None
         if not g.is_macro_name(name):
             raise ValueError(f"not a TeX control word: {name!r}")
         if name in self.values:
             if self.values[name] == text:
                 return
             raise ValueError(f"macro \\{name} defined twice ({self.sources[name]}, {source})")
+        if taken is not None:
+            if taken[2]:
+                self._last_window = taken[2:]
+            elif _copy is None:
+                # Values computed once and printed by several macros (an
+                # estimate, then its Lo, Hi, CI, N): the rows read are those
+                # of the window before.
+                taken = taken[:2] + self._last_window
+            self.traces[name] = (dict(_copy) if _copy is not None
+                                 else self._trace(name, text, source, taken, raw, meta))
         self.values[name] = text
         self.sources[name] = source
 
-    def add_ci(self, name: str, estimate, lo, hi, formatter, source: str, **kwargs) -> None:
-        self.add(name, formatter(estimate, **kwargs), source)
+    @staticmethod
+    def _trace(name, text, source, taken, raw, meta) -> dict:
+        calls, recent, rows, columns, files = taken
+        record = {"source": source, "calls": [], "raw": [], "where": [], "meta": meta or {}}
+        for function, raws, other, kwargs, printed, where in calls:
+            record["calls"].append([function, _jsonable(list(other)), _jsonable(kwargs),
+                                    printed])
+            record["raw"] += list(raws)
+            record["where"] += [w or g.TRACE.locate(v, recent) for v, w in zip(raws, where)]
+        if raw is not None:
+            record["raw"] = list(raw)
+            record["where"] = [g.TRACE.locate(v, recent) for v in record["raw"]]
+        if text == MISSING:
+            record["kind"] = "missing"
+            return record
+        if source in CODE_SOURCES:
+            record["kind"] = "constant"
+            return record
+        if not record["raw"]:
+            raise UntracedMacro(
+                f"\\{name}: no traced value. Print it with a genlib formatter (or one "
+                "wrapped in genlib.traced_formatter), or pass raw=[...] (paper/README.md, "
+                "'The claims ledger')")
+        if source != DECISION_SOURCE and source not in g.TRACE.loaded:
+            raise UntracedMacro(
+                f"\\{name}: source {source!r} is not a results file this build read; "
+                "pass the results-relative path the value came from")
+        located = record["where"]
+        if all(located) and len({(w[0], w[1]) for w in located}) == 1:
+            record["kind"] = "value"
+            record["file"], record["row"] = located[0][0], located[0][1]
+            record["columns"] = [g.trace_column(w) for w in located]
+        else:
+            used = {w[0] for w in located if w} | set(files)
+            if not used and source != DECISION_SOURCE:
+                used = {source}
+            record["kind"] = "derived"
+            record["files"] = sorted(used)
+            record["rows"] = len({r for r in rows if r[0] in used})
+            record["columns"] = sorted({c for f, c in columns if f in used})
+        if source == DECISION_SOURCE:
+            record["kind"] = "decision" if meta and meta.get("rule") else "decision_count"
+            if record["kind"] == "decision_count" and meta and meta.get("files"):
+                record["files"] = list(meta["files"])
+                record.pop("row", None)
+                record["rows"] = None
+        return record
+
+    def add_ci(self, name: str, estimate, lo, hi, formatter, source: str, *,
+               meta: dict | None = None, **kwargs) -> None:
+        self.add(name, formatter(estimate, **kwargs), source, meta=meta)
         if lo is None or hi is None:
             return
-        self.add(name + "Lo", formatter(lo, **kwargs), source)
-        self.add(name + "Hi", formatter(hi, **kwargs), source)
+        self.add(name + "Lo", formatter(lo, **kwargs), source, meta=meta)
+        self.add(name + "Hi", formatter(hi, **kwargs), source, meta=meta)
         self.add(name + "CI", formatter(estimate, **kwargs) + "~"
-                 + fci(lo, hi, formatter, **kwargs), source)
+                 + fci(lo, hi, formatter, **kwargs), source, meta=meta)
 
     def alias(self, alias: str, target: str) -> None:
         """Copy ``target`` (and its interval suffixes) to ``alias``."""
         for suffix in PAIRED_SET + ("Ties",):
             if target + suffix in self.values:
+                copy = self.traces.get(target + suffix)
+                if copy is not None:
+                    copy = dict(copy, alias_of=target + suffix)
                 self.add(alias + suffix, self.values[target + suffix],
-                         self.sources[target + suffix])
+                         self.sources[target + suffix], _copy=copy)
 
     def render(self, missing: list[str], results_root: str) -> str:
         lines = [
@@ -737,7 +839,8 @@ def web_calibration(results: g.Results, out: g.Output, m: Macros) -> None:
 
 
 def _flatten(payload, prefix=()):
-    for key, value in payload.items():
+    for key in payload:
+        value = payload[key]  # indexed, so the claims trace sees the read
         if isinstance(value, dict):
             yield from _flatten(value, prefix + (key,))
         else:
@@ -852,10 +955,29 @@ def _decisions_module():
 DECISION_SOURCE = "paper/decisions.py"
 
 
+@g.traced_formatter
+def fabspp(value) -> str:
+    """An unsigned interval of |D| in percentage points."""
+    return fnum(100.0 * value, 2) + r"\,pp"
+
+
+@g.traced_formatter
+def frho(value) -> str:
+    return fnum(value, 2, sign=True)
+
+
 def _decision_formatter(statistic):
     return {"difference": fpp, "ratio": fratio, "us": fus, "ms": fms,
-            "absolute": lambda v: fnum(100.0 * v, 2) + r"\,pp",
-            "rho": lambda v: fnum(v, 2, sign=True)}[statistic]
+            "absolute": fabspp, "rho": frho}[statistic]
+
+
+def _decision_meta(d) -> dict:
+    """What the ledger records about the verdict a macro belongs to."""
+    study = {"learned_depth": "gpu"}.get(d.study, d.study)
+    return {"rule": d.rule, "study": d.study, "scope": d.scope, "comparison": d.comparison,
+            "verdict": d.verdict, "note": d.note,
+            "intervals": [list(i) for i in d.intervals],
+            "preregistered": f"results/{study}/PREREGISTERED.md"}
 
 
 def _verdict_word(verdict: str) -> str:
@@ -900,23 +1022,34 @@ def decision_macros(results: g.Results, out: g.Output, m: Macros) -> None:
     is ``\\dec<Key>`` itself) for each interval it rests on;
     plus verdict counts per real-device cell group and the policies P5 finds
     reducing device I/Os."""
+    g.TRACE.files_read = set()
     decisions = _decisions_module().decide(results, out)
+    read = sorted(g.TRACE.files_read)
+
+    def count_meta(name: str) -> dict:
+        """A verdict count: the files the decisions it counts were read from."""
+        rest = name[len("dec"):]
+        study = ("disk" if rest.startswith(("PFive", "TallyCThree", "TallyCFour")) else
+                 "live" if rest.startswith(("TallyH", "CountH")) else "realio")
+        return {"study": study, "files": [f for f in read if f.startswith(study + "/")],
+                "preregistered": f"results/{study}/PREREGISTERED.md"}
     counts = defaultdict(int)
     tallies = defaultdict(int)
     reducers = defaultdict(list)
     fastest = defaultdict(lambda: [0, 0, 0])
     for d in decisions:
         stem = "dec" + d.key[:1].upper() + d.key[1:]
-        m.add(stem + "Verdict", g.esc(d.verdict), DECISION_SOURCE)
+        meta = _decision_meta(d)
+        m.add(stem + "Verdict", g.esc(d.verdict), DECISION_SOURCE, meta=meta)
         for label, estimate, lo, hi, statistic in d.intervals:
             name = stem + camel(label)
             formatter = _decision_formatter(statistic)
             if estimate is not None:
-                m.add_ci(name, estimate, lo, hi, formatter, DECISION_SOURCE)
+                m.add_ci(name, estimate, lo, hi, formatter, DECISION_SOURCE, meta=meta)
             elif lo is not None and hi is not None:
-                m.add(name + "Lo", formatter(lo), DECISION_SOURCE)
-                m.add(name + "Hi", formatter(hi), DECISION_SOURCE)
-                m.add(name + "CI", fci(lo, hi, formatter), DECISION_SOURCE)
+                m.add(name + "Lo", formatter(lo), DECISION_SOURCE, meta=meta)
+                m.add(name + "Hi", formatter(hi), DECISION_SOURCE, meta=meta)
+                m.add(name + "CI", fci(lo, hi, formatter), DECISION_SOURCE, meta=meta)
         if d.study == "realio" and d.rule in ("R1", "R6"):
             device, backend, think = d.scope.split(", ")[:3]
             group = camel(device) + camel(backend) + camel(think)
@@ -950,7 +1083,7 @@ def decision_macros(results: g.Results, out: g.Output, m: Macros) -> None:
         for word in classes:
             counts.setdefault(name + word, 0)
     for name, value in sorted(counts.items()):
-        m.add(name, fcount(value), DECISION_SOURCE)
+        m.add(name, fcount(value), DECISION_SOURCE, meta=count_meta(name))
     # Zero counts too, for every verdict a tallied rule can give.
     for name in [n for n in tallies if n.startswith("decTally")]:
         for rule, verdicts in TALLY_VERDICTS.items():
@@ -960,14 +1093,15 @@ def decision_macros(results: g.Results, out: g.Output, m: Macros) -> None:
                 for verdict in verdicts:
                     tallies.setdefault(name + camel(verdict), 0)
     for name, value in sorted(tallies.items()):
-        m.add(name, fcount(value), DECISION_SOURCE)
+        m.add(name, fcount(value), DECISION_SOURCE, meta=count_meta(name))
     for scope, policies in reducers.items():
         m.add("decPFiveReducers" + camel(scope.replace(" ", "")),
-              g.esc(", ".join(policies)), DECISION_SOURCE)
+              g.esc(", ".join(policies)), DECISION_SOURCE, meta=count_meta("decPFive"))
     for key, (cells, none_fastest, top_fastest) in fastest.items():
-        m.add("decCells" + key, fcount(cells), DECISION_SOURCE)
-        m.add("decCellsNoneFastest" + key, fcount(none_fastest), DECISION_SOURCE)
-        m.add("decCellsTopSimFastest" + key, fcount(top_fastest), DECISION_SOURCE)
+        meta = count_meta("decCells")
+        m.add("decCells" + key, fcount(cells), DECISION_SOURCE, meta=meta)
+        m.add("decCellsNoneFastest" + key, fcount(none_fastest), DECISION_SOURCE, meta=meta)
+        m.add("decCellsTopSimFastest" + key, fcount(top_fastest), DECISION_SOURCE, meta=meta)
 
 
 # ---------------------------------------------------------------------------
@@ -1155,9 +1289,22 @@ FAMILIES = (disk_tables, disk_best_depth, disk_deltas, disk_corpora, disk_kappa,
             web_dataset, web_calibration, live, host, decision_macros, facts, envelopes)
 
 
-def build(results: g.Results) -> tuple[Macros, g.Output]:
+def build(results: g.Results, *, trace: bool = True) -> tuple[Macros, g.Output]:
+    """Every macro, with its trace (``Macros.traces``) when ``trace`` is on."""
     out = results.output(OUTPUT)
     m = Macros(results.fixture)
+    previous = g.TRACE.active
+    if trace:
+        g.TRACE.reset()
+        g.TRACE.active = True
+    try:
+        _build(results, out, m)
+    finally:
+        g.TRACE.active = previous
+    return m, out
+
+
+def _build(results: g.Results, out: g.Output, m: Macros) -> None:
     constants(m)
     for family in FAMILIES:
         family(results, out, m)
@@ -1168,11 +1315,10 @@ def build(results: g.Results) -> tuple[Macros, g.Output]:
                 gap = source if source not in out.inputs else f"{source}: no row for \\{alias}"
                 if gap not in out.missing:
                     out.missing.append(gap)
-    return m, out
 
 
 def generate(results: g.Results, paper_dir: Path = g.PAPER_DIR) -> list[g.Output]:
-    macros, out = build(results)
+    macros, out = build(results, trace=False)
     paper_dir.mkdir(parents=True, exist_ok=True)
     (paper_dir / OUTPUT).write_text(macros.render(out.missing, results.display_root),
                                     encoding="utf-8")

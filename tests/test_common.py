@@ -402,7 +402,9 @@ class SchemaTests(unittest.TestCase):
                     "web/calibration.csv", "web/learning_curve.csv",
                     "web/dataset_profile.json", "web/think_time.json",
                     "web/session_parity.json", "live/live_config.json",
-                    "live/disk_probe_*.json"}
+                    "live/disk_probe_*.json",
+                    # The claims ledger (paper/claims.py, reproduce.py paper).
+                    "claims/paper_claims.csv"}
         self.assertEqual(set(schemas.SCHEMAS), expected)
         for name, schema in schemas.SCHEMAS.items():
             self.assertIn(schema.fmt, schemas.FORMATS, name)

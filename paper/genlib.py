@@ -111,6 +111,13 @@ class Results:
     def note_input(self, output: Output | None, relative: str) -> None:
         if output is None:
             return
+        active, TRACE.active = TRACE.active, False  # bookkeeping, not a claim's read
+        try:
+            self._note_input(output, relative)
+        finally:
+            TRACE.active = active
+
+    def _note_input(self, output: Output, relative: str) -> None:
         path = self.root / relative
         digest = sha256_file(path)
         study, _, inner = relative.partition("/")
@@ -125,8 +132,11 @@ class Results:
     def provenance(self, study: str) -> dict | None:
         if study not in self._provenance:
             path = self.root / study / PROVENANCE_FILE
-            self._provenance[study] = (schemas.read_rows(f"{study}/{PROVENANCE_FILE}", path)[0]
+            relative = f"{study}/{PROVENANCE_FILE}"
+            self._provenance[study] = (traced(schemas.read_rows(relative, path)[0], relative, 0)
                                        if path.is_file() else None)
+            if path.is_file():
+                TRACE.loaded.add(relative)
         return self._provenance[study]
 
     def exists(self, relative: str) -> bool:
@@ -141,7 +151,8 @@ class Results:
         """
         if relative not in self._cache:
             path = self.root / relative
-            self._cache[relative] = (schemas.read_rows(relative, path)
+            self._cache[relative] = ([traced(row, relative, i) for i, row in
+                                      enumerate(schemas.read_rows(relative, path))]
                                      if path.is_file() else None)
         rows = self._cache[relative]
         if rows is None:
@@ -149,6 +160,7 @@ class Results:
                 output.missing.append(relative)
             return None
         self.note_input(output, relative)
+        TRACE.loaded.add(relative)
         return rows
 
     def json_object(self, relative: str, output: Output | None = None, *,
@@ -163,8 +175,9 @@ class Results:
             if output is not None and required:
                 output.missing.append(relative)
             return None
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = traced(json.loads(path.read_text(encoding="utf-8")), relative, 0)
         self.note_input(output, relative)
+        TRACE.loaded.add(relative)
         return payload
 
     def glob(self, pattern: str, output: Output | None = None, *,
@@ -331,6 +344,170 @@ def capacity_label(blocks: int) -> str:
     return f"{blocks} blocks"
 
 
+
+# ---------------------------------------------------------------------------
+# Claim tracing (the claims ledger, results/claims/)
+# ---------------------------------------------------------------------------
+#
+# Every value a generator prints must trace back to a results file. Two
+# hooks make that automatic, without changing any printed byte:
+#
+# - :class:`Results` hands out rows as :class:`TracedRow` (a ``dict``) that
+#   tell :data:`TRACE` which file, row and column every read came from;
+# - the formatters below (``fnum``, ``fpct``, ``fpp``, ``fratio``,
+#   ``fcount``, ``fci``, ``esc``, and any function wrapped in
+#   :func:`traced_formatter`) tell it which raw value they printed.
+#
+# ``numbers.Macros.add`` and ``paper/claims.py`` match the raw values to the
+# reads (by object identity, then by equality on the most recent reads), so
+# each macro or table cell records ``(file, row, column, raw value,
+# formatter)``. Tracing is off unless a caller switches it on, so it costs
+# nothing elsewhere.
+
+
+class _Trace:
+    WINDOW = 512
+
+    def __init__(self):
+        self.active = False
+        #: results-relative files any Results has loaded (kept across resets).
+        self.loaded: set = set()
+        self.reset()
+
+    def reset(self) -> None:
+        from collections import deque
+        self.depth = 0
+        self.calls: list = []
+        self.recent = deque(maxlen=self.WINDOW)
+        self.window_rows: set = set()
+        self.window_columns: set = set()
+        self.window_files: set = set()
+        self.floats: dict = {}
+        self.files_read: set = set()
+
+    def read(self, row: "TracedRow", key, value) -> None:
+        column = row._prefix + str(key)
+        where = (row._relative, row._index, column)
+        self.recent.append((where, value))
+        self.window_rows.add((row._relative, row._index))
+        self.window_columns.add((row._relative, column))
+        self.window_files.add(row._relative)
+        self.files_read.add(row._relative)
+        if isinstance(value, float):
+            self.floats.setdefault(id(value), (value, where))
+
+    def take(self):
+        """The formatter calls and the window of reads since the last take."""
+        calls, rows = self.calls, self.window_rows
+        columns, files = self.window_columns, self.window_files
+        recent = list(self.recent)
+        self.calls, self.window_rows, self.window_columns = [], set(), set()
+        self.window_files = set()
+        self.recent.clear()
+        return calls, recent, rows, columns, files
+
+    def locate(self, value, recent) -> tuple | None:
+        """``(file, row index, column)`` a raw value was read from, or None."""
+        if isinstance(value, float):
+            found = self.floats.get(id(value))
+            if found is not None and found[0] is value:
+                return found[1]
+        if value is None or isinstance(value, (dict, list, tuple)):
+            return None
+        for where, seen in reversed(recent):
+            if seen is value:
+                return where
+        for where, seen in reversed(recent):
+            if type(seen) is type(value) and seen == value:
+                return where
+        if isinstance(value, float):
+            # A fraction printed as percent (100 * x) or a saving (-x).
+            for where, seen in reversed(recent):
+                if isinstance(seen, float):
+                    for scale in SCALES:
+                        if scale * seen == value:
+                            return where + (scale,)
+        return None
+
+
+#: Scalings of a read value that ``_Trace.locate`` recognises; the ledger
+#: writes the column as ``column*scale``.
+SCALES = (100, -1, -100)
+
+
+def trace_column(where) -> str:
+    """The ledger's column text for a located read: ``col`` or ``col*100``."""
+    return where[2] if len(where) == 3 else f"{where[2]}*{where[3]}"
+
+
+TRACE = _Trace()
+
+
+class TracedRow(dict):
+    """A results row that reports every read to :data:`TRACE` when it is on."""
+
+    __slots__ = ("_relative", "_index", "_prefix")
+
+    def __getitem__(self, key):
+        value = dict.__getitem__(self, key)
+        if TRACE.active:
+            TRACE.read(self, key, value)
+        return value
+
+    def get(self, key, default=None):
+        if key in self:
+            return self[key]
+        return default
+
+
+def traced(value, relative: str, index: int, prefix: str = ""):
+    """Wrap a parsed row (recursively for nested JSON) as :class:`TracedRow`."""
+    if isinstance(value, dict):
+        row = TracedRow()
+        row._relative, row._index, row._prefix = relative, index, prefix
+        for key, item in value.items():
+            dict.__setitem__(row, key, traced(item, relative, index, f"{prefix}{key}."))
+        return row
+    if isinstance(value, list):
+        return [traced(item, relative, index, f"{prefix[:-1]}[{i}].")
+                if isinstance(item, (dict, list)) else item for i, item in enumerate(value)]
+    return value
+
+
+def traced_formatter(function=None, *, raw: int = 1):
+    """Make a formatter report ``(name, raw values, other args, output)`` to
+    :data:`TRACE`. ``raw`` is how many leading positional arguments are the
+    values printed. Only the outermost formatter call is recorded (``fpct``
+    calling ``fnum`` is one call). A generator that prints a number through a
+    function of its own must wrap it with this, or its macro has no traced
+    value and ``numbers.Macros.add`` refuses it."""
+    import functools
+
+    def wrap(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            if not TRACE.active:
+                return fn(*args, **kwargs)
+            TRACE.depth += 1
+            try:
+                text = fn(*args, **kwargs)
+            finally:
+                TRACE.depth -= 1
+            if TRACE.depth == 0:
+                values = args[:raw]
+                TRACE.calls.append((fn.__name__, values, args[raw:], kwargs, text,
+                                    [TRACE.locate(v, TRACE.recent) for v in values]))
+            return text
+        wrapper.traced_raw = raw
+        FORMATTERS[fn.__name__] = wrapper
+        return wrapper
+
+    return wrap(function) if function is not None else wrap
+
+
+#: Every traced formatter by name; the ledger re-applies them by this name.
+FORMATTERS: dict = {}
+
 # ---------------------------------------------------------------------------
 # LaTeX text and numbers
 # ---------------------------------------------------------------------------
@@ -340,6 +517,7 @@ _ESCAPES = {"\\": r"\textbackslash{}", "&": r"\&", "%": r"\%", "$": r"\$", "#": 
             "^": r"\textasciicircum{}"}
 
 
+@traced_formatter
 def esc(text) -> str:
     """Escape a plain string for LaTeX text mode."""
     return "".join(_ESCAPES.get(ch, ch) for ch in str(text))
@@ -352,6 +530,7 @@ def finite(value) -> bool:
 DASH = "--"
 
 
+@traced_formatter
 def fnum(value, digits: int = 2, *, sign: bool = False) -> str:
     """A number in math mode: ``$-0.89$``. ``--`` for None; inf spelled out."""
     if value is None:
@@ -366,6 +545,7 @@ def fnum(value, digits: int = 2, *, sign: bool = False) -> str:
     return f"${text}$"
 
 
+@traced_formatter
 def fpct(fraction, digits: int = 2) -> str:
     """A fraction as a percentage: 0.35723 -> ``$35.72$\\,\\%``."""
     if not finite(fraction):
@@ -373,6 +553,7 @@ def fpct(fraction, digits: int = 2) -> str:
     return fnum(100.0 * fraction, digits) + r"\,\%"
 
 
+@traced_formatter
 def fpp(fraction, digits: int = 2) -> str:
     """A fractional difference in percentage points: ``$+4.10$\\,pp``."""
     if not finite(fraction):
@@ -380,6 +561,7 @@ def fpp(fraction, digits: int = 2) -> str:
     return fnum(100.0 * fraction, digits, sign=True) + r"\,pp"
 
 
+@traced_formatter
 def fratio(value, digits: int = 3) -> str:
     """A ratio as a multiplier: ``$0.659\\times$``."""
     if not finite(value):
@@ -387,6 +569,7 @@ def fratio(value, digits: int = 3) -> str:
     return f"${value:.{digits}f}\\times$"
 
 
+@traced_formatter
 def fcount(value) -> str:
     """An integer with thin grouping LaTeX accepts in text: ``2{,}756{,}101``."""
     if value is None:
@@ -394,6 +577,7 @@ def fcount(value) -> str:
     return f"{int(value):,}".replace(",", "{,}")
 
 
+@traced_formatter(raw=2)
 def fci(lo, hi, formatter, **kwargs) -> str:
     """``[lo, hi]`` with the same formatter as the estimate, minus its unit."""
     if lo is None or hi is None:

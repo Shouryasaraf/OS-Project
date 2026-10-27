@@ -439,12 +439,44 @@ def _graphics_target(paper_dir: Path, target: str) -> str:
     return target + ".pdf"
 
 
+#: The claims ledger (paper/claims.py): beside a scratch paper directory, or
+#: in results/claims/ for the committed paper.
+CLAIMS_LEDGER = ("claims", "paper_claims.csv")
+
+
+def claims_ledger(paper_dir: Path) -> Path | None:
+    """The ledger that belongs to ``paper_dir``: ``paper_dir/claims/`` (a fixture
+    or scratch build), else ``results/claims/`` for the repository's paper."""
+    local = paper_dir.joinpath(*CLAIMS_LEDGER)
+    if local.is_file():
+        return local
+    if paper_dir.resolve() == PAPER_DIR.resolve():
+        return PAPER_DIR.parent / "results" / CLAIMS_LEDGER[0] / CLAIMS_LEDGER[1]
+    return None
+
+
+def read_ledger(path: Path) -> dict[str, str]:
+    """``{macro: printed}`` of the ledger's macro rows."""
+    import csv
+    with open(path, newline="", encoding="utf-8") as handle:
+        return {row["claim_id"]: row["printed"] for row in csv.DictReader(handle)
+                if not row["claim_id"].startswith("tables/") and row["kind"] != "missing"}
+
+
 def run_checks(paper_dir: Path | str = PAPER_DIR, *, strict: bool = False,
                final: bool = False) -> Report:
     """Lint the paper rooted at ``paper_dir/main.tex``; see the module doc."""
     paper_dir = Path(paper_dir)
     strict = strict or final
     report = Report()
+    ledger_path = claims_ledger(paper_dir)
+    ledger = None
+    if strict and ledger_path is not None:
+        if ledger_path.is_file():
+            ledger = read_ledger(ledger_path)
+        else:
+            report.add("error", ROOT_FILE, 0, f"no claims ledger at {ledger_path}; "
+                                              "run `python reproduce.py paper`")
     root = paper_dir / ROOT_FILE
     if not root.is_file():
         report.add("error", ROOT_FILE, 0, "missing")
@@ -521,6 +553,18 @@ def run_checks(paper_dir: Path | str = PAPER_DIR, *, strict: bool = False,
             refs.append((relative, _line_of(text, match.start()), match.group(1).strip()))
 
         if generated:
+            if strict and fnmatch.fnmatch(relative, "tables/*.tex"):
+                # A generated caption is written by tables/make_tables.py; a
+                # figure typed into its caption string is not traced to
+                # results/ (the claims ledger traces the cells). Reported,
+                # not fatal: see paper/README.md, "The claims ledger".
+                for match in re.finditer(r"\\caption\s*\{", raw):
+                    end = _balanced_end(raw, match.end() - 1, "{", "}")
+                    caption = raw[match.start():end or len(raw)]
+                    for _, figure in hand_numbers(caption):
+                        report.add("warning", relative, _line_of(raw, match.start()),
+                                   f"hand-typed number '{figure}' in a generated caption; "
+                                   "print it from results/ in tables/make_tables.py")
             continue
         for line in bare_underscores(raw):
             report.add("error", relative, line, "bare '_' outside math; write '\\_'")
@@ -535,6 +579,14 @@ def run_checks(paper_dir: Path | str = PAPER_DIR, *, strict: bool = False,
                     if name not in defined:
                         report.add("warning" if fixture_numbers else "error", relative, line,
                                    f"\\{name} is not defined in numbers.tex")
+                    elif (ledger is not None and "\\missingnumber" not in defined[name]
+                          and ledger.get(name) != defined[name]):
+                        report.add("error", relative, line,
+                                   f"\\{name} is not traced in the claims ledger "
+                                   f"({ledger_path.name}): run `python reproduce.py paper`"
+                                   if name not in ledger else
+                                   f"\\{name}: the claims ledger prints {ledger[name]!r}, "
+                                   f"numbers.tex {defined[name]!r} (stale ledger)")
                     elif final and "\\missingnumber" in defined[name]:
                         report.add("error", relative, line,
                                    f"\\{name} prints \\missingnumber (its result is missing)")

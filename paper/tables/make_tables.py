@@ -776,11 +776,26 @@ def t8_cross_domain(results, out):
 # T9: the pre-registered decisions
 # ---------------------------------------------------------------------------
 
+# Named and traced (genlib.traced_formatter) so the claims ledger can
+# re-apply them to the raw values of Table T9.
+@g.traced_formatter
+def t9_absolute(v) -> str:
+    return fnum(100.0 * v, 2)
+
+
+@g.traced_formatter
+def t9_signed0(v) -> str:
+    return fnum(v, 0, sign=True)
+
+
+@g.traced_formatter
+def t9_signed2(v) -> str:
+    return fnum(v, 2, sign=True)
+
+
 def _interval_text(label, estimate, lo, hi, statistic) -> str:
-    formatter = {"difference": fpp, "ratio": fratio,
-                 "absolute": lambda v: fnum(100.0 * v, 2),
-                 "us": lambda v: fnum(v, 0, sign=True), "ms": lambda v: fnum(v, 2, sign=True),
-                 "rho": lambda v: fnum(v, 2, sign=True)}[statistic]
+    formatter = {"difference": fpp, "ratio": fratio, "absolute": t9_absolute,
+                 "us": t9_signed0, "ms": t9_signed2, "rho": t9_signed2}[statistic]
     unit = {"difference": " pp", "absolute": " pp", "us": r" $\mu$s",
             "ms": " ms"}.get(statistic, "")
     parts = []
