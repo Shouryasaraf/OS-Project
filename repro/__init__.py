@@ -3,20 +3,21 @@
 Each study module is owned by the work package that implements it, so
 parallel work never edits one shared file:
 
-==========  ========================================  =====
-module      study                                     owner
-==========  ========================================  =====
-disk        multi-corpus simulator sweep (E1)         WP10
-gpu         GPU training, disk (E2) and web (E5)      WP9 (disk), WP11 (web)
-realio      real Linux prefetch testbed (E3)          WP8
-web         RetailRocket replay benchmark (E4)        WP6
-live        real HTTP prefetch experiment (E6)        WP12
-msrc        MSRC light-sample transfer check (E7)     WPMSRC
-classifier  classifier zoo and router benchmark       track CLF
-hindsight   hindsight-labelled disk router            HSR
-paper       figures, tables, numbers from results/    WP13
-notebook    walkthrough notebook from results/       NB
-==========  ========================================  =====
+===========  ========================================  =====
+module       study                                     owner
+===========  ========================================  =====
+disk         multi-corpus simulator sweep (E1)         WP10
+gpu          GPU training, disk (E2) and web (E5)      WP9 (disk), WP11 (web)
+realio       real Linux prefetch testbed (E3)          WP8
+web          RetailRocket replay benchmark (E4)        WP6
+web_rankers  web ranker alternatives (after E4-E6)     WRK
+live         real HTTP prefetch experiment (E6)        WP12
+msrc         MSRC light-sample transfer check (E7)     WPMSRC
+classifier   classifier zoo and router benchmark       track CLF
+hindsight    hindsight-labelled disk router            HSR
+paper        figures, tables, numbers from results/    WP13
+notebook     walkthrough notebook from results/       NB
+===========  ========================================  =====
 
 Interface every study module provides (``gpu`` differs; see its docstring)::
 
@@ -36,8 +37,8 @@ GPU) returns ``EXIT_UNAVAILABLE`` with a reason rather than faking a result.
 
 from __future__ import annotations
 
-STUDIES = ("disk", "realio", "web", "live", "msrc", "classifier", "hindsight", "paper",
-           "notebook")
+STUDIES = ("disk", "realio", "web", "web_rankers", "live", "msrc", "classifier", "hindsight",
+           "paper", "notebook")
 
 EXIT_NOT_IMPLEMENTED = 3
 EXIT_UNAVAILABLE = 4

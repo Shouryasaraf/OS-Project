@@ -1,0 +1,8 @@
+comparison,headline,scorer,policy,baseline_scorer,baseline_policy,split,capacity,metric,cost,estimate,ci_lo,ci_hi,sessions,verdict,label,reps,seed,note
+S1,True,hgb,fixed1,logistic,fixed1,test,8,hit_ratio,0.0,0.000618,-0.00038200000000000007,0.001618,364364,no difference detected,,200,42,FIXTURE
+K1,False,hgb,ranking,logistic,ranking,test,,hit_at_1,0.0,0.001469,0.000469,0.002469,364364,better,,200,42,FIXTURE
+K2,True,hgb,fixed1,logistic,fixed1,test,8,hit_ratio,0.0,-0.001023,-0.002023,-2.3000000000000017e-05,364364,worse,,200,42,FIXTURE
+K3,True,hgb,fixed1,logistic,fixed1,test,8,hit_ratio,0.0,-4.3e-05,-0.001043,0.0009570000000000001,364364,no difference detected,,200,42,FIXTURE
+K4,True,hgb,fixed1,logistic,fixed1,test,8,hit_ratio,0.0,0.000135,-0.000865,0.001135,364364,no difference detected,,200,42,FIXTURE
+K5,True,hgb,fixed1,logistic,fixed1,test,8,hit_ratio,0.0,-0.001735,-0.002735,-0.000735,364364,worse,,200,42,FIXTURE
+K6,True,hgb,fixed1,logistic,fixed1,test,8,hit_ratio,0.0,0.000719,-0.000281,0.001719,364364,no difference detected,,200,42,FIXTURE

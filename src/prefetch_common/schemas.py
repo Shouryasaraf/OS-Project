@@ -769,6 +769,71 @@ _HSR_COMPARISONS = (
     _c("verdict", "str", "better | worse | no difference detected [...]"),
 )
 
+# -------------------------------------------------------------- web rankers
+
+_WR_RANK = "coverage_at_8"
+_WEB_RANKERS_TUNING = (
+    _c("family", "str", "ranker family (webprefetch.rankers.FAMILIES) or logistic"),
+    _c("trial", "int", "random-search trial; -1 = the shipped ranker (reference)"),
+    _c("params", "json", "sklearn hyperparameters of this trial"),
+    _c("selected", "bool", "the family's validation choice (highest MRR@8)"),
+    _c("train_decisions", "int", "split-1 decisions trained on"),
+    _c("tune_decisions", "int", "split-2 decisions scored"),
+    _c("tune_eligible", "int", "eligible next views among them"),
+    _c("hit_at_1", "float"), _c(_WR_RANK, "float"), _c("mrr_at_8", "float"),
+    _c("log_loss", "float", "candidate-level, split-2 tuning sample"),
+    _c("fit_s", "float?", "wall s; CONTENDED host"), _c("score_s", "float?", "wall s; CONTENDED"),
+    _c("threads", "int?"), _c("load_avg", "float?", "1-min load average at the end of the trial"),
+    _c("note", "str?"),
+)
+
+_WEB_RANKERS_RANKING = (
+    _c("split", "str", "validation | test (full split, every view)"), _c("scorer", "str"),
+    _c("train_range", "str", "what the ranker was trained and tuned on"),
+    _c("params", "json?", "selected hyperparameters; None for history-only scorers"),
+    _c("eligible", "int", "views with a next view"),
+    _c("hit_at_1", "float"), _c(_WR_RANK, "float", "next view among the top 8"),
+    _c("mrr_at_8", "float"),
+    _c("novel_eligible", "int", "next view not yet viewed in the session"),
+    _c("novel_hit_at_1", "float"), _c("novel_coverage_at_8", "float"),
+    _c("views", "int"),
+    _c("train_s", "float?", "refit wall s of the selected config; CONTENDED"),
+    _c("train_threads", "int?"),
+    _c("batch_us_per_request", "float?", "batch predict wall us per view; CONTENDED"),
+    _c("request_us", "float?", "one-request scoring wall us; CONTENDED"),
+    _c("load_avg", "float?"), _c("timing_note", "str"),
+)
+
+_WEB_RANKERS_COMPARISONS = (
+    _c("comparison", "str", "S1 | K1-K6 (results/web_rankers/PREREGISTERED.md)"),
+    _c("headline", "bool", "pre-registered headline row; others are references"),
+    _c("scorer", "str"), _c("policy", "str", "validated or fixed policy; 'ranking' for K1"),
+    _c("baseline_scorer", "str"), _c("baseline_policy", "str"),
+    _c("split", "str"), _c("capacity", "int?", "None for ranking metrics"),
+    _c("metric", "str", "hit_ratio | utility_per_view | a ranking metric"),
+    _c("cost", "float", "assumed c in the utility; 0 otherwise"),
+    _c("estimate", "float?"), _c("ci_lo", "float?"), _c("ci_hi", "float?"),
+    _c("sessions", "int?"),
+    _c("verdict", "str", "better | worse | no difference detected (A - B)"),
+    _c("label", "str?", "controller label (benchmark.verdict) for K6"),
+    _c("reps", "int"), _c("seed", "int"), _c("note", "str?"),
+)
+
+_WEB_RANKERS_SUMMARY = (
+    _c("families", "json"), _c("baselines", "json"), _c("capacities", "json"),
+    _c("trials", "json", "random-search budget per family"), _c("search_seed", "int"),
+    _c("train_decisions", "int"), _c("tune_decisions", "int"),
+    _c("train_positives", "int"), _c("train_candidate_rows", "int"),
+    _c("tune_positives", "int"), _c("tune_candidate_rows", "int"),
+    _c("validation_views", "int"), _c("test_views", "int"), _c("partial_run", "bool"),
+    _c("selection", "json", "per scorer, capacity, cost and family: the validation choice"),
+    _c("selected_family", "json", "per capacity: the S1 scorer"),
+    _c("bootstrap", "json"), _c("search_s", "float"), _c("costs", "json"),
+    _c("load_avg", "json"),
+    _c("e4_check", "json?", "shipped ranker vs E4's test cap-8 fixed1 row; None off the full split"),
+    _c("workers", "int"), _c("wall_s", "float"), _c("timing_note", "str"),
+)
+
 _PROVENANCE = tuple(_c(key, "json?" if key not in ("format", "study") else "str")
                     for key in _PROV_KEYS) + tuple(
     _c(key, "json", required=False) for key in _PROV_OPTIONAL)
@@ -831,6 +896,18 @@ SCHEMAS: dict[str, Schema] = {s.name: s for s in (
             "time to the session's next view per split", _WEB_THINK_TIME),
     _schema("web/session_parity.json", "json", "WP6 (E4; demo_server.run_parity)",
             "demo step loop vs batch replay on held-out sessions", _WEB_SESSION_PARITY),
+    _schema("web_rankers/tuning.csv", "csv", "WRK",
+            "random-search trials per ranker family, scored on a split-2 sample",
+            _WEB_RANKERS_TUNING),
+    _schema("web_rankers/ranking_metrics.csv", "csv", "WRK",
+            "next-view ranking quality and cost per (split, scorer)", _WEB_RANKERS_RANKING),
+    _schema("web_rankers/policy_metrics.csv", "csv", "WRK",
+            "web/policy_metrics.csv columns for every ranker family", _WEB_POLICY),
+    _schema("web_rankers/comparisons.csv", "csv", "WRK",
+            "pre-registered ranker comparisons with paired session-bootstrap CIs",
+            _WEB_RANKERS_COMPARISONS),
+    _schema("web_rankers/summary.json", "json", "WRK",
+            "selection, search, costs and loads of the ranker run", _WEB_RANKERS_SUMMARY),
     _schema("live/live_metrics.csv", "csv", "WP12 (E6)",
             "T7/F7: one row per pass and policy", _LIVE_METRICS),
     _schema("live/live_parity.csv", "csv", "WP12 (E6)",

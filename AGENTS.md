@@ -28,7 +28,7 @@ of it). How components work: `docs/architecture.md`. Metric definitions:
   `provenance.json`. `results/pivot_original/` is the web branch's original
   run kept verbatim: never edit it.
 - **Never hand-edit a results file.** Every file is written through
-  `prefetch_common.schemas.write_rows` (exact columns and types; 44 schemas)
+  `prefetch_common.schemas.write_rows` (exact columns and types; 49 schemas)
   and hashed in its directory's `provenance.json`;
   `provenance.verify_provenance` detects an edit. A results file changes only
   when its full reproduce command re-runs.
@@ -537,6 +537,14 @@ What the experiments found (details and figures: `docs/DECISIONS.md` D18-D21,
   (W3 and W8 together) the predictor is **not** called the smallest lever;
   the GRU is worse than online counting; the feedback gate issues fewer
   prefetches without a detectable utility difference.
+- **Web rankers (track WRK, `results/web_rankers/`, after E1-E6).** Tuned
+  `hgb`, `rf`, `et` and `mlp` rankers over the shipped candidates and features
+  rank better than the shipped logistic ranker and raise the validated
+  controller's simulated `U(0.01)` at both replayed capacities (8 and 32);
+  the validation-selected `mlp` is the primary row, and its hit ratio is
+  *lower* than logistic's at capacity 8 (as for `rf` and `et`). None beats
+  transition top-1 at depth 1 and all stay far below online counts.
+  `docs/web/WEB_RANKERS.md`.
 - **Live (E6, `results/live/`).** Every pass valid, zero parity mismatches;
   measured waits are on loopback with an emulated network.
 - **MSRC light sample (E7, `results/msrc_samples/`).** Seven size-selected

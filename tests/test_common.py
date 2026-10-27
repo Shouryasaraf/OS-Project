@@ -415,7 +415,11 @@ class SchemaTests(unittest.TestCase):
                     # Track HSR: the hindsight router.
                     "hindsight/rows.csv", "hindsight/selection.csv",
                     "hindsight/families.csv", "hindsight/summary.csv",
-                    "hindsight/comparisons.csv"}
+                    "hindsight/comparisons.csv",
+                    # Track WRK: alternative web rankers.
+                    "web_rankers/tuning.csv", "web_rankers/ranking_metrics.csv",
+                    "web_rankers/policy_metrics.csv", "web_rankers/comparisons.csv",
+                    "web_rankers/summary.json"}
         self.assertEqual(set(schemas.SCHEMAS), expected)
         for name, schema in schemas.SCHEMAS.items():
             self.assertIn(schema.fmt, schemas.FORMATS, name)

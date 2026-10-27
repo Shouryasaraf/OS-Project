@@ -3,6 +3,7 @@
     python reproduce.py disk [--quick] [--gpu]
     python reproduce.py realio [--device DIR]
     python reproduce.py web [--quick] [--gpu]
+    python reproduce.py web_rankers [--quick] [--workers N]
     python reproduce.py live [--store-dir DIR]
     python reproduce.py msrc [--quick]
     python reproduce.py classifier [--quick] [--workers N]
