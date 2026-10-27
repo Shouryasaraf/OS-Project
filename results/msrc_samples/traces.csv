@@ -1,0 +1,8 @@
+trace,family,path,requests,read_requests,seq_flag_requests,seq_flag_read_requests,windows,seq_windows_majority,seq_windows_quarter,small_n_majority,mean_service_ms,age_table_evictions,flag_matches_contiguity
+rsrch_1,rsrch,data/samples/msrc/rsrch_1.revised,13778,42,180,1,430,0,1,True,41.84599111898795,0,0.9993467373158162
+rsrch_2,rsrch,data/samples/msrc/rsrch_2.revised,207585,136364,18389,17824,6487,0,297,True,2.8212355612355804,0,0.9999181054416525
+wdev_1,wdev,data/samples/msrc/wdev_1.revised,1053,0,10,0,32,0,0,True,565.055258120755,0,1.0
+wdev_2,wdev,data/samples/msrc/wdev_2.revised,181264,189,1978,52,5664,1,4,True,3.298740857190529,0,0.9998510451664157
+wdev_3,wdev,data/samples/msrc/wdev_3.revised,680,10,12,1,21,0,0,True,877.8851306190971,0,1.0
+web_1,web,data/samples/msrc/web_1.revised,160889,87056,23623,19454,5027,74,1500,False,3.754211877752146,0,0.9842064044552732
+web_3,web,data/samples/msrc/web_3.revised,31378,10048,11705,862,980,340,545,False,18.94214157965839,0,0.9846065589444497
