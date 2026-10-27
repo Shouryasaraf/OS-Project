@@ -213,6 +213,7 @@ rebuild it with `reproduce.py notebook`.
 | [docs/PRESENTATION.md](docs/PRESENTATION.md) | slide-by-slide outline, speaker notes and viva questions |
 | [AGENTS.md](AGENTS.md) | the invariants and claim rules for anyone (or any agent) changing the code |
 | [docs/MASTER_PLAN.md](docs/MASTER_PLAN.md) | the work plan this branch was built to |
+| [docs/history/](docs/history/README.md) | executed earlier work plans and how `master` was formed, kept for the record |
 | [paper/README.md](paper/README.md), [presentation/README.md](presentation/README.md) | building the paper and the deck on Overleaf |
 
 ## The disk study's original entry points

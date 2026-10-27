@@ -5,7 +5,7 @@
 
 <!-- doc-numbers: off (executed work plan from branch main; its figures are from that time) -->
 
-Source of truth: [`Operating Systems Lab Submission 2.pdf`](reference/Operating%20Systems%20Lab%20Submission%202.pdf) (Project Review 1).
+Source of truth: [`Operating Systems Lab Submission 2.pdf`](../reference/Operating%20Systems%20Lab%20Submission%202.pdf) (Project Review 1).
 Goal of Stage 2: **actually build and prove what the PDF promises** — classify
 access pattern in real time, switch prefetch policy per class, learn online, and
 benchmark against **stride, Markov, and offline-LSTM baselines**.
@@ -28,7 +28,7 @@ benchmark against **stride, Markov, and offline-LSTM baselines**.
 
 ## 2. Architecture (unchanged spine, pluggable policy layer)
 
-Same 5-stage pipeline (see [`PIPELINE.md`](PIPELINE.md)). Change: **Stage 4 policy selection
+Same 5-stage pipeline (see [`PIPELINE.md`](../PIPELINE.md)). Change: **Stage 4 policy selection
 becomes a pluggable predictor registry** so every baseline + the adaptive
 classifier feed the same `candidates()`-style signature and are compared under
 identical causality, stream, cache, and LRU rules.
