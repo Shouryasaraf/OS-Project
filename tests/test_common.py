@@ -402,7 +402,11 @@ class SchemaTests(unittest.TestCase):
                     "web/calibration.csv", "web/learning_curve.csv",
                     "web/dataset_profile.json", "web/think_time.json",
                     "web/session_parity.json", "live/live_config.json",
-                    "live/disk_probe_*.json"}
+                    "live/disk_probe_*.json",
+                    # Track WRK: alternative web rankers.
+                    "web_rankers/tuning.csv", "web_rankers/ranking_metrics.csv",
+                    "web_rankers/policy_metrics.csv", "web_rankers/comparisons.csv",
+                    "web_rankers/summary.json"}
         self.assertEqual(set(schemas.SCHEMAS), expected)
         for name, schema in schemas.SCHEMAS.items():
             self.assertIn(schema.fmt, schemas.FORMATS, name)

@@ -1,0 +1,41 @@
+{
+  "format": "prefetch_common.provenance/1",
+  "study": "web_rankers",
+  "command": [
+    "python",
+    "tests/fixtures/make_results_fixtures.py"
+  ],
+  "git_sha": "0000000000000000000000000000000000000000",
+  "git_dirty": false,
+  "created_utc": "2026-01-01T00:00:00+00:00",
+  "host": {
+    "hostname": "fixture-host",
+    "platform": "Linux-fixture",
+    "kernel": "6.14.0",
+    "python": "3.12.0",
+    "cpu_count": 128
+  },
+  "load_avg": {
+    "start": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "end": [
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "wall_s": 0.0,
+  "gpu": null,
+  "inputs": {},
+  "outputs": {
+    "comparisons.csv": "1d0d65e2bf696e43beafd94a9fff0127975bf0445d53ded2c7ad10a30cdb1427",
+    "policy_metrics.csv": "997cc8d027bfb35a50409b84b5d4ad5dd41d577cf90486b657f8a1c5b99bd619",
+    "ranking_metrics.csv": "051443ac7da1e03ca45e8eb5cf14492cbf583689e5bf61c8dabe70d765afc649",
+    "summary.json": "fccf6a81a0b8d488d6fcc4bf4f3b78da4b71f186857f6c5bc1047164753dd230",
+    "tuning.csv": "851bcf8facf9c77fcdf483f2181013b97705615bc152454101c97d858610e199"
+  },
+  "notes": "FIXTURE: synthetic values from tests/fixtures/make_results_fixtures.py; not a result, never quote"
+}

@@ -687,6 +687,83 @@ def build_live_side(rng) -> None:
         "hinted": {"0": {"resident_frac": 0.0, **summary}}, "load_avg_end": [1.0, 1.0, 1.0]}])
 
 
+# ------------------------------------------------------------ web rankers
+
+WR_SCORERS = ("logistic", "logistic_tuned", "hgb", "rf", "et", "mlp")
+
+
+def build_web_rankers(rng) -> None:
+    """Track WRK's files (results/web_rankers/), synthetic like the rest."""
+    tuning = [{"family": "logistic", "trial": -1, "params": {"C": 10.0}, "selected": True,
+               "train_decisions": 30000, "tune_decisions": 100000, "tune_eligible": 32586,
+               "hit_at_1": 0.045, "coverage_at_8": 0.104, "mrr_at_8": 0.064, "log_loss": 0.0163,
+               "fit_s": None, "score_s": None, "threads": None, "load_avg": 1.0,
+               "note": "shipped ranker; reference"}]
+    for family in WR_SCORERS[1:]:
+        for trial in range(2):
+            tuning.append({"family": family, "trial": trial, "params": {"p": trial},
+                           "selected": trial == 0, "train_decisions": 100000,
+                           "tune_decisions": 100000, "tune_eligible": 32586,
+                           "hit_at_1": _r(rng, 0.04, 0.05), "coverage_at_8": _r(rng, 0.10, 0.11),
+                           "mrr_at_8": _r(rng, 0.06, 0.07), "log_loss": _r(rng, 0.015, 0.017),
+                           "fit_s": _r(rng, 1, 60), "score_s": _r(rng, 0.1, 10), "threads": 1,
+                           "load_avg": 1.0, "note": None})
+    _w("web_rankers/tuning.csv", tuning)
+    ranking, policies = [], []
+    for split in ("validation", "test"):
+        for scorer in (*WR_SCORERS, "trans_s0", "trans_online"):
+            ranking.append({
+                "split": split, "scorer": scorer, "train_range": "FIXTURE",
+                "params": None if scorer.startswith("trans") else {"p": 0}, "eligible": 168480,
+                "hit_at_1": _r(rng, 0.04, 0.06), "coverage_at_8": _r(rng, 0.09, 0.2),
+                "mrr_at_8": _r(rng, 0.05, 0.08), "novel_eligible": 108000,
+                "novel_hit_at_1": _r(rng, 0.01, 0.03), "novel_coverage_at_8": _r(rng, 0.05, 0.1),
+                "views": 532844, "train_s": None, "train_threads": None,
+                "batch_us_per_request": None, "request_us": _r(rng, 50, 900) if split == "test" else None,
+                "load_avg": 1.0, "timing_note": "CONTENDED shared host; FIXTURE"})
+            if scorer.startswith("trans"):
+                continue
+            for capacity in (8, 32):
+                for policy, depth in (("fixed0", 0.0), ("fixed1", 1.0), ("adaptive_0.01", 0.8)):
+                    hit = 0.11 + 0.01 * depth + _r(rng, 0.0, 0.002)
+                    issued = depth * _r(rng, 0.8, 1.0)
+                    record = {"policy": policy, "views": 532844, "hit_ratio": hit,
+                              "issued_per_view": issued}
+                    policies.append({
+                        "split": split, "scorer": scorer, "cache_scope": "session",
+                        "capacity": capacity, "policy": policy, "views": 532844,
+                        "hit_ratio": hit, "prefetch_hits_per_view": 0.01 * depth,
+                        "issued_per_view": issued, "precision": 0.012 if depth else 0.0,
+                        "wasted_per_view": issued * 0.98, "demand_evicted_by_prefetch_per_view": 0.0,
+                        "c_star": 0.012 if depth else None, **utility.utility_columns(record)})
+    _w("web_rankers/ranking_metrics.csv", ranking)
+    _w("web_rankers/policy_metrics.csv", policies)
+    comparisons = []
+    for cid in ("S1", "K1", "K2", "K3", "K4", "K5", "K6"):
+        estimate = _r(rng, -0.002, 0.002)
+        lo, hi = estimate - 0.001, estimate + 0.001
+        comparisons.append({
+            "comparison": cid, "headline": cid != "K1", "scorer": "hgb",
+            "policy": "ranking" if cid == "K1" else "fixed1", "baseline_scorer": "logistic",
+            "baseline_policy": "ranking" if cid == "K1" else "fixed1", "split": "test",
+            "capacity": None if cid == "K1" else 8,
+            "metric": "hit_at_1" if cid == "K1" else "hit_ratio", "cost": 0.0,
+            "estimate": estimate, "ci_lo": lo, "ci_hi": hi, "sessions": 364364,
+            "verdict": "better" if lo > 0 else "worse" if hi < 0 else "no difference detected",
+            "label": None, "reps": REPS, "seed": 42, "note": "FIXTURE"})
+    _w("web_rankers/comparisons.csv", comparisons)
+    _w("web_rankers/summary.json", [{
+        "families": list(WR_SCORERS[1:]), "baselines": ["logistic", "trans_s0", "trans_online"],
+        "capacities": [8, 32], "trials": {f: 2 for f in WR_SCORERS[1:]}, "search_seed": 42,
+        "train_decisions": 100000, "tune_decisions": 100000, "train_positives": 5327,
+        "train_candidate_rows": 1374810, "tune_positives": 3921, "tune_candidate_rows": 1318063,
+        "validation_views": 532843, "test_views": 532844, "partial_run": False,
+        "selection": {}, "selected_family": {"8": "hgb", "32": "logistic"},
+        "bootstrap": {"reps": REPS, "seed": 42, "sessions": 364364}, "search_s": 1.0,
+        "costs": {}, "load_avg": {"start": 1.0}, "e4_check": None, "workers": 1, "wall_s": 1.0,
+        "timing_note": "FIXTURE"}])
+
+
 # ------------------------------------------------------------- provenance
 
 def write_provenance(study: str) -> None:
@@ -728,7 +805,8 @@ def main() -> int:
     build_gpu_side(side)
     build_web_side(side)
     build_live_side(side)
-    for study in ("disk", "gpu", "realio", "web", "live"):
+    build_web_rankers(random.Random(20261028))
+    for study in ("disk", "gpu", "realio", "web", "live", "web_rankers"):
         write_provenance(study)
     print(json.dumps(sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*") if p.is_file()),
                      indent=1))
