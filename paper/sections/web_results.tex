@@ -1,26 +1,81 @@
-% VIII. Web results (simulated). Object sizes, RTT and bandwidth are
-% assumed (constraint 8). Headline comparisons are against the best fixed
-% depth at the same capacity and against transition top-1 (constraint 7).
-% Feeds from: results/web/dataset_profile.json, freshness.csv,
-% policy_metrics.csv, comparisons.csv, decomposition.csv, seq_metrics.csv,
-% calibration.csv (E4, E5).
-% Generated: tables T4, T5, T6; figure F6.
+% VIII. Web results (simulated, E4/E5). Object sizes, RTT and bandwidth are
+% assumed and the cost c is an assumed number of hit-equivalents
+% (constraint 8). Headline comparisons are against the best fixed depth at the
+% same capacity, no prefetching and transition top-1 (constraint 7); nothing
+% generalises from one capacity or one cost (web decision rule 1).
+% Sources: results/web/{decomposition,comparisons,policy_metrics,freshness,
+% seq_metrics,calibration}.csv, via numbers.tex and paper/decisions.py.
+% Generated: Table T5 (T4, T6 and Fig. F6 in the appendix).
 
-\section{Web Results}\label{sec:web}
+\section{Web Results (Simulated)}\label{sec:web}
 
-\todo{Table T4: the RetailRocket event counts and pair kinds (novel,
-self-repeat, revisit), from results/web/dataset\_profile.json.}
+\input{tables/t5_web_decomposition}
 
-\todo{Fig. F6: coverage at K versus index freshness, from
-results/web/freshness.csv.}
+All numbers here replay the RetailRocket test split (\webSessions{} sessions)
+through per-session caches with instant prefetch, with an assumed $c$.
+Table~\ref{tab:t5_web_decomposition} isolates one lever per row against its
+pre-registered baseline.
 
-\todo{Table T5: what moves the needle (freshness, depth, controller,
-scorer) with CIs, from results/web/decomposition.csv.}
+\textbf{The controller.} Selected on validation separately at each capacity,
+the adaptive controller (\polAdaptive) beats the best fixed depth at the same
+capacity (W1; \decWebWOneCapEightCI{} in $U$ at $c$ = \webHeadlineCost{} and
+capacity 8, \decWebWOneCapThirtyTwoCI{} at capacity 32), beats no prefetching
+(W2; \decWebWTwoCapEightCI), and, in an exploratory comparison, beats
+transition top-1 (\webCmpVsTransitionPerCapacityLogisticCapEightCostZeroPointZeroOneCI). By
+decision rule 1 we may therefore say that \decWebRuleOneCapEightVerdict{} at
+capacities 8 and 32, at this cost, and no more. It gets there by issuing less:
+\webIssuedLogisticCapEightAdaptiveZeroPointZeroOne{} prefetches per view
+against \webIssuedLogisticCapEightFixedOne{} for the best fixed depth, with a
+hit ratio of \webHitLogisticCapEightAdaptiveZeroPointZeroOne{} against
+\webHitLogisticCapEightFixedOne{} (\webHitLogisticCapEightFixedZero{} without
+prefetching; every capacity and family is in Table~\ref{tab:t6_web_comparisons}).
 
-\todo{Table T6: per-capacity validated comparisons against the best fixed
-depth, fixed0 and transition top-1, from results/web/comparisons.csv; the
-feedback gate, from results/web/policy\_metrics.csv.}
+\textbf{The ranker and its freshness.} The trained logistic ranker loses to
+plain history: top-1 transition counts from the index split hit more often at
+depth one (W3; \decWebWThreeHitRankerCI), although, as an
+exploratory diagnostic, the logistic ranker is the better-calibrated of the
+two (Brier skill \webBrierSkillLogistic{} against \webBrierSkillTransSZero{}
+for the counts).
+Counts updated online as the test split replays are worth far more (W4,
+online counts minus the logistic ranker at depth four;
+\decWebWFourHitFreshnessCI). Descriptively, the next item is in the online
+index's top eight for \webCoverageOnlineKEight{} of eligible views, against
+\webCoverageSplitZeroKEight{} for the shipped index (Fig.~\ref{fig:f6} in the
+appendix).
 
-\todo{The GRU sequence model against counts over seeds, from
-results/web/seq\_metrics.csv; a footnote on calibration, from
-results/web/calibration.csv.}
+\textbf{Depth.} Prefetching four items instead of one raises the hit ratio
+(W5; \decWebWFiveHitDepthCI) but costs more than it gains at $c$ =
+\webHeadlineCost{} (\decWebWFiveUtilityDepthCI{} in $U$): only
+\webPrecisionLogisticCapEightFixedFour{} of its prefetches are used, against
+\webPrecisionLogisticCapEightFixedOne{} at depth one. Depth is a lever in both
+directions, which is consistent with a controller that chooses it per view
+beating every fixed depth.
+
+\textbf{The feedback gate.} Against the adaptive controller, the validated
+gate (\polFeedback) gets the verdict ``\decWebWSixHitFeedbackVerdict'' in hit
+ratio (W6; \decWebWSixHitFeedbackCI) and ``\decWebWSixUtilityFeedbackVerdict''
+in $U$ (\decWebWSixUtilityFeedbackCI), so by rule 3 it is
+\decWebRuleThreeVerdict. It does issue fewer prefetches
+(\webIssuedLogisticCapEightFeedbackZeroPointZeroOneEpsZeroPointZeroZeroFive{} per
+view against \webIssuedLogisticCapEightAdaptiveZeroPointZeroOne).
+
+\textbf{The sequence model.} The GRU, trained on the index and training splits
+over \webSeqGruFinalCapEightFixedFourCostZeroPointZeroOneSeeds{} seeds, reaches
+a hit ratio of \webSeqGruFinalCapEightFixedFourCostZeroPointZeroOneCacheHit{} at
+depth four (seed range
+\webSeqGruFinalCapEightFixedFourCostZeroPointZeroOneCacheHitMin{} to
+\webSeqGruFinalCapEightFixedFourCostZeroPointZeroOneCacheHitMax), below the
+online transition counts' \webHitTransOnlineCapEightFixedFour{} on every seed;
+the pre-registered comparison (W8, seed 0) gives
+``\decWebWEightHitSequenceModelVerdict'' (\decWebWEightHitSequenceModelCI).
+
+\textbf{Scope and the lever rule.} One cache per visitor instead of per
+session would add \decWebWSevenHitCacheScopeCI{} of hits with no prefetching
+and an unbounded cache (W7); this is an upper bound on cross-session reuse,
+not a prefetching result. By rule 2, the ranker lever
+($|\Delta|$ in \decWebPredictorSmallestRankerCI{} pp) is smaller than both
+depth (\decWebPredictorSmallestDepthCI) and freshness
+(\decWebPredictorSmallestFreshnessCI), but the sequence-model lever
+(\decWebPredictorSmallestSequenceModelCI) overlaps depth, so
+\decWebPredictorSmallestVerdict{} and we make no ordering claim between the
+sequence model and depth.

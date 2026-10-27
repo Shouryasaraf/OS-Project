@@ -90,8 +90,13 @@ def ci_cell(estimate, lo, hi, formatter=fpp, **kwargs) -> str:
     return text + (r" {\scriptsize " + interval + "}" if interval else "")
 
 
+#: Font size and column gap of a dense table, so the widest tables fit the
+#: IEEE text width (7.16 in) or column width (3.5 in) without a resize.
+DENSE = ("scriptsize", 2)
+
+
 def float_env(name: str, caption: str, body: str, *, wide: bool, out: "g.Output",
-              note: str | None = None) -> str:
+              note: str | None = None, dense: bool = False) -> str:
     env = "table*" if wide else "table"
     if out.fixture:
         caption = r"\textbf{FIXTURE DATA -- not results.} " + caption
@@ -100,8 +105,9 @@ def float_env(name: str, caption: str, body: str, *, wide: bool, out: "g.Output"
         "% Inputs: " + (", ".join(sorted(out.inputs)) or "none"),
     ]
     lines += [f"% MISSING input: {item}" for item in sorted(set(out.missing))]
-    lines += [rf"\begin{{{env}}}[t]", r"\centering", r"\footnotesize",
-              r"\setlength{\tabcolsep}{3pt}", rf"\caption{{{caption}}}",
+    size, gap = DENSE if dense else ("footnotesize", 3)
+    lines += [rf"\begin{{{env}}}[t]", r"\centering", "\\" + size,
+              rf"\setlength{{\tabcolsep}}{{{gap}pt}}", rf"\caption{{{caption}}}",
               rf"\label{{tab:{name}}}", body]
     if note:
         lines.append(r"\\[2pt]{\scriptsize " + note + "}")
@@ -117,8 +123,14 @@ def placeholder(name: str, caption: str, out: "g.Output", *, wide: bool) -> str:
     return float_env(name, caption, body, wide=wide, out=out)
 
 
+#: The demand-only Belady/MIN reference row of the disk tables.
+BELADY = "belady_min"
+
+
 def policy_label(policy: str, latency: str = g.HEADLINE_LATENCY) -> str:
     text = esc(policy)
+    if policy == BELADY:
+        return text + r"$^\ddagger$"
     return text + r"$^\dagger$" if latency != g.HEADLINE_LATENCY else text
 
 
@@ -168,8 +180,10 @@ def t1_datasets(results, out):
         items = by_corpus[corpus]
         caps = sorted({r["max_merge_sectors"] for r in items if r["max_merge_sectors"]})
         units = "/".join(sorted({r["size_unit"] for r in items}))
-        merges = "/".join(sorted({r["merge"] for r in items}))
-        rule = (f"{esc(merges)}, cap {'/'.join(map(str, caps))} sectors" if caps
+        # Records become requests only where pages were merged (FIU); every
+        # other corpus records one request per record, whatever cap is stored.
+        merged = sum(r["records"] for r in items) != sum(r["requests"] for r in items)
+        rule = (f"pages merged, cap {'/'.join(map(str, caps))}" if merged and caps
                 else "as recorded")
         table.row(["Block traces", esc(corpus), fcount(len(items)),
                    fcount(sum(r["records"] for r in items)),
@@ -188,13 +202,15 @@ def t1_datasets(results, out):
                    rf"\textbf{{{g.MISSING_TEXT}: web/dataset\_profile.json}}"] + [DASH] * 6)
     else:
         sessions = _web_value(web, "sessions", "n_sessions")
-        table.row(["RetailRocket", "web", "1", fcount(_web_value(web, "events", "n_events")),
+        table.row(["RetailRocket", "web", "1",
+                   fcount(_web_value(web, "raw_rows", "events", "n_events")),
                    fcount(_web_value(web, "views", "n_views")),
                    (f"{fcount(sessions)} sessions" if sessions is not None else DASH),
                    DASH, DASH, DASH, DASH])
-    return float_env("t1_datasets", caption, table.latex(), wide=True, out=out,
-                     note="Records: raw oracleGeneral records (web: events). Requests: "
-                          "canonical requests (web: product views).")
+    return float_env("t1_datasets", caption, table.latex(), wide=True, out=out, dense=True,
+                     note="Records: raw oracleGeneral records (web: raw event rows). Requests: "
+                          "canonical requests (web: product views). Merge caps in 512-B "
+                          "sectors; record sizes in bytes or sectors as noted.")
 
 
 def t1b_hardware(results, out):
@@ -209,7 +225,7 @@ def t1b_hardware(results, out):
             results.note_input(out, f"{study}/provenance.json")
             break
     if not devices and host is None:
-        return placeholder("t1b_hardware", caption, out, wide=False)
+        return placeholder("t1b_hardware", caption, out, wide=True)
     table = Table("lllrrr", ["Item", "Model", "Type", "Rand.\\ 4K p50 ($\\mu$s)",
                              "Seq.\\ 1M (MB/s)", "$\\kappa$"])
     if host is not None:
@@ -226,7 +242,7 @@ def t1b_hardware(results, out):
                    fnum(row["kappa"], 0)])
     if not devices:
         table.row([rf"\textbf{{{g.MISSING_TEXT}: realio/device\_*.json}}"] + [DASH] * 5)
-    return float_env("t1b_hardware", caption, table.latex(), wide=False, out=out)
+    return float_env("t1b_hardware", caption, table.latex(), wide=True, out=out)
 
 
 # ---------------------------------------------------------------------------
@@ -244,7 +260,9 @@ def t2_disk_main(results, out):
                "ratio over traces; $\\Delta$ in percentage points with 95\\% paired-bootstrap CIs "
                "over traces; device-I/O and blocks-moved ratios are means over traces of the "
                "policy's count over \\texttt{none}'s. $^\\dagger$ gated mode at the break-even "
-               "cost model. Writes replay as reads.")
+               "cost model. $^\\ddagger$ Belady's MIN for demand paging without prefetch, "
+               "on the same block stream: a reference for replacement, not a bound on "
+               "prefetching policies, several of which exceed it. Writes replay as reads.")
     rows = results.rows("disk/table_main.csv", out)
     rows = _headline(rows, corpus="all")
     if not rows:
@@ -280,14 +298,15 @@ def t2_disk_main(results, out):
                        fnum(None if row["mean_wasted_share"] is None
                             else 100 * row["mean_wasted_share"], 1),
                        fratio(row["device_io_ratio"]), fratio(row["blocks_moved_ratio"]), wl])
-    return float_env("t2_disk_main", caption, table.latex(), wide=True, out=out,
+    return float_env("t2_disk_main", caption, table.latex(), wide=True, out=out, dense=True,
                      note=f"Bootstrap: {_resamples(results, out)}. W/L: traces where the policy's "
                           "hit ratio is above/below none's.")
 
 
 def t2b_disk_by_corpus(results, out):
     caption = ("Disk mean block hit ratio (\\%, simulated) per corpus, C1, canonical requests; "
-               "n traces per corpus in the header.")
+               "n traces per corpus in the header. $^\\ddagger$ demand-only Belady MIN, a "
+               "reference for replacement and not a bound on prefetching.")
     rows = _headline(results.rows("disk/table_by_corpus.csv", out), latency=g.HEADLINE_LATENCY)
     if not rows:
         return placeholder("t2b_disk_by_corpus", caption, out, wide=True)
@@ -302,14 +321,16 @@ def t2b_disk_by_corpus(results, out):
     cell = {(r["policy"], r["capacity"], r["corpus"]): r["mean_hit_ratio"] for r in rows}
     for policy in sorted({r["policy"] for r in rows}, key=g.policy_key):
         values = [cell.get((policy, cap, corpus)) for cap in capacities for corpus in corpora]
-        table.row([esc(policy)] + [fnum(None if v is None else 100 * v, 2) for v in values])
+        table.row([policy_label(policy)] + [fnum(None if v is None else 100 * v, 2)
+                                            for v in values])
     return float_env("t2b_disk_by_corpus", caption, table.latex(), wide=True, out=out)
 
 
 def t2c_learned_depth(results, out):
     caption = ("learned\\_depth against the validation-chosen fixed depth (VCF) on each trace's "
                "held-out test segment (simulated block hit ratio, \\%, mean over seeds). "
-               "Oracle: the best segment choice in hindsight over the same actions.")
+               "Oracle: E2's hindsight same-actions reference; it is not a bound and can "
+               "fall below the learned controller.")
     rows = results.rows("gpu/disk_learned_depth.csv", out)
     if not rows:
         return placeholder("t2c_learned_depth", caption, out, wide=True)
@@ -393,29 +414,73 @@ def t3_realio(results, out, trace: str = "msr_hm_0"):
                      table.latex(), wide=True, out=out)
 
 
+def _decisions():
+    """``paper/decisions.py`` (the pre-registered rules), loaded by path."""
+    if "paper_decisions" not in sys.modules:
+        spec = importlib.util.spec_from_file_location("paper_decisions",
+                                                      HERE.parent / "decisions.py")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["paper_decisions"] = module
+        spec.loader.exec_module(module)
+    return sys.modules["paper_decisions"]
+
+
+def _rho_cell(rho, verdict: str) -> str:
+    """rho with the R2 verdict as a mark: * consistent, \\dag{} against."""
+    text = fnum(rho, 2, sign=True)
+    mark = ("^{*}" if verdict.startswith("ranks consistently")
+            else "^{\\dagger}" if verdict.startswith("ranks against") else "")
+    # Inside the number's own math: "$x$$^{*}$" would open display math.
+    return text[:-1] + mark + "$" if mark and text.endswith("$") else text
+
+
 def t3b_realio_summary(results, out):
-    caption = ("Simulator against measurement per device, backend, think model and trace: "
-               "Spearman rank correlation across modes of measured mean latency with simulated "
-               "device time and with simulated hit ratio, and the mean prediction error of the "
-               "hit-ratio-based latency prediction. Stated per trace, not as a device property.")
+    caption = ("Simulator against measurement (E3, measured) per device, backend, think model "
+               "and 20{,}000-request trace prefix: Spearman rank correlation across modes of "
+               "measured mean latency with simulated device time and with simulated hit ratio "
+               "($^{*}$: the pre-registered R2 rule finds a ranking consistent with measured "
+               "latency, $^{\\dagger}$: a ranking against it; unmarked: ranking not supported, "
+               "or n = 4 and descriptive only), the mode with the lowest measured mean latency "
+               "against the mode with the highest simulated hit ratio, and the mean error of "
+               "the hit-ratio-only latency prediction. Stated per trace, not as a device "
+               "property.")
     rows = results.rows("realio/realio_summary.csv", out)
     if not rows:
         return placeholder("t3b_realio_summary", caption, out, wide=True)
-    table = Table("llllrrrrr", ["Device", "Backend", "Think", "Trace", "Modes",
-                                "$\\rho$ dev.\\ time", "$\\rho$ hit", "Pred.\\ err.\\ (\\%)",
-                                "Foreign I/O (\\%)"])
+    verdicts = {}
+    for d in _decisions().realio_decisions(results, out):
+        verdicts[(d.rule, d.scope, d.comparison)] = d
+    table = Table("llllrrrllrr", ["Device", "Backend", "Think", "Trace", "Modes",
+                                  "$\\rho$ dev.\\ time", "$\\rho$ hit", "Fastest",
+                                  "Max sim.\\ hit", "Pred.\\ err.\\ (\\%)",
+                                  "Foreign (\\%)"])
     groups = defaultdict(list)
     for row in rows:
         groups[(row["device"], row["backend"], row["think"], row["trace"])].append(row)
-    for (device, backend, think, trace), items in sorted(groups.items()):
+    for (device, backend, think, trace), items in sorted(
+            groups.items(), key=lambda kv: (kv[0][0] != "sdb", kv[0][2] != "closed", kv[0][1:])):
+        scope = f"{device}, {backend}, {think}, {trace}"
         errors = [r["pred_err"] for r in items if r["pred_err"] is not None]
         foreign = [r["foreign_io_frac_max"] for r in items if r["foreign_io_frac_max"] is not None]
-        table.row([esc(device), esc(backend), esc(think), esc(trace), fcount(len(items)),
-                   fnum(items[0]["spearman_device_time"], 2, sign=True),
-                   fnum(items[0]["spearman_hit_ratio"], 2, sign=True),
+        planned = sum(r["sim_hit_ratio"] is not None for r in items)
+        hit = verdicts.get(("R2", scope, "rho(simulated hit, measured latency)"))
+        dev = verdicts.get(("R2", scope, "rho(simulated device time, measured latency)"))
+        fastest = verdicts.get(("fastest", scope, "lowest measured mean latency"))
+        top = (fastest.note.split(": ", 1)[1] if fastest is not None else DASH)
+        table.row([esc(device), esc(backend), esc(think), esc(trace),
+                   f"{fcount(planned)}/{fcount(len(items))}",
+                   _rho_cell(items[0]["spearman_device_time"], dev.verdict if dev else ""),
+                   _rho_cell(items[0]["spearman_hit_ratio"], hit.verdict if hit else ""),
+                   esc(fastest.verdict) if fastest is not None else "contended",
+                   esc(top),
                    fnum(100 * statistics.fmean(errors), 1, sign=True) if errors else DASH,
                    fnum(100 * max(foreign), 2) if foreign else DASH])
-    return float_env("t3b_realio_summary", caption, table.latex(), wide=True, out=out)
+    return float_env("t3b_realio_summary", caption, table.latex(), wide=True, out=out,
+                     dense=True,
+                     note="Modes: modes with a simulator plan / all modes in the cell "
+                          "(kernel\\_ra and kernel\\_seq have none). A cell whose foreign I/O "
+                          "exceeds 1\\% is contended: no fastest mode is named and no rule is "
+                          "applied.")
 
 
 # ---------------------------------------------------------------------------
@@ -438,11 +503,11 @@ def t4_web_dataset(results, out):
                 yield prefix + (key,), value
 
     for path, value in walk(payload):
-        fraction = any(word in path[-1] for word in ("frac", "share", "ratio"))
+        fraction = any(word in str(part) for part in path for word in ("frac", "share", "ratio"))
         text = (fcount(value) if isinstance(value, int)
                 else fpct(value) if fraction and abs(value) <= 1 else fnum(value, 3))
         table.row([esc(" / ".join(map(str, path))), text])
-    return float_env("t4_web_dataset", caption, table.latex(), wide=False, out=out)
+    return float_env("t4_web_dataset", caption, table.latex(), wide=False, out=out, dense=True)
 
 
 def t5_web_decomposition(results, out):
@@ -462,15 +527,26 @@ def t5_web_decomposition(results, out):
                    f"{esc(row['metric'])} ({row['cost']:g})",
                    ci_cell(row["estimate"], row["ci_lo"], row["ci_hi"]),
                    fcount(row["sessions"])])
-    return float_env("t5_web_decomposition", caption, table.latex(), wide=True, out=out)
+    return float_env("t5_web_decomposition", caption, table.latex(), wide=True, out=out,
+                     dense=True)
+
+
+#: T6 prints the pre-registered cost (W1, W2) for the logistic ranker and the
+#: online-index scorer whose controller E6 replays; comparisons.csv holds
+#: every scorer, cost and the capacity_transfer protocol as well.
+T6_SCORERS = ("logistic", "trans_online")
+T6_COST = 0.01
 
 
 def t6_web_comparisons(results, out):
-    caption = ("Validated web controller against the strongest fair baselines (test split, "
-               "simulated): the best fixed depth at the same capacity, no prefetch (fixed0) "
-               "and transition top-1. $\\Delta$ U(c) per view in percentage points with 95\\% "
-               "paired session-bootstrap CIs.")
-    rows = g.select(results.rows("web/comparisons.csv", out), split="test")
+    caption = ("Validated web controllers against the strongest fair baselines (test split, "
+               "simulated, per-capacity selection on validation, assumed c = 0.01): the best "
+               "fixed depth at the same capacity, no prefetch (fixed0) and transition top-1. "
+               "$\\Delta$ U(c) per view in percentage points with 95\\% paired "
+               "session-bootstrap CIs.")
+    rows = [r for r in g.select(results.rows("web/comparisons.csv", out), split="test",
+                                selection="per_capacity")
+            if r["scorer"] in T6_SCORERS and r["cost"] == T6_COST]
     if not rows:
         return placeholder("t6_web_comparisons", caption, out, wide=True)
     table = Table("rrllrrrl", ["Cap.", "c", "Selected", "Best fixed", "vs best fixed",
@@ -489,7 +565,7 @@ def t6_web_comparisons(results, out):
                                    row["vs_transition_top1_hi"]),
                            esc(row["label"])])
     reps = sorted({r["reps"] for r in rows})
-    return float_env("t6_web_comparisons", caption, table.latex(), wide=True, out=out,
+    return float_env("t6_web_comparisons", caption, table.latex(), wide=True, out=out, dense=True,
                      note=f"Bootstrap: {'/'.join(fcount(r) for r in reps)} session resamples.")
 
 
@@ -511,9 +587,10 @@ def _live_ideal_cell(items) -> str:
 
 
 def _live_groups(rows, experiments):
+    """Citable passes (valid, store foreign I/O at most 1 %) per group."""
     groups = defaultdict(list)
-    for row in rows:
-        if row["valid"] and row["experiment"] in experiments:
+    for row in g.live_citable(rows):
+        if row["experiment"] in experiments:
             groups[(row["experiment"], row["store"], row["config"], row["link"],
                     row["policy"])].append(row)
     return groups
@@ -522,7 +599,8 @@ def _live_groups(rows, experiments):
 def t7_live(results, out):
     caption = ("Live HTTP replay (measured on loopback with an emulated network; RTT, bandwidth "
                "and object sizes are ASSUMED). Milliseconds of wait saved per view against the "
-               "no-prefetch baseline: mean over valid passes, with the envelope of the "
+               "no-prefetch baseline: mean over citable passes (valid, and at most 1\\% "
+               "foreign I/O on the store device), with the envelope of the "
                "per-pass 95\\% session-bootstrap CIs. Parity: sessions whose live counters "
                "differ from the simulator's.")
     rows = results.rows("live/live_metrics.csv", out)
@@ -555,10 +633,12 @@ def t7_live(results, out):
                        if compared else DASH,
                        parity_cell])
     invalid = [r for r in rows if r["experiment"] == "headline" and not r["valid"]]
-    valid = [r for r in rows if r["experiment"] == "headline" and r["valid"]]
+    valid = [r for r in g.live_citable(rows) if r["experiment"] == "headline"]
+    flagged = sum(r["valid"] for r in rows if r["experiment"] == "headline") - len(valid)
     unpaired = len(valid) - len(g.live_comparable(valid))
     note = (f"{fcount(len(invalid))} headline pass-policy row(s) failed the validity gate "
-            "and are excluded.")
+            f"and {fcount(flagged)} valid row(s) carried more than 1\\% foreign I/O on the "
+            "store device; both are excluded.")
     if unpaired:
         note += (f" {fcount(unpaired)} valid row(s) have no valid baseline pass and are "
                  "left out of the savings and bytes columns.")
@@ -573,7 +653,7 @@ def t7b_live_ablation(results, out):
     if not rows or not experiments:
         if rows is not None:
             out.missing.append("live/live_metrics.csv: no non-headline experiment rows")
-        return placeholder("t7b_live_ablation", caption, out, wide=False)
+        return placeholder("t7b_live_ablation", caption, out, wide=True)
     groups = _live_groups(rows, experiments)
     table = Table("lllrrr", ["Experiment", "Store / link", "Policy", "Passes", "Saved (ms)",
                              "Ideal"])
@@ -581,7 +661,7 @@ def t7b_live_ablation(results, out):
         items = groups[key]
         table.row([esc(key[0]), f"{esc(key[1])} / {esc(key[3])}", esc(key[4]),
                    fcount(len(items)), _live_saved_cell(items), _live_ideal_cell(items)])
-    return float_env("t7b_live_ablation", caption, table.latex(), wide=False, out=out)
+    return float_env("t7b_live_ablation", caption, table.latex(), wide=True, out=out)
 
 
 # ---------------------------------------------------------------------------
@@ -617,8 +697,9 @@ def t8_cross_domain(results, out):
     caption = ("Cross-domain summary. Disk and web rows are simulated, live rows measured on "
                "loopback with an ASSUMED network. Gain is against no prefetching with a 95\\% CI; "
                "c*: the cost per prefetch at which the policy ties no prefetching.")
-    table = Table("lllrrrr", ["Domain / setting", "Best policy", "Gain unit",
-                              "Gain over none", "Waste", "c*", "Feedback gate"])
+    table = Table("lllrrrr", ["Domain / setting", "Policy", "Gain unit",
+                              "Gain over none", "Waste; I/Os", "c*",
+                              "Feedback gate"])
     any_rows = False
     disk = _headline(results.rows("disk/table_main.csv", out), corpus="all",
                      latency=g.HEADLINE_LATENCY)
@@ -634,8 +715,10 @@ def t8_cross_domain(results, out):
         table.row([f"Disk, {g.capacity_label(capacity)}", esc(best["policy"]), "hit ratio, pp",
                    ci_cell(best["delta_vs_none"], best["delta_vs_none_lo"],
                            best["delta_vs_none_hi"]),
-                   fpct(best["mean_wasted_share"]).replace(r"\,\%", "\\,\\% unused")
-                   if best["mean_wasted_share"] is not None else DASH,
+                   (fpct(best["mean_wasted_share"]).replace(r"\,\%", "\\,\\% unused")
+                    if best["mean_wasted_share"] is not None else DASH)
+                   + (f", {fratio(best['device_io_ratio'])} I/Os"
+                      if best["device_io_ratio"] is not None else ""),
                    fnum(c_star, 3) if c_star is not None else DASH,
                    ci_cell(guard["delta_vs_none"], guard["delta_vs_none_lo"],
                            guard["delta_vs_none_hi"]) if guard else DASH])
@@ -677,15 +760,195 @@ def t8_cross_domain(results, out):
                    DASH, ci_cell(*scored[gate], fnum, digits=2) if gate else DASH])
     if not any_rows:
         return placeholder("t8_cross_domain", caption, out, wide=True)
-    return float_env("t8_cross_domain", caption, table.latex(), wide=True, out=out,
-                     note="Disk: C1 canonical, best by mean hit ratio, gate = guard. Web: the "
+    return float_env("t8_cross_domain", caption, table.latex(), wide=True, out=out, dense=True,
+                     note="Disk: C1 canonical, the highest mean hit ratio (not a winner: its "
+                          "waste and device I/Os are beside it), gate = guard. Web: the "
                           "validation-selected controller at the smallest positive cost, gate = "
                           "feedback lever. Live: best valid policy by mean saving.")
 
 
+# ---------------------------------------------------------------------------
+# T9: the pre-registered decisions
+# ---------------------------------------------------------------------------
+
+def _interval_text(label, estimate, lo, hi, statistic) -> str:
+    formatter = {"difference": fpp, "ratio": fratio,
+                 "absolute": lambda v: fnum(100.0 * v, 2),
+                 "us": lambda v: fnum(v, 0, sign=True), "ms": lambda v: fnum(v, 2, sign=True),
+                 "rho": lambda v: fnum(v, 2, sign=True)}[statistic]
+    unit = {"difference": " pp", "absolute": " pp", "us": r" $\mu$s",
+            "ms": " ms"}.get(statistic, "")
+    parts = []
+    if estimate is not None:
+        parts.append(formatter(estimate).replace(r"\,pp", ""))
+    if lo is not None and hi is not None:
+        parts.append(fci(lo, hi, formatter))
+    text = " ".join(parts) + unit
+    return (esc(label) + " " + text) if label else text
+
+
+def _tex(text: str) -> str:
+    """Escape a verdict or note, with its comparison signs in math mode
+    (a bare < or | prints as another glyph in IEEEtran's OT1 text font)."""
+    return (esc(text).replace(" < ", " $<$ ").replace(" - ", " $-$ ")
+            .replace(" / ", " $/$ "))
+
+
+def _tally(decisions) -> str:
+    counts = defaultdict(int)
+    for d in decisions:
+        counts[d.verdict.split(" (")[0]] += 1
+    return "; ".join(f"{_tex(verdict)}: {fcount(n)}" for verdict, n in
+                     sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+
+
+#: The files the decisions rest on (paper/decisions.py reads them optionally).
+T9_INPUTS = ("disk/deltas.csv", "realio/realio_summary.csv", "web/comparisons.csv",
+             "web/decomposition.csv", "live/live_metrics.csv")
+
+
+def t9_decisions(results, out):
+    caption = ("The pre-registered decisions, applied by paper/decisions.py to the results "
+               "files with each study's rule (results/*/PREREGISTERED.md). Disk and web rows "
+               "are simulated; real-device and live rows are measured (live: loopback with an "
+               "emulated network and assumed object sizes). Intervals are 95\\%: disk paired "
+               "and corpus-cluster bootstraps over traces; web and live paired session "
+               "bootstraps; real device Student-t over three repeats.")
+    decisions = _decisions().decide(results, out)
+    if not decisions:
+        out.missing.extend(f for f in T9_INPUTS if not results.exists(f))
+        return placeholder("t9_decisions", caption, out, wide=True)
+    table = Table("p{0.45in}p{2.3in}p{2.45in}p{1.65in}",
+                  ["Rule", "Comparison (scope)", "Interval(s)", "Verdict"])
+    by = defaultdict(list)
+    for d in decisions:
+        by[(d.study, d.rule)].append(d)
+
+    def single(d, intervals=None):
+        shown = d.intervals if intervals is None else intervals
+        table.row([esc(d.rule), f"{_tex(d.comparison)} ({esc(d.scope)})",
+                   "; ".join(_interval_text(*i) for i in shown) or _tex(d.note),
+                   _tex(d.verdict)])
+
+    if any(k[0] == "disk" for k in by):
+        table.group("Disk, simulated (C1, first 1{,}000{,}000 canonical requests per trace)")
+        for rule in ("P1", "P2", "P3", "P4"):
+            for d in by.get(("disk", rule), ()):
+                policy = d.comparison.split(" - ")[0]
+                if rule == "P3" and policy != "deep@8" or rule == "P4" and policy != "linux_ra@256":
+                    continue
+                single(d)
+        for rule, word, better, label in (("P5", "device I/Os", "reduces device I/Os", "reduce"),
+                                          ("P6", "blocks moved", "moves fewer blocks",
+                                           "move fewer")):
+            scopes = []
+            for d in by.get(("disk", rule), ()):
+                if d.scope not in scopes:
+                    scopes.append(d.scope)
+            for scope in scopes:
+                items = [d for d in by[("disk", rule)] if d.scope == scope]
+                named = ", ".join(d.comparison.split(" / ")[0] for d in items
+                                  if d.verdict == better)
+                table.row([rule, f"every policy $/$ none, {word} ({esc(scope)}, "
+                           f"{fcount(len(items))} policies)", _tally(items),
+                           f"{label}: {esc(named) or 'no policy'}"])
+        for d in by.get(("disk", "levers"), ()):
+            table.row(["levers", f"$|\\Delta|$ vs sequential, hit ratio ({esc(d.scope)})",
+                       _tex(d.note.replace(" ? ", " cannot be ordered with ")), _tex(d.verdict)])
+        for rule in ("C3", "C4"):
+            items = by.get(("disk", rule), ())
+            if items:
+                odd = [d for d in items if d.verdict in ("prefix-dependent", "cap-sensitive")]
+                table.row([rule, ("slice 2 vs C1 on the 21 subset traces" if rule == "C3"
+                                  else "FIU merge cap 256 vs 1024")
+                           + f" ({fcount(len(items))} comparisons of P1--P4)", _tally(items),
+                           (_tex("; ".join(d.comparison for d in odd)) + " differ")
+                           if odd else "all agree"])
+        for d in by.get(("disk", "E2"), ()):
+            single(d)
+    if any(k[0] == "realio" for k in by):
+        table.group("Real device, measured (E3, 20{,}000-request prefixes, 3 repeats)")
+        groups = defaultdict(list)
+        for d in list(by.get(("realio", "R1"), ())) + list(by.get(("realio", "R6"), ())):
+            device, backend, think = d.scope.split(", ")[:3]
+            groups[(d.rule, device, backend, think)].append(d)
+        for (rule, device, backend, think), items in sorted(
+                groups.items(), key=lambda kv: (kv[0][0], kv[0][1] != "sdb", kv[0][3] != "closed",
+                                                kv[0][2])):
+            table.row([rule, f"each {'kernel mode' if rule == 'R6' else 'mode'} $-$ none, mean "
+                       f"latency ({esc(device)}, {esc(backend)}, {esc(think)}; "
+                       f"{fcount(len(items))} mode-trace cells)",
+                       "per cell: realio\\_summary.csv", _tally(items)])
+        for quantity in ("hit", "device time"):
+            items = [d for d in by.get(("realio", "R2"), ()) if f"simulated {quantity}," in
+                     d.comparison]
+            if items:
+                table.row(["R2", f"$\\rho$(simulated {esc(quantity)}, measured latency) "
+                           f"({fcount(len(items))} cells)",
+                           "per cell: Table~\\ref{tab:t3b_realio_summary}",
+                           _tally(items)])
+        fastest = by.get(("realio", "fastest"), ())
+        if fastest:
+            none = sum(d.verdict == "none" for d in fastest)
+            top = sum(d.note.endswith(": " + d.verdict) for d in fastest)
+            table.row(["--", f"lowest measured mean latency ({fcount(len(fastest))} "
+                       "uncontended cells)", "descriptive",
+                       f"none fastest in {fcount(none)}; highest simulated hit ratio fastest "
+                       f"in {fcount(top)}"])
+        r7 = by.get(("realio", "R7"), ())
+        if r7:
+            table.row(["R7", f"closed vs spread think time, msr\\_hm\\_0 on sdb "
+                       f"({fcount(len(r7))} mode-backend pairs)", "descriptive", _tally(r7)])
+        for d in by.get(("realio", "R3"), ()):
+            single(d)
+    if any(k[0] == "web" for k in by):
+        table.group("Web, simulated (RetailRocket test split, per-session cache)")
+        for rule in ("W1", "W2", "rule 1"):
+            for d in by.get(("web", rule), ()):
+                single(d)
+        for rule in ("W3", "W4", "W5", "W6", "W7", "W8"):
+            for d in by.get(("web", rule), ()):
+                single(d)
+        for rule in ("rule 2", "rule 3"):
+            for d in by.get(("web", rule), ()):
+                if rule == "rule 2":
+                    table.row([esc(rule), f"lever ordering ({esc(d.scope)})",
+                               _tex(d.note.replace(" ? ", " vs ").replace(
+                                   "sequence_model", "seq. model")), _tex(d.verdict)])
+                else:
+                    single(d)
+    if any(k[0] == "live" for k in by):
+        table.group("Live HTTP, measured on loopback (E6; RTT, bandwidth and object sizes ASSUMED)")
+        for d in by.get(("live", "H1"), ()):
+            single(d)
+        for rule in ("H2", "H3"):
+            stores = defaultdict(list)
+            for d in by.get(("live", rule), ()):
+                stores[d.scope].append(d)
+            for scope, items in sorted(stores.items()):
+                flagged = [d for d in items if "flagged" in d.note]
+                table.row([rule, ("each policy - fixed0, mean wait" if rule == "H2" else
+                                  "measured vs model-ideal delta") + f" ({esc(scope)}, "
+                           f"{fcount(len(items))} policies)",
+                           "per repetition: Table~\\ref{tab:t7_live}"
+                           + (f"; {fcount(len(flagged))} with flagged repetitions not cited"
+                              if flagged else ""), _tally(items)])
+        for rule in ("H5", "H6"):
+            for d in by.get(("live", rule), ()):
+                single(d)
+        h7 = by.get(("live", "H7"), ())
+        if h7:
+            table.row(["H7", f"SSD vs HDD store, first citable repetition ({fcount(len(h7))} "
+                       "policies)", "per policy: Table~\\ref{tab:t7_live}", _tally(h7)])
+        for d in by.get(("live", "H4"), ()):
+            table.row(["H4", f"{_tex(d.comparison)} ({esc(d.scope)})", "descriptive",
+                       _tex(d.verdict)])
+    return float_env("t9_decisions", caption, table.latex(), wide=True, out=out, dense=True)
+
+
 TABLES = (t1_datasets, t1b_hardware, t2_disk_main, t2b_disk_by_corpus, t2c_learned_depth,
           t3_realio, t3b_realio_summary, t4_web_dataset, t5_web_decomposition,
-          t6_web_comparisons, t7_live, t7b_live_ablation, t8_cross_domain)
+          t6_web_comparisons, t7_live, t7b_live_ablation, t8_cross_domain, t9_decisions)
 
 
 def generate(results, paper_dir: Path = g.PAPER_DIR) -> list:

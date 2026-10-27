@@ -31,7 +31,9 @@ import hashlib
 import json
 import math
 import re
+import statistics
 import sys
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -234,6 +236,20 @@ def _mode_order() -> tuple[str, ...]:
 _MODE_ORDER = _mode_order()
 
 
+#: A live pass whose store device carried more foreign I/O than this share
+#: is flagged and never cited (E6 pre-registration; lead ruling for SSD rows).
+LIVE_FOREIGN_LIMIT = 0.01
+
+
+def live_citable(rows: Sequence[dict]) -> list[dict]:
+    """Valid live passes that may be cited: the validity gate passed and the
+    store's foreign I/O share was at most ``LIVE_FOREIGN_LIMIT`` (or not
+    recorded). Flagged passes stay in the results file; they are only kept
+    out of every number the paper quotes."""
+    return [r for r in rows if r["valid"] and (r.get("foreign_io_frac") is None
+                                               or r["foreign_io_frac"] <= LIVE_FOREIGN_LIMIT)]
+
+
 def live_comparable(items: Sequence[dict]) -> list[dict]:
     """Valid live passes that carry a delta against their baseline.
 
@@ -256,6 +272,46 @@ def live_saved(items: Sequence[dict]):
     return (-sum(r["delta_vs_base_ms"] for r in items) / len(items),
             -max(r["delta_vs_base_ms_hi"] for r in items),
             -min(r["delta_vs_base_ms_lo"] for r in items))
+
+
+def sweep_label(row) -> str:
+    """Sweep row -> table policy label (deep@8, linux_ra@256)."""
+    if row["mode"] == "deep":
+        return f"deep@{row['depth']}"
+    if row["mode"] == "linux_ra":
+        return f"linux_ra@{row['max_blocks']}"
+    return row["mode"]
+
+
+def disk_utility_rows(sweep, capacity):
+    """Mean over traces of each policy's hit ratio and prefetches per block,
+    on the traces where every drawn policy has an ok row (paired).
+
+    Only policies with an ok row on every trace any policy covers are drawn,
+    so one partially covered mode cannot shrink every curve to its traces.
+    """
+    rows = [r for r in sweep if r["config"] == HEADLINE_CONFIG and r["merge"] == HEADLINE_MERGE
+            and r["latency"] == HEADLINE_LATENCY and r["capacity"] == capacity]
+    by_policy = defaultdict(dict)
+    for row in rows:
+        if row["status"] == "ok":
+            by_policy[sweep_label(row)][row["trace"]] = row
+    if not by_policy:
+        return [], 0
+    covered = set.union(*(set(v) for v in by_policy.values()))
+    by_policy = {p: v for p, v in by_policy.items() if set(v) == covered}
+    if not by_policy:
+        return [], 0
+    traces = covered
+    out = []
+    for policy in sorted(by_policy, key=policy_key):
+        items = [by_policy[policy][t] for t in sorted(traces)]
+        if items:
+            out.append({"policy": policy, "requests": 1.0,
+                        "hit_ratio": statistics.fmean(r["hit_ratio"] for r in items),
+                        "issued_per_request": statistics.fmean(
+                            r["total_prefetches"] / r["read_blocks"] for r in items)})
+    return out, len(traces)
 
 
 def policy_key(policy: str) -> tuple:

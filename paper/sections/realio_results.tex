@@ -1,20 +1,82 @@
-% VII. Real-device validation (measured). Every number is labelled measured
-% with its device, think-time model and host load. Prediction error and
-% k_eff are stated per trace and per think model, never as a property of
-% HDDs or SSDs (constraint 15).
-% Feeds from: results/realio/realio.csv, realio_summary.csv,
-% device_*.json and provenance.json (E3).
-% Generated: table T3; figure F5.
+% VII. Real-device validation (measured, E3). Every number is labelled
+% measured with its device, backend and think model; prediction error and
+% k_eff are stated per trace and think model, never as a property of HDDs
+% or SSDs (constraint 15). The hard disk is the headline device; the SSD is
+% secondary and a contended cell is not used (lead rulings).
+% Sources: results/realio/{realio,realio_summary}.csv, device_*.json, via
+% numbers.tex and paper/decisions.py. Generated: Table T3b, Fig. F5 (T3 in
+% the appendix).
 
-\section{Real-Device Validation}\label{sec:realio}
+\section{Real-Device Validation (Measured)}\label{sec:realio}
 
-\todo{Table T3: backend by mode by think time with hit ratio, full-hit
-fraction, mean, p50 and p99 latency, late hits, device MiB and k, from
-results/realio/realio\_summary.csv.}
+\input{tables/t3b_realio_summary}
 
-\todo{Fig. F5: simulated hit ratio versus measured mean latency, closed and
-spread think models, HDD and SSD, from results/realio/realio\_summary.csv.}
+The simulator assumes that prefetches complete instantly and cost the demand
+stream nothing; the testbed measures what happens instead. All numbers here
+are measured request latencies on the \realioRequests-request prefixes.
+Backend~B's cache equalled the simulator's on every request of all
+\realioOdirectRuns{} of its runs, so its differences come from timing alone.
 
-\todo{The simulator prediction error, the rank correlation and the
-kernel\_ra baseline, from results/realio/realio\_summary.csv; the simulator
-parity assertion from results/realio/realio.csv.}
+\textbf{Prefetching was slower on the hard disk.} With Backend~B and a closed
+loop on the hard disk, a prefetching mode \emph{raised} the mean latency
+against \texttt{none} in \decCountROneSdbOdirectClosedRaises{} of
+\decCountROneSdbOdirectClosed{} mode--trace cells, showed no difference
+detectable with \realioReps{} repeats in
+\decCountROneSdbOdirectClosedNoDifference, and lowered it in
+\decCountROneSdbOdirectClosedLowers. On \texttt{msr\_hm\_0}, for example,
+\texttt{deep@64} raises the simulated hit ratio from
+\realioSimHitSdbOdirectNoneClosedMsrHmZero{} to
+\realioSimHitSdbOdirectDeepAtSixtyFourClosedMsrHmZero{} and the measured mean
+latency by \decRealioROneSdbOdirectClosedMsrHmZeroDeepAtSixtyFourCI. A plausible
+cause is that the prefetches queue on the same spindle as the demand reads; a
+prediction from the measured full-hit fraction alone misses this cell's mean
+by \realioPredErrSdbOdirectDeepAtSixtyFourClosedMsrHmZero. Through the page cache
+(Backend~A) the picture is mixed: \decCountROneSdbPagecacheClosedLowers{} of
+\decCountROneSdbPagecacheClosed{} cells lower the mean, and
+\decCountROneSdbPagecacheClosedRaises{} raise it.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/f5_sim_vs_measured}
+\caption{Measured mean request latency against simulated hit ratio for every
+mode with a simulator plan, per device and backend, closed loop (left) and
+spread think time on \texttt{msr\_hm\_0} (right); bars are Student-$t$
+intervals over \realioReps{} repeats. Higher simulated hit ratio does not mean
+lower latency. Measured on one host; per trace, not a device property.}
+\label{fig:f5}
+\end{figure*}
+
+\textbf{The simulator does not rank the modes.} By the pre-registered rank
+rule, simulated hit ratio ranks the modes consistently with measured latency
+in \decTallyRTwoHitRanksConsistentlyWithMeasuredLatency{} of the
+\decTallyRTwoHit{} cells; the ranking is not supported in
+\decTallyRTwoHitRankingNotSupported{}, where \decRhoPositiveHitSdb{} of the
+\decRhoCellsHitSdb{} hard-disk correlations have the wrong (positive) sign, and
+the SSD cells are too small for the test
+(Table~\ref{tab:t3b_realio_summary}). Simulated device time, which charges
+positioning per I/O, ranks consistently in
+\decTallyRTwoDeviceTimeRanksConsistentlyWithMeasuredLatency{} cells (both on
+the FIU trace) and against measured latency in
+\decTallyRTwoDeviceTimeRanksAgainstMeasuredLatency. The mode with the highest
+simulated hit ratio was the fastest in \decCellsTopSimFastest{} of the
+\decCells{} uncontended cells, and \texttt{none} was the fastest in
+\decCellsNoneFastest{} (Fig.~\ref{fig:f5}).
+
+\textbf{The kernel's own read-ahead.} On Backend~A, the kernel's read-ahead
+lowered the mean latency against \texttt{none} in
+\decCountRSixSdbPagecacheClosedLowers{} of \decCountRSixSdbPagecacheClosed{}
+cells: on \texttt{msr\_web\_2}, \texttt{kernel\_ra} by
+\decRealioRSixSdbPagecacheClosedMsrWebTwoKernelRaCI{} and \texttt{kernel\_seq} by
+\decRealioRSixSdbPagecacheClosedMsrWebTwoKernelSeqCI. It raised it on
+\texttt{msr\_prn\_0}
+(\decRealioRSixSdbPagecacheClosedMsrPrnZeroKernelRaCI).
+
+\textbf{Think time and the SSD.} Spreading each second's requests over that
+second changed no mode's effect by the R7 rule
+(\decTallyRSevenNoChangeByTheRSevenRule{} of \decTallyRSeven{} pairs; the spread
+intervals are wide). On the SSD (secondary), Backend~B lowered the mean in
+\decCountROneSsdOdirectClosedLowers{} of \decCountROneSsdOdirectClosed{} cells,
+for instance \texttt{deep} on \texttt{msr\_hm\_0}
+(\decRealioROneSsdOdirectClosedMsrHmZeroDeepCI), and raised it in
+\decCountROneSsdOdirectClosedRaises; the page-cache cell of \texttt{msr\_web\_2}
+exceeded the foreign-I/O limit and is not used.

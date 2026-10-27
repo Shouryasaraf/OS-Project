@@ -3,8 +3,8 @@
 Stdlib only, so it runs under system python3 too. These tests pin what the
 lint catches (missing cite keys and inputs, unbalanced braces, bare
 underscores, hand-typed numbers), what it lets through (versions, section
-and decision numbers, lengths, comments), and that the committed skeleton
-and bibliography pass it.
+and decision numbers, lengths, comments), and that the committed paper and
+bibliography pass it, in the --final submission mode included.
 """
 
 import contextlib
@@ -77,10 +77,13 @@ class CommittedPaperTests(unittest.TestCase):
         for path in (PAPER / "sections").glob("*.tex"):
             self.assertIn(path.relative_to(PAPER).as_posix(), reached)
 
-    def test_skeleton_is_not_yet_submittable(self):
-        # --final rejects any remaining \todo; the skeleton is all TODOs.
+    def test_committed_paper_is_submittable(self):
+        # WP14 wrote every section: --final (no \todo, every generated file
+        # and \ref label present, every number macro defined and generated)
+        # must pass on the committed paper.
         report = check.run_checks(PAPER, final=True)
-        self.assertTrue(any(m == "\\todo remains" for m in _messages(report)))
+        self.assertEqual(report.errors, [], "\n".join(map(str, report.errors)))
+        self.assertFalse(any("todo" in m for m in _messages(report, "warning")))
 
     def test_bibliography_holds_the_verified_entries(self):
         entries, problems = check.parse_bib((PAPER / "refs.bib").read_text(encoding="utf-8"))
@@ -277,6 +280,36 @@ class StructureTests(unittest.TestCase):
         with _PaperDir(main, {"a.tex": "\\todo{write this}\n"}) as paper:
             self.assertTrue(check.run_checks(paper).ok)
             self.assertEqual(_messages(check.run_checks(paper, final=True)), ["\\todo remains"])
+
+    def test_undefined_number_macro_is_an_error_in_strict_mode(self):
+        main = _main_tex("\\input{numbers}\\input{sections/a}")
+        numbers = "\\newcommand{\\diskHitNoneOneMiB}{$14.85$\\,\\%}\n"
+        with _PaperDir(main, {"a.tex": "hits \\diskHitNoneOneMiB{} and \\diskHitNoneOneMb.\n"}) as paper:
+            (paper / "numbers.tex").write_text(numbers, encoding="utf-8")
+            self.assertTrue(check.run_checks(paper).ok)  # skeleton mode: not checked
+            self.assertEqual(_messages(check.run_checks(paper, strict=True)),
+                             ["\\diskHitNoneOneMb is not defined in numbers.tex"])
+            # A fixture build lacks most rows by design: a warning only.
+            (paper / "numbers.tex").write_text(
+                numbers + "\\providecommand{\\paperFixtureData}{true}\n", encoding="utf-8")
+            self.assertTrue(check.run_checks(paper, strict=True).ok)
+
+    def test_missing_result_fails_only_in_final_mode(self):
+        main = _main_tex("\\input{numbers}\\input{sections/a}")
+        with _PaperDir(main, {"a.tex": "a gain of \\diskAdaptiveVsSeq.\n"}) as paper:
+            (paper / "numbers.tex").write_text(
+                "\\newcommand{\\diskAdaptiveVsSeq}{\\missingnumber}\n", encoding="utf-8")
+            self.assertTrue(check.run_checks(paper, strict=True).ok)
+            self.assertEqual(_messages(check.run_checks(paper, final=True)),
+                             ["\\diskAdaptiveVsSeq prints \\missingnumber (its result is missing)"])
+
+    def test_adjacent_math_shifts_are_an_error(self):
+        # "$+0.86$$^{*}$" opens display math in TeX; a table cell built by
+        # appending a mark to a number that holds its own $ produces it.
+        main = _main_tex("\\input{sections/a}")
+        with _PaperDir(main, {"a.tex": "$a$$^{*}$ and $b$\\,$c$ and \\$\\$5\n"}) as paper:
+            self.assertEqual(_messages(check.run_checks(paper)),
+                             ["'$$' (adjacent math shifts open display math)"])
 
     def test_cli_returns_one_on_errors(self):
         with _PaperDir(_main_tex("\\cite{nope}")) as paper, contextlib.redirect_stdout(io.StringIO()) as out:

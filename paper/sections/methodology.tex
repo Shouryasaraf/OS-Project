@@ -1,28 +1,67 @@
-% V. Methodology. Every count, cap and hardware figure comes from the
-% results files below through numbers.tex or a generated table.
-% Feeds from: results/disk/corpus_profile.csv, results/web/dataset_profile.json,
-% results/realio/device_*.json, results/gpu/gpu_env.json, and the
-% provenance.json in each results directory.
-% Table T1 (datasets) comes from paper/tables/make_tables.py.
+% V. Methodology. Every count, cap and hardware figure comes from results/
+% through numbers.tex or a generated table (T1; T1b in the appendix).
+% Sources: results/disk/corpus_profile.csv, results/web/dataset_profile.json,
+% results/realio/device_*.json, results/gpu/gpu_env.json and the
+% provenance.json of each results directory; protocol facts from
+% results/*/PREREGISTERED.md.
 
 \section{Methodology}\label{sec:method}
 
-\todo{Table T1 (datasets): the oracleGeneral block traces in four corpora
-with their reconstruction rules (MSR, Alibaba and Tencent records as
-requests; FIU pages merged into requests with a sector cap), twin traces
-and request caps, from results/disk/corpus\_profile.csv; and the
-RetailRocket splits from results/web/dataset\_profile.json. Cite the trace
-and dataset sources~\cite{narayanan2008write,koller2010iodedup,
-li2020alibaba,zhang2020osca,snia_tencent_cbs,cmupdl_cachedatasets,
-yang2020twemcache,libcachesim,retailrocket2017}.}
+\input{tables/t1_datasets}
 
-\todo{Protocols: chronological validation and test splits; paired and
-cluster bootstrap CIs (method, resamples and seed from the PREREGISTERED.md
-files); repeats per configuration; the training range of every trained
-artifact, which is never scored on its own training segment.}
+\textbf{Disk traces and configurations.} We use the \diskTraces{} oracleGeneral
+block traces of four corpora (Table~\ref{tab:t1_datasets}): MSR
+Cambridge~\cite{narayanan2008write}, FIU~\cite{koller2010iodedup},
+Alibaba~\cite{li2020alibaba} and Tencent~\cite{zhang2020osca,snia_tencent_cbs},
+as redistributed with libCacheSim~\cite{libcachesim,cmupdl_cachedatasets,
+yang2020twemcache}. A record holds a whole-second timestamp, a byte offset and
+a size, with no read/write flag or service time, so writes replay as reads.
+FIU stores one record per 4\,KiB page, which we merge back into requests
+(same second, contiguous, at most 1024 sectors); the other corpora's records
+are requests. \corpusTwinTraces{} traces form near-duplicate families. The
+headline configuration C1 replays the first \diskSliceCOne{} canonical requests
+of every trace through 1\,MiB and 64\,MiB caches, every policy under the assumed
+cost model and the gated modes also at the break-even model. C2 sweeps depth
+on the first \diskSliceCTwo{} requests, C3 replays a second slice (after
+\diskSkipCThree{} requests) of \corpusPaperSubset{} subset traces, and C4 repeats
+FIU at a merge cap of 256 sectors. The trained modes are scored only in the GPU
+study: on each subset trace's first \ldPrefixMax{} requests, the first
+\ldTrainShare{} trains, the next \ldValShare{} selects thresholds and the
+validation-chosen fixed depth (VCF), and only the last \ldTestShare{} is
+scored, over \ldSeedsCapTwoHundredFiftySix{} seeds.
 
-\todo{Hardware table: CPU, the HDD and SSD models, kernel, page-cache
-reclaim policy, and the GPU with its contention record, from
-results/realio/device\_*.json and results/gpu/gpu\_env.json. Software:
-PyTorch~\cite{paszke2019pytorch} and
-scikit-learn~\cite{pedregosa2011sklearn}.}
+\textbf{Real device.} The testbed replays the first \realioRequests{} requests
+of \realioTraces{} traces through a 32\,MiB cache (Backend~A's cgroup cannot
+hold 1\,MiB), \realioReps{} repeats per cell, in a closed loop and, for
+\texttt{msr\_hm\_0}, with each recorded second's requests spread over that
+second. The headline device is an idle hard disk (\deviceSdbModel,
+$t_{pos}$ = \deviceSdbTPos, $\kappa$ = \deviceSdbKappa{} blocks); the root SSD
+(\deviceSsdModel, $\kappa$ = \deviceSsdKappa) is shared with other tenants and
+runs a reduced grid, and a cell with over one percent foreign I/O is not used.
+
+\textbf{Web and live HTTP.} RetailRocket~\cite{retailrocket2017} gives
+\webDataViews{} views in \webDataSessions{} sessions (split by a
+\webDataSessionGapMinutes-minute gap). Four chronological splits build the
+candidate index (\webDataViewsBySplitIndex{} views), train the ranker
+(\webDataViewsBySplitTrain), validate (\webDataViewsBySplitValidation) and test
+(\webDataViewsBySplitTest). Every choice, each controller's parameter included,
+is made on validation separately per capacity (\webCapacities{} objects) and
+cost ($c$ in \webCosts); the test split is replayed once. The live study
+replays \liveSessions{} test sessions (\liveViews{} views) at capacity 8 with an
+emulated \liveRttMs{} round trip, a \liveMbps{} link and lognormal object sizes
+of median \liveSizeMedianKiB, all ASSUMED; each store runs
+\liveHeadlineReps{} repetitions of no prefetching, two fixed depths and the
+three controllers E4 validated at $c$ = \webHeadlineCost.
+
+\textbf{Statistics.} Disk intervals are \ciLevel{} percentile intervals of a
+paired bootstrap over traces and of a two-level cluster bootstrap over corpora
+and traces with twin families down-weighted (\diskBootstrapReps{} resamples,
+seed 42). A disk policy is \emph{better} or \emph{worse} only when both agree;
+a paired-only result is reported as not robust to clustering. Web and live
+intervals are paired session bootstraps, real-device ones Student-$t$ over
+paired repeats. All comparisons and rules were committed before the
+experiments; the two amendments (smaller real-device and live grids) were
+committed before their first run. The host (\hostCpuCount{} CPUs, kernel
+\hostKernel) and its \hostGpu{} GPU were shared, so GPU times are contended and
+never quoted as costs. The models use PyTorch~\cite{paszke2019pytorch} and
+scikit-learn~\cite{pedregosa2011sklearn}.

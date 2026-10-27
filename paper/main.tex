@@ -28,27 +28,44 @@
 \IfFileExists{numbers.tex}{\input{numbers}}{%
   \typeout{numbers.tex has not been generated; run python reproduce.py paper}}
 
+% The validated web controllers, by the names results/web/comparisons.csv
+% gives them (capacity 8, the pre-registered cost), so no policy parameter is
+% typed into the prose. E6 replays exactly these three.
+\newcommand{\polAdaptive}{\texttt{\webCmpAdaptivePolicyPerCapacityLogisticCapEightCostZeroPointZeroOne}}
+\newcommand{\polFeedback}{\texttt{\webCmpAdaptivePolicyPerCapacityLogisticFeedbackCapEightCostZeroPointZeroOne}}
+\newcommand{\polOnline}{\texttt{\webCmpAdaptivePolicyPerCapacityTransOnlineCapEightCostZeroPointZeroOne{}@trans\_online}}
+
 % Skeleton marker for unwritten text. `check.py --final` fails while any
 % \todo remains, so none can reach the submitted paper.
 \newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
 
 \begin{document}
 
-% Working title from MASTER_PLAN section 5. It states a hypothesis that the
-% preregistered comparisons (results/*/PREREGISTERED.md) may contradict;
-% WP14 rewrites the title and abstract from whichever way they come out.
-\title{Depth, Freshness and Feedback, Not Prediction:\\
-What Makes Prefetching Pay, from Disk Blocks to Product Pages}
+% Title (WP14), chosen from how the pre-registered comparisons came out
+% (paper/decisions.py, tables/t9_decisions.tex). The working title of MASTER_PLAN section 5
+% ("Depth, Freshness and Feedback, Not Prediction") is contradicted on two
+% counts: the feedback gate never beat its baseline in either study, and
+% neither study's rule calls the learned predictor the *smallest* lever. What
+% the rules do support is that every learned predictor lost to its simple
+% fair baseline while depth (or window growth) and freshness moved the
+% simulated hit ratio, and that simulated hit ratio did not rank measured
+% latency on the real disk.
+\title{Depth and Freshness, Not Learned Prediction:\\
+A Pre-Registered Study of Prefetching from Disk Blocks to Product Pages}
 
 % Students only; no supervisor or other author is listed.
+% E-mail addresses are left out on purpose; add them here before submission:
+% \IEEEauthorblockA{... \\ <e-mail>}
 \author{%
-\IEEEauthorblockN{Ashvik Mishra}
-\IEEEauthorblockA{Vellore Institute of Technology (VIT)\\
-\todo{school, campus and e-mail}}
+\IEEEauthorblockN{Ashvik Mishra (24BAI0342)}
+\IEEEauthorblockA{School of Computer Science and Engineering\\
+Vellore Institute of Technology\\
+Vellore, India}
 \and
-\IEEEauthorblockN{Shourya Saraf}
-\IEEEauthorblockA{Vellore Institute of Technology (VIT)\\
-\todo{school, campus and e-mail}}
+\IEEEauthorblockN{Shourya Saraf (24BDS0391)}
+\IEEEauthorblockA{School of Computer Science and Engineering\\
+Vellore Institute of Technology\\
+Vellore, India}
 }
 
 \maketitle

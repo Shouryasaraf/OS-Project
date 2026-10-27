@@ -1,8 +1,87 @@
-% Appendix (after the references; MASTER_PLAN L4). Holds the material cut
-% from the page budget, in the section-5 priority order: T4, F4, F6, F7,
-% T8, the FIU merge sensitivity and the full threats list.
+% Appendix (after the references; MASTER_PLAN L4). Holds the full decision
+% record and the material cut from the eight-page budget, in the section-5
+% priority order. Every table and figure is generated from results/.
+
+\section{The Pre-Registered Decisions}\label{app:decisions}
+
+Table~\ref{tab:t9_decisions} lists every verdict the pre-registered rules give,
+as \texttt{paper/decisions.py} computes it from the results files. Every
+finding the body states from a pre-registered comparison is one of these rows;
+everything else is labelled descriptive or exploratory.
+
+\input{tables/t9_decisions}
 
 \section{Supplementary Results}\label{app:supplementary}
 
-\todo{Whatever does not fit the page budget once WP14 has written the main
-sections.}
+\textbf{Hardware and data} (Tables~\ref{tab:t1b_hardware}
+and~\ref{tab:t4_web_dataset}). Table~\ref{tab:t4_web_dataset} lists every
+numeric field of the web dataset profile, including the share of next views
+that repeat an item already seen in the session.
+
+\input{tables/t1b_hardware}
+\input{tables/t4_web_dataset}
+
+\textbf{Disk depth, per corpus, learned depth and $\kappa^*$}
+(Fig.~\ref{fig:f2}, Tables~\ref{tab:t2b_disk_by_corpus}
+and~\ref{tab:t2c_learned_depth}, Fig.~\ref{fig:f4}). The validation-chosen fixed depth is the baseline for
+\texttt{learned\_depth}; the oracle column is E2's hindsight same-actions
+reference, which is not a bound (it falls below the learned controller on
+some traces).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/f2_hit_vs_depth}
+\caption{Simulated mean block hit ratio against fixed read-ahead depth per
+corpus and cache size (C2, first \diskSliceCTwo{} canonical requests per trace;
+depth 0 is \texttt{none}).}
+\label{fig:f2}
+\end{figure}
+
+\input{tables/t2b_disk_by_corpus}
+\input{tables/t2c_learned_depth}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/f4_kappa_cdf}
+\caption{Distribution over traces of $\kappa^*$, the positioning-to-transfer
+ratio above which a policy's modelled device time falls below
+\texttt{none}'s (C1, 1\,MiB, simulated counts), with the measured $\kappa$ of
+the two devices.}
+\label{fig:f4}
+\end{figure}
+
+\textbf{Real device in detail} (Table~\ref{tab:t3_realio}): every backend and
+mode on \texttt{msr\_hm\_0} on the hard disk, both think models.
+
+\input{tables/t3_realio}
+
+\textbf{Web comparisons and freshness} (Table~\ref{tab:t6_web_comparisons},
+Fig.~\ref{fig:f6}).
+
+\input{tables/t6_web_comparisons}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/f6_freshness}
+\caption{Share of eligible test views whose next item is among the top $K$
+candidates of the index-split counts, the counts of splits 0--2, and the
+online counts (simulated, descriptive).}
+\label{fig:f6}
+\end{figure}
+
+\textbf{Live ablations and the bytes trade-off} (Table~\ref{tab:t7b_live_ablation},
+Fig.~\ref{fig:f7}).
+
+\input{tables/t7b_live_ablation}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/f7_live_saved_vs_bytes}
+\caption{Measured wait saved per view against wasted KiB per view, per store
+and policy (loopback, emulated network, assumed sizes; citable passes only).}
+\label{fig:f7}
+\end{figure}
+
+\textbf{Cross-domain summary} (Table~\ref{tab:t8_cross_domain}).
+
+\input{tables/t8_cross_domain}
