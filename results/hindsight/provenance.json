@@ -6,9 +6,9 @@
     "reproduce.py",
     "hindsight"
   ],
-  "git_sha": "2ab0bf485fe68ce34e27920e6c3639485acd3b94",
+  "git_sha": "7602a8b991d1a509d3242e51d0834ec5b94718d3",
   "git_dirty": false,
-  "created_utc": "2026-10-27T04:54:16+00:00",
+  "created_utc": "2026-10-27T04:59:30+00:00",
   "host": {
     "hostname": "antpc",
     "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
@@ -18,17 +18,17 @@
   },
   "load_avg": {
     "start": [
-      29.11,
-      43.63,
-      68.11
+      14.79,
+      29.54,
+      55.26
     ],
     "end": [
-      27.5,
-      37.31,
-      61.97
+      19.78,
+      26.47,
+      50.2
     ]
   },
-  "wall_s": 152.592,
+  "wall_s": 154.674,
   "gpu": null,
   "inputs": {
     "data/block-traces/alibaba/alibabaBlock_13.oracleGeneral.zst": "66641fea45e083148b4b02a219bdf76954027cc497ef82c2ada673163e6d61fa",
@@ -55,7 +55,7 @@
     "results/disk/sweep.jsonl": "9d0ebad4d49f76fb922babf7be517c48b2635acd93453e46adb9b78179c53b14"
   },
   "outputs": {
-    "PREREGISTERED.md": "bd8acbb0913b4f4900026e2c3a14716b65d12daa45ea637f415d3260f499790a",
+    "PREREGISTERED.md": "69cb35af4e8f9bed5ff3cf92ee9a87d7216f20d428352edd4054edd6054e4f7d",
     "README.md": "a768aec9949cba7fd707830eba43b0e35031f268e3c89a760f6d586b7680acb2",
     "comparisons.csv": "1b33495f11318e2cfa4d6dca648167c309766e94632b48e7afc5ec760a11f453",
     "families.csv": "e1a72634bf6c6d39c1cdbb8eab42f9f1228433d686da58a29e734a3300860bfa",

@@ -163,3 +163,12 @@ window; the final refits of section 4 keep 4,000 per trace); (2) the random
 forest and extra-trees `n_estimators` space is {50, 100} instead of
 {100, 200}. Nothing else changes. The scores of the 24 stopped tasks were not
 used.
+
+**A2 (2026-10-27, written after the run; a clarification, not a change of
+rule).** Section 2 defines slice 1 as C1's slice, and C1 replays the first
+1,000,000 canonical requests *or the whole file when it is shorter*.
+`fiu_madmax-110108-112108` has 219,198 canonical requests in total, so its
+slice 1 is the whole file (as in C1) and it was used for training and
+selection like the other 20 traces; its training record names [0, 1,000,000)
+as a conservative range. It and `fiu_online.cs.fiu.edu-110108-113008` have no
+full slice 2 and are `n/a` in every slice-2 comparison (n = 19).
