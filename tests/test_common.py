@@ -411,7 +411,11 @@ class SchemaTests(unittest.TestCase):
                     # Track CLF: the classifier zoo and router benchmark.
                     "classifier/synthetic_tuning.csv", "classifier/synthetic_eval.csv",
                     "classifier/router_runs.csv", "classifier/router_comparisons.csv",
-                    "classifier/router_summary.csv"}
+                    "classifier/router_summary.csv",
+                    # Track HSR: the hindsight router.
+                    "hindsight/rows.csv", "hindsight/selection.csv",
+                    "hindsight/families.csv", "hindsight/summary.csv",
+                    "hindsight/comparisons.csv"}
         self.assertEqual(set(schemas.SCHEMAS), expected)
         for name, schema in schemas.SCHEMAS.items():
             self.assertIn(schema.fmt, schemas.FORMATS, name)

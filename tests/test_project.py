@@ -1386,14 +1386,22 @@ class GateAuditRegressionTests(unittest.TestCase):
         for mode in ("none", "sequential", "strided", "adaptive_evidence",
                      "guard", "depth_adaptive", "correlate", "deep",
                      "stride", "markov", "adaptive", "linux_ra",
-                     "learned_depth"):
+                     "learned_depth", "routed"):
             model = make_model(42) if mode == "adaptive" else None
             # learned_depth runs through the same loop with any per-request
             # depth policy; a trained artifact is pinned in test_disk_gpu.
-            extra = ({"depth_model": depth()} if mode == "learned_depth" else {})
-            a, _ = replay(requests, mode=mode, model=model, **extra)
+            # routed takes a fresh in-loop router (track HSR).
+            from adaptive_prefetch.hindsight import feature_router
+
+            def fresh():
+                if mode == "learned_depth":
+                    return {"depth_model": depth()}
+                if mode == "routed":
+                    return {"router": feature_router()}
+                return {}
+            a, _ = replay(requests, mode=mode, model=model, **fresh())
             b = replay_stream(iter([iter(requests)]), mode=mode, model=model,
-                              **({"depth_model": depth()} if extra else {}))
+                              **fresh())
             for field in ("read_hits", "read_blocks", "prefetches",
                           "useful_prefetches", "policy_switches",
                           "prefetch_cost_us", "demand_latency_us",

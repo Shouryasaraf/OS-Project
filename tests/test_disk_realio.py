@@ -92,6 +92,9 @@ class PlanTests(unittest.TestCase):
             # stdlib RelativeDepth baseline needs no torch or artifact (WP9).
             from adaptive_prefetch.depth_model import RelativeDepth
             return {"depth_model": RelativeDepth(1.0)}
+        if mode == "routed":
+            from adaptive_prefetch.hindsight import feature_router
+            return {"router": feature_router()}
         return {}
 
     def test_recording_lru_plan_identity_for_all_modes(self):

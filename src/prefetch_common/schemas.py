@@ -695,6 +695,80 @@ _CLF_ROUTER_SUMMARY = (
 
 # --------------------------------------------------------------- provenance
 
+# ---------------------------------------------------------------- hindsight
+
+#: Track HSR: the hindsight-labelled router (``adaptive_prefetch.hindsight``).
+_HSR_ROWS = (
+    _c("trace", "str"), _c("corpus", "str"),
+    _c("skip_requests", "int", "0 = slice 1 (training), max_requests = slice 2 (test)"),
+    _c("max_requests", "int"), _c("capacity", "int", "512-B blocks"),
+    _c("policy", "str", "fixed action, vcf_/gvcf_<obj>, routed_<obj>[_gnb|_loco], "
+       "oracle_<obj> (reference, not a policy), adaptive, adaptive_evidence, linux_ra@256"),
+    _c("family", "str?", "router classifier family (routed_* rows)"),
+    _c("objective", "str?", "hit | u0.5 | dev"),
+    _c("action", "str?", "the fixed action a fixed or vcf row replays"),
+    _c("status", "str"),
+    _c("source", "str", "record | replay | sweep (reused after an exact reproduction)"),
+    _c("read_blocks", "int?"), _c("read_hits", "int?"), _c("hit_ratio", "float?"),
+    _c("precision", "float?"), _c("total_prefetches", "int?"),
+    _c("useful_prefetches", "int?"),
+    _c("wasted_share", "float?", "unused / issued; None when nothing was issued"),
+    _c("u05_per_block", "float?", "(hits - 0.5 * prefetches) / read_blocks"),
+    _c("demand_ios", "int?"), _c("prefetch_ios", "int?"),
+    _c("prefetch_ios_mergeable", "int?"), _c("device_ios", "int?"),
+    _c("blocks_moved", "int?"), _c("policy_switches", "int?"),
+    _c("action_shares", "json?", "share of windows per action (routed/oracle rows)"),
+    _c("training_range", "str?", "what the router or VCF choice was trained/selected on"),
+    _c("sweep_match", "bool?", "equals results/disk/sweep.jsonl on every counter; "
+       "None when no sweep row exists"),
+    _c("load_start", "float?"), _c("load_end", "float?"), _c("wall_s", "float?"),
+)
+
+_HSR_SELECTION = (
+    _c("capacity", "int"), _c("objective", "str"), _c("family", "str"),
+    _c("config", "int", "random-search draw index"), _c("params", "json"),
+    _c("cv_score", "float?", "mean held-out share of hindsight headroom over none"),
+    _c("cv_accuracy", "float?", "label accuracy, diagnostic only"),
+    _c("cv_fold_scores", "json"), _c("cv_traces_scored", "int"),
+    _c("family_best", "bool"), _c("selected", "bool"),
+    _c("n_train_windows", "int"), _c("wall_s", "float"), _c("load", "float?"),
+)
+
+_HSR_FAMILIES = (
+    _c("capacity", "int"), _c("objective", "str"),
+    _c("which", "str", "selected | a family name (its CV-best configuration)"),
+    _c("family", "str"), _c("params", "json"), _c("cv_score", "float?"),
+    _c("n_traces", "int"),
+    *_ci("proxy_headroom", "float?", "slice-2 headroom captured, trajectory proxy; "
+         "paired bootstrap over traces"),
+    _c("label_accuracy", "float?", "slice-2 hindsight label accuracy, diagnostic"),
+    _c("action_shares", "json"),
+)
+
+_HSR_SUMMARY = (
+    _c("capacity", "int"), _c("policy", "str"), _c("n_traces", "int"),
+    _c("mean_hit_ratio", "float"), _c("mean_u05_per_block", "float"),
+    _c("mean_precision", "float?", "over traces that issued a prefetch"),
+    _c("mean_wasted_share", "float?", "same traces"),
+    *_ci("device_io_ratio", "float", "mean per-trace device_ios / none's, paired bootstrap"),
+    *_ci("blocks_moved_ratio", "float", "mean per-trace blocks_moved / none's"),
+    _c("headroom_captured", "float?", "(routed - vcf) / (oracle - vcf) of the per-trace "
+       "means; device I/Os relative to none"),
+    _c("action_shares", "json?"),
+)
+
+_HSR_COMPARISONS = (
+    _c("capacity", "int"), _c("comparison", "str", "H1-H7, S1-S2, R, D (PREREGISTERED.md)"),
+    _c("metric", "str", "hit_ratio | u0.5 | device_ios | blocks_moved"),
+    _c("policy", "str"), _c("baseline", "str"), _c("primary", "bool"),
+    _c("statistic", "str", "difference | ratio"), _c("n", "int"),
+    _c("estimate", "float"), _c("ci_lo", "float"), _c("ci_hi", "float"),
+    _c("cluster_estimate", "float"), _c("cluster_ci_lo", "float"),
+    _c("cluster_ci_hi", "float"),
+    _c("wins", "int"), _c("losses", "int"), _c("ties", "int"),
+    _c("verdict", "str", "better | worse | no difference detected [...]"),
+)
+
 _PROVENANCE = tuple(_c(key, "json?" if key not in ("format", "study") else "str")
                     for key in _PROV_KEYS) + tuple(
     _c(key, "json", required=False) for key in _PROV_OPTIONAL)
@@ -788,6 +862,18 @@ SCHEMAS: dict[str, Schema] = {s.name: s for s in (
             "paired and cluster comparisons over traces", _CLF_ROUTER_COMPARISONS),
     _schema("classifier/router_summary.csv", "csv", "track CLF (Part 2)",
             "per (capacity, policy) means and routing agreement", _CLF_ROUTER_SUMMARY),
+    _schema("hindsight/rows.csv", "csv", "HSR",
+            "every slice-1 and slice-2 replay of the hindsight study", _HSR_ROWS),
+    _schema("hindsight/selection.csv", "csv", "HSR",
+            "grouped-CV score of every random-search configuration", _HSR_SELECTION),
+    _schema("hindsight/families.csv", "csv", "HSR",
+            "every family's best router on slice 2 under the trajectory proxy",
+            _HSR_FAMILIES),
+    _schema("hindsight/summary.csv", "csv", "HSR",
+            "per (capacity, policy) means and device work against none", _HSR_SUMMARY),
+    _schema("hindsight/comparisons.csv", "csv", "HSR",
+            "pre-registered comparisons with paired and cluster intervals",
+            _HSR_COMPARISONS),
     _schema("*/provenance.json", "json", "prefetch_common.provenance",
             "provenance.write_provenance output", _PROVENANCE),
 )}
