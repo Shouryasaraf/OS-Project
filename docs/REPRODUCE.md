@@ -80,6 +80,7 @@ under `outputs/` and never touches `results/`: a smoke run is not a result.
 | `python reproduce.py web --gpu` | **E5**: GRU sequence model, 5 seeds, and the decomposition `sequence_model` lever | `results/web/seq_metrics.csv`, `results/web/seq/` | E4's prepared views, CUDA |
 | `python reproduce.py live --store-dir DIR` | **E6**: real HTTP replay with simulator parity | `results/live/` | E4's `comparisons.csv`, prepared views and ranker; a quiet host |
 | `python reproduce.py paper` | figures, tables and `numbers.tex` from `results/` (no experiment) | `paper/` | `[paper]` for figures |
+| `python reproduce.py notebook` | rebuilds and executes `notebooks/walkthrough.ipynb` from `results/` and `paper/decisions.py` (no experiment, under a minute; exit 4 without nbformat, pandas or matplotlib) | `notebooks/walkthrough.ipynb` | `[web,paper]`, nbformat |
 | `python reproduce.py all [--quick]` | every study above in order; a step that cannot run here is passed over and the exit status says so | as above | |
 
 ### Measured wall times of the committed results
@@ -175,6 +176,10 @@ PYTHONPATH=src .venv/bin/python reproduce.py paper   # under 1 min
 python3 paper/check.py --final                       # submission gate
 python3 tools/check_doc_numbers.py                   # also lints presentation/slides.tex
 ```
+
+After the paper step, `python reproduce.py notebook` rebuilds the
+walkthrough notebook (`notebooks/README.md`). `tests/test_notebook.py` fails
+while the committed notebook is stale.
 
 Then compile on Overleaf: `paper/README.md` for the paper,
 `presentation/README.md` for the Beamer deck. Both read
