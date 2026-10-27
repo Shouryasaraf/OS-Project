@@ -402,7 +402,11 @@ class SchemaTests(unittest.TestCase):
                     "web/calibration.csv", "web/learning_curve.csv",
                     "web/dataset_profile.json", "web/think_time.json",
                     "web/session_parity.json", "live/live_config.json",
-                    "live/disk_probe_*.json"}
+                    "live/disk_probe_*.json",
+                    # Track CLF: the classifier zoo and router benchmark.
+                    "classifier/synthetic_tuning.csv", "classifier/synthetic_eval.csv",
+                    "classifier/router_runs.csv", "classifier/router_comparisons.csv",
+                    "classifier/router_summary.csv"}
         self.assertEqual(set(schemas.SCHEMAS), expected)
         for name, schema in schemas.SCHEMAS.items():
             self.assertIn(schema.fmt, schemas.FORMATS, name)

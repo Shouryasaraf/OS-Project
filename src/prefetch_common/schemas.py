@@ -536,6 +536,81 @@ _LIVE_DISK_PROBE = (
     _c("load_avg_end", "json"),
 )
 
+# --------------------------------------------------------------- classifier
+# Track CLF: the classifier zoo (Part 1, synthetic windows) and the real-trace
+# router benchmark (Part 2). results/classifier/PREREGISTERED.md fixes the
+# comparisons; adaptive_prefetch.clfzoo produces every file.
+
+_CLF_TUNING = (
+    _c("setting", "str", "regime, or 'transfer' (block-size shift, trained at size 1)"),
+    _c("family", "str", "clfzoo.zoo.FAMILIES"),
+    _c("candidate", "int", "random-search index; 0 is the library default"),
+    _c("params", "json"), _c("folds", "int", "train-seed folds (validate on the next train seed)"),
+    _c("val_accuracy", "float", "mean over folds; the selection criterion"),
+    _c("val_macro_f1", "float"), _c("selected", "bool"),
+    _c("error", "str?", "why the candidate could not be fitted (scored 0)"),
+    _c("wall_s", "float", "contended"), _c("load_avg", "float?"),
+)
+
+_CLF_EVAL = (
+    _c("setting", "str"), _c("condition", "str", "'in_regime' or '1->N' (transfer)"),
+    _c("family", "str"), _c("params", "json", "selected on training seeds only"),
+    _c("val_accuracy", "float", "the selected candidate's validation accuracy"),
+    _c("n_seed_pairs", "int"), _c("n_test_per_pair", "int"),
+    *_ci("accuracy", "float", "test accuracy, mean over seed pairs; bootstrap over pairs"),
+    _c("accuracy_sd", "float", "population sd over seed pairs"),
+    *_ci("macro_f1", "float", "mean over seed pairs; bootstrap over pairs"),
+    _c("ece", "float", "expected calibration error, 15 bins, mean over pairs"),
+    _c("brier", "float", "multiclass Brier score, mean over pairs"),
+    _c("confusion", "json", "summed over seed pairs; rows true, cols predicted"),
+    _c("predict_us", "float", "median single-window predict(); CONTENDED host"),
+    _c("train_ms", "float", "median fit time; CONTENDED host"),
+    _c("load_avg", "float", "mean 1-min load during evaluation"),
+    *_ci("delta_accuracy", "float?", "paired bootstrap over seed pairs vs gnb_online"),
+    *_ci("delta_macro_f1", "float?", "paired bootstrap over seed pairs vs gnb_online"),
+    _c("verdict_vs_gnb", "str", "better | worse | no difference detected | baseline"),
+    _c("wins", "int?"), _c("losses", "int?"), _c("ties", "int?"),
+)
+
+_CLF_ROUTER_RUNS = (
+    _c("trace", "str"), _c("corpus", "str"), _c("capacity", "int"),
+    _c("policy", "str", "a clfzoo family routing 'adaptive', or a baseline mode label"),
+    _c("source", "str", "replayed_labels | e1_sweep_reused | multicorpus_run_job"),
+    _c("label_key", "str?", "clfzoo.router.label_key of the routing sequence"),
+    _c("gnb_label_key", "str?"), _c("requests", "int"), _c("windows", "int?"),
+    _c("hit_ratio", "float", "SIMULATED block hit ratio"), _c("precision", "float"),
+    _c("total_prefetches", "int"), _c("useful_prefetches", "int"),
+    _c("device_ios", "int"), _c("blocks_moved", "int"), _c("policy_switches", "int"),
+    _c("share_sequential", "float?"), _c("share_strided", "float?"),
+    _c("share_random", "float?"), _c("share_mixed", "float?"),
+    _c("agreement_with_gnb", "float?", "fraction of windows routed as GNB routes them"),
+    _c("age_table_evictions", "int?"), _c("wall_s", "float?", "contended"),
+    _c("load_avg", "float?"),
+)
+
+_CLF_ROUTER_COMPARISONS = (
+    _c("capacity", "int"), _c("metric", "str", "hit_ratio | device_ios | blocks_moved"),
+    _c("statistic", "str", "difference | ratio"), _c("policy", "str"), _c("baseline", "str"),
+    _c("n", "int", "paired traces"),
+    _c("estimate", "float"), _c("ci_lo", "float"), _c("ci_hi", "float"),
+    _c("cluster_estimate", "float"), _c("cluster_ci_lo", "float"), _c("cluster_ci_hi", "float"),
+    _c("verdict", "str", "PREREGISTERED.md section 4: both intervals must agree"),
+    _c("wins", "int"), _c("losses", "int"), _c("ties", "int"),
+    _c("reps", "int"), _c("seed", "int"),
+)
+
+_CLF_ROUTER_SUMMARY = (
+    _c("capacity", "int"), _c("policy", "str"), _c("n_traces", "int"),
+    _c("mean_hit_ratio", "float", "SIMULATED"), _c("mean_precision", "float?"),
+    _c("mean_wasted_share", "float?"),
+    _c("device_io_ratio", "float", "mean over traces of device_ios / none's"),
+    _c("blocks_moved_ratio", "float", "mean over traces of blocks_moved / none's"),
+    _c("mean_agreement_with_gnb", "float?"), _c("min_agreement_with_gnb", "float?"),
+    _c("traces_identical_to_gnb", "int?", "traces whose routing sequence equals GNB's"),
+    _c("share_sequential", "float?"), _c("share_strided", "float?"),
+    _c("share_random", "float?"), _c("share_mixed", "float?"),
+)
+
 # --------------------------------------------------------------- provenance
 
 _PROVENANCE = tuple(_c(key, "json?" if key not in ("format", "study") else "str")
@@ -609,6 +684,16 @@ SCHEMAS: dict[str, Schema] = {s.name: s for s in (
     _schema("live/disk_probe_*.json", "json", "WP12 (E6)",
             "MEASURED cold/warm/hinted page-cache reads of one object store",
             _LIVE_DISK_PROBE),
+    _schema("classifier/synthetic_tuning.csv", "csv", "track CLF (Part 1)",
+            "every random-search candidate's validation score", _CLF_TUNING),
+    _schema("classifier/synthetic_eval.csv", "csv", "track CLF (Part 1)",
+            "selected classifiers on held-out seeds, paired vs gnb_online", _CLF_EVAL),
+    _schema("classifier/router_runs.csv", "csv", "track CLF (Part 2)",
+            "one row per (trace, capacity, policy) on C3 slice 2", _CLF_ROUTER_RUNS),
+    _schema("classifier/router_comparisons.csv", "csv", "track CLF (Part 2)",
+            "paired and cluster comparisons over traces", _CLF_ROUTER_COMPARISONS),
+    _schema("classifier/router_summary.csv", "csv", "track CLF (Part 2)",
+            "per (capacity, policy) means and routing agreement", _CLF_ROUTER_SUMMARY),
     _schema("*/provenance.json", "json", "prefetch_common.provenance",
             "provenance.write_provenance output", _PROVENANCE),
 )}

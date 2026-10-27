@@ -4,6 +4,7 @@
     python reproduce.py realio [--device DIR]
     python reproduce.py web [--quick] [--gpu]
     python reproduce.py live [--store-dir DIR]
+    python reproduce.py classifier [--quick] [--workers N]
     python reproduce.py paper
     python reproduce.py all [--quick]
 
