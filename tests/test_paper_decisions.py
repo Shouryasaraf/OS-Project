@@ -244,6 +244,7 @@ class CommittedPaperTests(unittest.TestCase):
             "hsrDDeviceIosRoutedDevVsNoneOneMiB": "reduces device I/Os",
             "hsrDBlocksMovedRoutedHitVsNoneOneMiB": "moves more blocks",
             "hsrHSixHitRatioRoutedHitLocoVsVcfHitOneMiB": "worse",
+            "hsrHSixHitRatioRoutedHitLocoVsVcfHitSixtyFourMiB": "worse",
             "hsrSTwoHitRatioRoutedHitGnbVsRoutedHitSixtyFourMiB": "worse",
             "hsrRHitRatioOracleHitVsVcfHitOneMiB": "better",
             "wrkRuleTwoCapEight": "a tuned alternative ranker improves the controller",
