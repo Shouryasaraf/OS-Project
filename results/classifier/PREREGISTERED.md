@@ -137,4 +137,10 @@ example QDA with a singular class covariance) scores 0.
 
 ## Amendments
 
-(none)
+1. **2026-10-27, before any full-run result existed.** The first full run
+   was stopped during Part 1 tuning because one linear-SVM candidate (a
+   large `C` on unscaled vectors) did not finish a single fit in over two
+   minutes; no tuning or test score had been written or read. Both SVM
+   families now cap libsvm at `max_iter=200000` iterations
+   (`zoo.SVC_MAX_ITER`); a capped fit is scored like any other candidate.
+   Nothing else changed, and the run restarted from the beginning.

@@ -76,6 +76,9 @@ COMMON_CITATIONS = ("pedregosa2011sklearn", "bergstra2012random")
 #: Random-search candidates per tunable family (the default is candidate 0).
 N_CANDIDATES = 16
 SEARCH_SEED = 42
+#: libsvm iteration cap (amendment 1 of PREREGISTERED.md): uncapped, a
+#: linear SVC with a large C on unscaled vectors did not finish in minutes.
+SVC_MAX_ITER = 200_000
 
 
 def _log_uniform(rng: random.Random, low: float, high: float) -> float:
@@ -190,10 +193,11 @@ def _sklearn_estimator(family: str, params: dict, seed: int):
     elif family == "knn":
         model = KNeighborsClassifier(**p)
     elif family == "svm_linear":
-        model = SVC(kernel="linear", C=p["C"], probability=True, random_state=seed)
+        model = SVC(kernel="linear", C=p["C"], probability=True, random_state=seed,
+                    max_iter=SVC_MAX_ITER)
     elif family == "svm_rbf":
         model = SVC(kernel="rbf", C=p["C"], gamma=p["gamma"], probability=True,
-                    random_state=seed)
+                    random_state=seed, max_iter=SVC_MAX_ITER)
     elif family == "cart":
         model = DecisionTreeClassifier(random_state=seed, **p)
     elif family == "rf":
