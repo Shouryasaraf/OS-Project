@@ -1,5 +1,12 @@
 # Project guide: adaptive product-page prefetching
 
+> **Status on `master`.** The `pivot` branch's project guide, kept as
+> written. Its figures are from the pivot run (`results/pivot_original/`,
+> `audit/`). The current web results and the corrections to this guide's
+> conclusions are in `docs/web/WEB_DECISIONS.md`.
+
+<!-- doc-numbers: off (the pivot branch's guide; its figures are from the pivot run (results/pivot_original/ and audit/)) -->
+
 ## Scope
 
 This repository is an offline, reproducible machine-learning experiment on real product-view events. It predicts likely next product pages and evaluates how many pages to prefetch into a simulated browser cache. It is **not** a browser extension, server integration, or measured page-load acceleration system.

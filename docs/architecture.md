@@ -1,307 +1,247 @@
 # Architecture
 
-User-space, simulation-first prototype for *ML-Based Adaptive Disk I/O
-Prefetching Using Workload Pattern Classification*. It does **not** modify the
-operating system or perform physical disk reads; it replays recorded I/O
-requests against a modelled cache and reports the cache-level outcomes of each
-prefetch policy.
+This repository holds two prefetching studies that share one cache/prefetch
+abstraction, one objective and one results contract:
 
-## Design principles
+- the **disk study** (`src/adaptive_prefetch`): block-level read-ahead on
+  public block I/O traces, a causal LRU simulator, and a real Linux testbed
+  that replays the simulator's decisions on a real device;
+- the **web study** (`src/webprefetch`): product-page prefetching on the
+  RetailRocket clickstream, a per-session browser-cache simulator, and a real
+  HTTP replay that reproduces the simulator's counters exactly;
+- shared code (`src/prefetch_common`): the utility `U(c)`, the bootstraps,
+  provenance records and the results schemas;
+- the paper pipeline (`paper/`) and the reproduce dispatcher (`reproduce.py`,
+  `repro/`).
 
-1. **Simulation over OS hooks.** Everything runs on recorded request streams;
-   no kernel module, device firmware, or real latency measurements.
-2. **Fair comparison.** Every policy sees the identical request stream, cache
-   capacity, first-window warm-up, and LRU rules. Differences in outcome are
-   attributable to the policy, not the harness.
-3. **Causal replay.** A window is classified only after all its requests have
-   occurred, and its policy affects *later* requests only. The first window
-   never prefetches.
-4. **Stdlib-only core.** The entire pipeline except the optional LSTM runs on
-   the Python standard library. PyTorch is an optional extra
-   (`pip install -e ".[lstm]"`); without it, the LSTM row is *skipped*, never
-   silently replaced.
-5. **Honest labels.** Ground truth exists only for synthetic workloads. On real
-   traces the classifier is frozen (or, opt-in, self-trained with a documented
-   weak label); updates require a trustworthy label and are never assumed.
+Metric definitions are in `docs/METRICS.md`; commands and runtimes in
+`docs/REPRODUCE.md`; the decision history in `docs/DECISIONS.md` (disk) and
+`docs/web/WEB_DECISIONS.md` (web).
 
-## High-level data flow
+## Design principles (both studies)
+
+1. **Causal replay.** A decision at request (or view) *i* sees only requests
+   up to *i*. Future knowledge is used only to score (oracle recall, the
+   Belady/MIN reference), never to decide.
+2. **Equal rules for every policy.** All policies of a study see the same
+   stream, the same cache capacity and eviction rule, and the same warm-up.
+   A difference in outcome is the policy's, not the harness's.
+3. **Simulate first, then measure the gap.** The simulators assume a
+   prefetch completes instantly and costs nothing. The real-device testbed
+   and the live HTTP replay execute the simulators' own decisions with
+   asserted parity, so what they add is exactly the timing the simulators
+   leave out.
+4. **Honest labels.** Synthetic data has ground truth; real traces do not. A
+   trained model is frozen on real traces, scored only on data it was not
+   trained or selected on, and compared against the strongest fair baseline.
+5. **Results are a contract.** Every file under `results/` is written through
+   `prefetch_common.schemas` (exact columns and types) and is hashed in its
+   directory's `provenance.json`. The paper reads only `results/`.
+6. **The disk core is stdlib-only.** Everything else is an extra
+   (`pyproject.toml`): `[traces]`, `[web]`, `[gpu]`, `[paper]`.
+
+## Data flow
 
 ```text
- trace file (normalized / msr / iotta8 / alibaba / revised)
- or synthetic generator
-        |
-        v
- Request records (timestamp_ms, lba, size_blocks, operation, stream_id)
-        |
-        +-- gathered into fixed-size windows (window_size, default 32)
-        |                      |
-        |                      v
-        |            feature extraction (12 features)
-        |                      |
-        |                      v
-        |          OnlineGaussianNB (frozen or incremental)
-        |                      |
-        |                      v
-        |           class -> policy routing (seq/strided/random/mixed)
-        |                      |
-        `----> candidate generation (per request)
-                          |
-                          v
-                 LRU cache replay + latency model
-                          |
-                          v
-              Metrics -> benchmark table -> result interpretation
+DISK                                              WEB
+data/block-traces/*.oracleGeneral.zst             data/raw/events.csv (SHA-pinned)
+  trace.iter_oracle_chunks (unit detection,         data.prepare: dedup, 30-min sessions,
+  FIU page merge, volume-tag mask)                   4 chronological splits, causal context
+        |                                                  |
+  Request(timestamp_ms, lba, size_blocks, op)       view rows (session, position, item, next_item)
+        |                                                  |
+  simulator.replay / replay_stream                  scorers: logistic | trans_s0 | trans_prior
+   - per-request predictors (stride, markov,          | trans_online (OnlineIndex) | seq (GRU)
+     lstm, linux_ra, learned_depth)                        |
+   - window router (adaptive, adaptive_evidence)    cachecore.Policy / FeedbackGate -> depth
+   - feedback gate (guard, depth_adaptive,                 |
+     correlate) -> read-ahead depth                 cachecore.Cache (per session, LRU,
+   - LRUCache (cache_factory)                         speculative-first eviction)
+        |                                                  |
+  Metrics: hits, prefetches, device_ios,            Counters: hits, issued, useful, pollution
+  blocks_moved                                             |
+        |                                           benchmark: select on validation per capacity,
+  multicorpus (C1-C4) -> sweep.jsonl                  freeze, replay test -> policy_metrics,
+  analysis -> tables, deltas, winners, kappa          comparisons, decomposition, freshness
+        |                                                  |
+  realio: decisions.record_plan -> Backend A/B      live: plan.json + sim.json -> origin +
+  on a real device -> realio.csv                      emulated browsers -> live_metrics.csv
+        \__________________ results/<study>/ ______________/
+                                   |
+                  paper/numbers.py, tables/, figures/ -> paper/, presentation/
 ```
 
-Two independent candidate sources feed the same cache: fixed heuristics and
-the ML classifier (`simulator.candidates`) on one side, and the learned
-per-request predictors (`baselines.py`, `lstm.py`, exposing
-`next_candidates(request)`) on the other.
+## Disk study (`src/adaptive_prefetch`)
 
-## Module map
+### Module map
 
-| Module | Responsibility | Entry points |
-| --- | --- | --- |
-| `trace.py` | Canonical `Request` record, CSV/trace import for five schemas, synthetic labelled workload generation | `load_csv`, `write_csv`, `synthetic_window`, `synthetic_dataset`, `transition_trace` |
-| `features.py` | Fixed-size window to 8 numeric features | `extract`, `dominant_stride` |
-| `model.py` | `OnlineGaussianNB` (diagonal, default) and `OnlineQDA` (full covariance + shrinkage), both with exponential decay | `make_classifier`, `CLASSIFIERS`, `DEFAULT_CLASSIFIER` |
-| `baselines.py` | Causal per-request stride and Markov prefetchers | `StridePrefetcher`, `MarkovPrefetcher` |
-| `lstm.py` | Optional offline LSTM predicting the next address *delta* as (sign, magnitude-bucket) with explicit abstention | `train_lstm`, `load_predictor`, `LSTMPrefetcher` |
-| `simulator.py` | Causal block-level LRU replay, latency model, class->policy routing, perfect-predictor bound | `replay`, `LRUCache`, `LatencyModel`, `oracle_reference`, `confusion_matrix` |
-| `guard.py` | Feedback-gated policies: observed prefetch precision vs `break_even_precision()`, stride confirmation | `PrecisionMonitor`, `CorrelateDetector`, `GateController`, `read_ahead`, `depth_for_margin` |
-| `benchmark.py` | Twelve-policy comparison, drift diagnostics, aggregation, result interpretation | `benchmark_dataset`, `drift_report`, `aggregate_results`, `analyze_results`, `markdown_table` |
-| `training.py` | Conservative weak-label adaptation for the unlabelled MSR sample | `adapt_msr_sample` |
-| `artifacts.py` | Versioned JSON persistence tagged by classifier kind (no pickle) | `save_model`, `load_model` |
-| `eda.py` | Trace profiling, locality/reuse analysis, k-means elbow, domain-shift and label-support measurement | `profile_trace`, `domain_shift`, `label_support`, `locality_profile` |
-| `pipeline.py` | Preprocessing, policy postprocessing, configurable regimes, model selection | `StandardScaler`, `PolicySmoother`, `evaluate_classifier`, `select_classifier` |
-| `report.py` | Findings-vs-raw-data split for the console and the `outputs/` file map | `dataset_overview`, `classifier_section`, `benchmark_section`, `drift_section` |
-| `cli.py` | argparse front-end: `demo`, `replay`, `benchmark`, `normalize`, `train-lstm`, `train-msr-sample`, `export-demo`, `evaluate`, `eda`, `shift` | `main` |
-| `main.py` | End-to-end run: EDA, classifier selection, domain shift, benchmark, drift. Console shows findings; `outputs/` holds every raw row | `main` |
+| Module | Responsibility | Main entry points |
+|---|---|---|
+| `trace.py` | `Request` record; loaders for `normalized`, `msr`, `iotta8`, `alibaba`, `revised` and `oracle` (`FORMATS`); `iter_oracle_chunks` and `iter_csv_chunks` streaming; synthetic labelled generators | `load_csv`, `iter_oracle_chunks`, `oracle_profile`, `transition_trace` |
+| `corpora.py` | the four corpora, twin families (`TWIN_GROUPS`), `PAPER_SUBSET` (21 stems), trace discovery | `discover_block_traces` |
+| `features.py` | 8 stream features per window, plus 4 contextual ones from `WindowContext` (bounded block-age table) | `extract`, `WindowContext`, `dominant_stride` |
+| `model.py` | `OnlineGaussianNB` (default) and `OnlineQDA`, with exponential decay | `make_classifier` |
+| `baselines.py` | `StridePrefetcher`, `MarkovPrefetcher` (`next_candidates`), and `LinuxReadahead` (cache-aware, `observe`) | |
+| `lstm.py` | optional delta LSTM (bucketed deltas, abstention), honest split, CUDA | `train_lstm`, `load_predictor` |
+| `depth_model.py` | `learned_depth`: per-segment read-ahead probabilities, thresholds chosen on validation, SHA-bound training sidecars | `train_and_select`, `load_prefetcher`, `DepthPrefetcher`, `PrecomputedDepth`, `RelativeDepth`, `scoring_conflict` |
+| `guard.py` | feedback gate: observed precision against break-even sets depth | `GateController`, `PrecisionMonitor`, `CorrelateDetector`, `read_ahead` |
+| `simulator.py` | the causal replay loops, `LRUCache`, `CacheView`, `Metrics`, `LatencyModel`, `IOCostModel`, routing | `replay`, `replay_stream`, `_validate_replay`, `_make_predictor`, `MODES_SUPPORTED` |
+| `benchmark.py` | one-trace benchmark over `MODES`, pooled rows, drift report, interpretation | `benchmark_dataset`, `aggregate_results`, `analyze_results` |
+| `sweep.py` | streamed sweep of a trace collection (`RANKING_MODES`) | `sweep_collection` |
+| `multicorpus.py` | E1 driver: configs C1-C4, explicit latency model per row, resumable `sweep.jsonl` | `python -m adaptive_prefetch.multicorpus` |
+| `analysis.py` | E1 tables, paired and cluster deltas, winners, `kappa*`, validity checks | `write_analysis`, `checks` |
+| `realio/` | real Linux testbed (below) | `python -m adaptive_prefetch.realio` |
+| `eda.py`, `pipeline.py`, `training.py`, `artifacts.py`, `report.py`, `datasets.py`, `cli.py` | trace profiling, classifier evaluation regimes, weak-label adaptation of the MSR sample, JSON model persistence, the `main.py` report, dataset lists, the CLI | |
 
-## Trace layer (`trace.py`)
+### The replay loop
 
-`Request` is an immutable dataclass validated in `__post_init__`:
-`timestamp_ms >= 0`, `lba >= 0`, `size_blocks > 0`, `operation in {R, W}`.
+`replay(requests, capacity, window_size, mode, ...)` and its streamed twin
+`replay_stream(chunks, ...)` are the only places a policy runs. For each
+request, in order:
 
-`load_csv(path, format)` dispatches on an explicit profile or auto-detects by
-column names:
+1. Demand: every block is touched in the cache (`LRUCache.read`/`write`);
+   misses are counted in maximal contiguous runs (`demand_ios`).
+2. The candidate source proposes blocks for later requests:
+   - **per-request predictors** expose `next_candidates(request)` (`stride`,
+     `markov`, `lstm`, `learned_depth`);
+   - **cache-aware predictors** (`linux_ra`) are driven through
+     `observe(request, missed_blocks, CacheView)`, because the read-ahead
+     policy depends on what is resident;
+   - **window modes** (`sequential`, `strided`, `deep`, `adaptive`,
+     `adaptive_evidence`, the gated modes) use the current window policy and
+     `guard.read_ahead`, which always returns exactly `depth` blocks.
+3. Prefetch, only once `index >= window_size`: **the first window never
+   prefetches**. Blocks already resident are not re-issued; new runs are
+   counted as prefetch I/Os (and as mergeable when they continue a missed
+   read).
+4. When a window completes: refresh the stride, and in `adaptive` mode
+   classify it and switch policy for *later* requests. The gated modes ask
+   `GateController` for a depth every `policy_interval` requests, feeding it
+   the **delta** of useful prefetches since its last decision.
 
-| Profile | Schema | Unit conversion |
-| --- | --- | --- |
-| `normalized` | `timestamp_ms,lba,size_blocks,operation[,stream_id]` | none (canonical) |
-| `msr` | `Timestamp,Hostname,DiskNumber,Type,Offset,Size,ResponseTime` | timestamps→elapsed ms, byte offset/size→512-B blocks, Read/Write→R/W |
-| `iotta8` | `device,sector,size,op,offset,timestamp,lifetime,count` | µs→ms; sector index/count kept |
-| `alibaba` | `device_id,opcode,offset,length,timestamp` | µs→ms, byte offset/length→blocks |
-| `revised` | whitespace-separated `time_s op lba size seq\|rand t1 t2 t3` (MSRC-trace-003 final-trace) | s→ms elapsed; RS/WS→R/W; sector lba/size kept |
+`replay_stream` carries cache, metrics, partial-window state, block ages,
+stride and gate state across chunk boundaries and is bit-identical to
+`replay` on every counter (pinned for every mode). `_validate_replay` is the
+only parameter validator, `_make_predictor` the only predictor factory, and
+`_publish_gate` the only place gate state reaches `Metrics`.
 
-All real-trace loaders validate ascending timestamps and reject malformed
-rows with a line number. The synthetic generators produce labelled windows
-(`sequential`, `strided`, `random`, `mixed`) with configurable noise; the
-label describes the construction, never a real trace.
+### Modes
 
-## Feature layer (`features.py`)
+`benchmark.MODES` and `sweep.RANKING_MODES` (14 modes, this order):
 
-For each complete window of `n >= 8` requests, 8 size-aware features in
-`FEATURE_NAMES`:
+| Family | Modes | What decides |
+|---|---|---|
+| fixed | `none`, `sequential` (depth 2), `strided`, `deep` (depth `DEFAULT_READ_AHEAD_DEPTH`, or `deep@N`) | nothing |
+| per-request | `stride`, `markov`, `lstm` (optional artifact) | address deltas |
+| classifier-routed | `adaptive` | a 4-class window label from `OnlineGaussianNB` |
+| evidence-routed | `adaptive_evidence` | the window's own contiguity, stride and jumpiness; no model |
+| feedback-gated | `guard`, `depth_adaptive`, `correlate` (`GATED_MODES`) | *observed* precision against `LatencyModel.break_even_precision()` |
+| kernel policy | `linux_ra` (window ceiling `linux_ra@N`, default 256 blocks) | an emulation of mm/readahead.c's on-demand read-ahead policy: sync window on a sequential miss, async ramp on the marker block |
+| learned depth | `learned_depth` (optional artifact) | a trained per-segment model; how far to read ahead |
 
-1. `contiguous_ratio` - adjacent LBAs continuing the previous request's size
-2. `dominant_stride_ratio` - most frequent non-contiguous, non-zero delta
-3. `random_jump_ratio` - deltas with `abs > 64`
-4. `short_run_ratio` - deltas with `abs <= 16`
-5. `unique_ratio` - distinct LBAs / window length
-6. `gap_cv` - coefficient of variation of inter-request timing (capped at 10)
-7. `fast_gap_ratio` - fraction of gaps below 0.15 ms
-8. `read_ratio` - fraction of read requests
+`OPTIONAL_MODES = ("lstm", "learned_depth")`: without an artifact they give
+a `skipped:` row with `None` metrics, never a substitute.
 
-`dominant_stride(window)` is reused by the simulator as a separate heuristic:
-the most common delta between 1 and 1024 blocks, required at least
-`max(2, len/4)` times.
+### Cost models
 
-## Classifier (`model.py`)
+- `LatencyModel(hit_us, demand_miss_us, prefetch_us)`: the legacy per-block
+  cost. `measured()` calibrates it from a trace's recorded service times (the
+  MSRC `.revised` format only), using the mean. Its break-even is degenerate
+  at `prefetch_multiple=1.0` (D11, corrected in D18).
+- `IOCostModel(t_pos_us, t_xfer_us_per_block)`: device time from
+  `device_ios` and `blocks_moved`, loaded from `results/realio/device_*.json`.
+  `kappa_star` gives each policy's break-even device ratio.
+- Oracle traces carry no service times, so every multi-corpus row names its
+  latency model explicitly (`assumed` 5/100/50 us, and `break_even`
+  1/100/100 us for the gated modes) and records its break-even.
 
-Two interchangeable classifiers share one `update`/`predict` contract. The
-default is `OnlineGaussianNB`; `OnlineQDA` keeps a full per-class scatter
-matrix with diagonal shrinkage and a cached Cholesky factor, and is selected
-with `--classifier qda`. The choice was made on measurement, not preference:
-see [DECISIONS.md](DECISIONS.md) D1 for the regime table and the
-block-size transfer test that demoted QDA back to opt-in.
+### The real Linux testbed (`adaptive_prefetch/realio/`)
 
-`OnlineGaussianNB` is a Gaussian Naive Bayes classifier with:
+| Module | Role |
+|---|---|
+| `decisions.py` | `record_plan`: runs `replay_stream` once with `RecordingLRU` as `cache_factory` and turns the cache log into a per-request plan (hit/miss of every block, prefetch runs). `ShadowLRU` has `LRUCache`'s exact rules; `verify_plan` replays a plan with no I/O. |
+| `layout.py` | `RegionMapper`: packs the trace's 1 MiB regions into a backing file in first-touch order (contiguity kept, empty space dropped; aliasing refused) |
+| `backend_odirect.py` | **Backend B**: user-space LRU, `O_DIRECT` demand reads, prefetch on a 4-thread pool, preallocated aligned buffers; raises `CacheDivergence` if a hit/miss differs from the plan; late and ready hits timed |
+| `backend_pagecache.py` | **Backend A**: the kernel page cache in a memory cgroup sized to the simulated cache; prefetch as `POSIX_FADV_WILLNEED` in 256 KiB chunks; `FADV_RANDOM` for policy modes, `FADV_NORMAL`/`FADV_SEQUENTIAL` for `kernel_ra`/`kernel_seq`; whole file dropped with `FADV_DONTNEED` before every run |
+| `online.py` | policies run inline against Backend A with a shadow `LRUCache`; the gated modes are fed *measured* usefulness |
+| `clock.py` | think-time models `closed`, `fixed:US`, `spread:SCALE:CAP_US`, and a precise pacer |
+| `calibrate.py` | QD1 `O_DIRECT` probes: `t_pos`, `t_xfer`, `kappa` -> `device_<dev>.json` |
+| `devstat.py` | which disk a file is on, foreign I/O share, drive-cache displacement |
+| `syscalls.py` | ctypes `cachestat(2)`, `mincore(2)` fallback, timer slack |
+| `runner.py`, `report.py` | fresh child process per run, shuffled order, load gate; `realio.csv` and the summary (delta vs `none`, Spearman, `pred_err`, `k_eff`) |
 
-- per-class running means and M2 variances updated incrementally
-- **exponential decay** (`decay_factor`, default 0.995) applied to historical
-  counts and variances on every update, so old observations fade and the
-  model can follow concept drift
-- a `variance_floor` (0.0025) preventing log(0) and over-confident fits
-- softmax-like confidence: `1 / sum(exp(score_i - score_max))`
+## Web study (`src/webprefetch`)
 
-`update(values, label)` requires a trustworthy label (synthetic only). On real
-traces the model is frozen by default; `training.py` demonstrates an opt-in
-weak-label adaptation for the bundled MSR sample with an explicit proxy rule,
-and `--online-real` adds a confidence-gated self-training row that is
-documented as *not* evidence of real-trace accuracy.
+### Module map
 
-Persistence is JSON (`artifacts.py`): means, M2s, counts, hyperparameters,
-and metadata, with format/feature/class compatibility checks on load.
+| Module | Responsibility |
+|---|---|
+| `data.py` | SHA-pinned `events.csv`; dedup; 30-minute sessions broken at split boundaries; four chronological splits; causal view records |
+| `model.py` | `CandidateIndex` and `fit_index(views, max_split=0)`; the logistic ranker (`train_ranker`) and `FastScorer` |
+| `index.py` | `OnlineIndex`: a transition enters only after its later view's time is strictly before the decision time |
+| `scorers.py` | the scorer registry (`SCORERS`: `logistic`, `logistic_novel`, `trans_s0`, `trans_prior`, `trans_online`, `seq`), each fixing its index and replay order; `RankTable` for precomputed rankings |
+| `cachecore.py` | **the one browser-cache model**: `Policy` (`fixed`, `gate`, `adaptive`, `adaptive_ca`, `feedback`), `Counters`, `Cache` (per-scope LRU, speculative objects evicted first), `FeedbackGate`; stdlib only |
+| `simulator.py` | `replay`, `replay_capacities`, `paired_bootstrap`, calibration and break-even helpers |
+| `parallel.py` | session-sharded replay with exact counts; feedback and online-index state replayed in global time order |
+| `benchmark.py` | validation search **per capacity**, frozen test replay, comparisons against best fixed / `fixed0` / transition top-1, decomposition, freshness, learning curve |
+| `seqmodel.py` | GRU (optionally SASRec) next-view model, chronological protocols, no-pickle artifacts, `SequenceScorer.precompute` |
+| `diagnostics.py` | model comparisons, calibration, pair kinds, think time |
+| `demo_server.py`, `demo/` | local API and static demo; `adaptive` = the validated policy, `adaptive_cost` = penalty equals cost; `session_parity` |
+| `live/` | real HTTP replay (below) |
+| `cli.py`, `paths.py` | `python -m webprefetch {download, prepare, eda, train, benchmark, freshness, decompose, learning-curve, parity, serve, export-demo, ...}`; web outputs go to `outputs/web/` and `models/web/` |
 
-## Simulator (`simulator.py`)
+### Policies and the replay
 
-`replay(requests, ...)` is the single causal evaluation loop:
+For each view of a session, in time order: the view is demanded from the
+session's cache (hit or miss), the scorer ranks candidate next items, the
+policy chooses how many to prefetch, and the chosen items not already
+resident are fetched into the cache. A fixed policy prefetches the top *k*;
+`adaptive` picks the depth that maximises predicted hits minus a penalty per
+slot; `adaptive_ca` drops resident items first, so it pays only for real
+fetches; `gate` prefetches 2 when the top score clears a threshold;
+`feedback` issues a candidate only while the observed precision of its
+(rank, score bin) bucket beats the cost, with exploration rate `epsilon`.
+Every parameter is chosen on validation per capacity and frozen for test.
 
-1. Builds an oracle `Counter` of future re-accesses for recall scoring only.
-2. Creates one `LRUCache` (capacity, default 128) and one latency model.
-3. For each request, in order:
-   - touches every block (`R` → `cache.read`, `W` → `cache.write`)
-   - asks the active candidate source for prefetch blocks
-   - prefetches only after the first `window_size` requests (warm-up)
-4. After each completed window: refreshes `dominant_stride`, and in adaptive
-   mode classifies the window, possibly switching policy
-   (`policy_switches`), optionally updating the model with a label or a
-   confident pseudo-label.
+### The live HTTP replay (`webprefetch/live/`)
 
-Class→policy routing (fixed mapping):
+| Module | Role |
+|---|---|
+| `plan.py` | samples test sessions, records per-view decisions through the same `cachecore` objects, and the simulator reference `sim.json`; a plan that disagrees with the simulator is refused |
+| `selection.py` | resolves `validated_<family>` names from `results/web/comparisons.csv`; no fallback |
+| `objects.py` | the object store (one file, aligned objects, **assumed** lognormal sizes), page-cache helpers, disk probe |
+| `origin.py` | asyncio HTTP/1.1 origin: real `pread`, emulated RTT and per-session link (FIFO or demand-first), `/hint` (server-side WILLNEED), `/stats` |
+| `client.py` | one emulated browser per session; its cache **is** `cachecore.Cache`; a demand-priority connection pool; recorded inter-view gaps |
+| `timing.py` | one clock, a microsecond timer for asyncio, event-loop lag monitor |
+| `analyze.py`, `run.py` | parity, the validity gate, paired session bootstrap, the report; sequential passes with dropped pages and a load gate |
 
-| Class | Candidate policy |
-| --- | --- |
-| `sequential` | two-block read-ahead |
-| `strided` | learned window stride, one block |
-| `random` | none |
-| `mixed` | one-block read-ahead |
+## Shared code (`src/prefetch_common`)
 
-`Metrics` accumulate read blocks/hits, prefetches, useful prefetches,
-prefetchable misses, policy switches, pseudo updates, modelled latency, and
-timed inference. Derived properties: hit ratio, prefetch precision, oracle
-re-access recall, unused prefetches, mean access latency, inference µs/call.
+| Module | Role |
+|---|---|
+| `utility.py` | `U(c)`, `cost_to_c`, `c_star`, envelopes; the mapping from the disk cost model to `c` |
+| `stats.py` | `paired_bootstrap`, `cluster_bootstrap` with `twin_weights`, `session_bootstrap`, optional `wilcoxon` |
+| `provenance.py` | `write_provenance`, `verify_provenance`, `snapshot` |
+| `schemas.py` | the results contract: exact columns and types per results file; `write_rows`, `validate_tree` |
 
-`LatencyModel` defaults: 5 µs hit, 100 µs demand miss, 50 µs prefetch. It is
-a *configured cost model*, not a measurement.
+## Paper and presentation
 
-## Baselines (`baselines.py`, `lstm.py`)
+`reproduce.py paper` runs `paper/numbers.py` (one `\newcommand` per quoted
+number), `paper/tables/make_tables.py` and `paper/figures/make_figures.py`,
+which share `paper/genlib.py` and are loaded by path, then
+`paper/check.py --strict`. `--fixtures` builds the same outputs from the
+synthetic `tests/fixtures/results/` tree into `outputs/paper-fixture/`.
+`presentation/slides.tex` inputs `paper/numbers.tex` and the same figure
+PDFs. `tools/check_doc_numbers.py` keeps the Markdown docs honest in the same
+way (`docs/METRICS.md` explains every metric the docs quote).
 
-All baselines implement `next_candidates(request) -> list[int]` and are
-causal: they consume the current request and propose blocks for later reads.
+## Limits that apply everywhere
 
-- `StridePrefetcher` - detects a repeated delta, then prefetches up to
-  `degree` blocks at that stride.
-- `MarkovPrefetcher` - 1st/2nd-order transitions between address deltas;
-  proposes the top-k most probable next deltas above a confidence threshold.
-- `LSTMPrefetcher` - offline LSTM (1 input unit, 64 hidden, softmax over a
-  256-delta vocabulary) predicting the next delta from the last 16 deltas;
-  prefetches up to two positive in-range candidates from the top-10 scores.
-  It predicts *deltas*, so compare cache outcomes and compute cost, never
-  four-class accuracy.
-
-## Benchmark (`benchmark.py`)
-
-`benchmark_dataset` replays one trace under all `MODES = (none, sequential,
-strided, stride, markov, lstm, adaptive, adaptive_evidence, guard,
-depth_adaptive, correlate, deep)` with identical parameters, computes
-`speedup_vs_none = baseline_mean_latency / mode_mean_latency`, and returns one
-row per mode. Missing LSTM → row with `status="skipped: ..."`, not a fake
-result. `aggregate_results` merges per-trace rows with request-weighted
-counters. `drift_report` compares frozen vs genuinely labelled online GNB on
-a synthetic transition trace, reporting per-phase switch lag and phase
-accuracy. `analyze_results` interprets the table: winning policy per dataset
-with speedup and hit-ratio gains, flags degenerate ties, calls out a
-different best-hit-ratio mode, and adds relative adaptive-vs-baseline gains.
-
-## Feedback-gated policies (`guard.py`)
-
-`guard`, `depth_adaptive` and `correlate` use **no classifier**. `LRUCache`
-already counts `useful_prefetches`, so the realised precision of the system's
-own speculative reads is observable at read time — causally, with no future
-knowledge. `GateController` compares that rolling precision against
-`LatencyModel.break_even_precision()` and sets read-ahead depth from the
-margin: depth 0 when precision is below break-even, otherwise depth scaled
-from 1 to 8.
-
-Two mechanisms keep the controller from getting stuck:
-
-* **Exploration** — `EXPLORATION_PREFETCHES` (256) speculative reads are issued
-  before the estimate is trusted. Without it the controller deadlocks: no
-  measurement means no prefetch, and no prefetch means no measurement.
-* **Re-probe** — after `REPROBE_AFTER` (8) consecutive closed decisions the
-  gate spends one interval prefetching again. Without it a gate that closes
-  never reopens, because closing stops the evidence that would reopen it.
-
-`correlate` additionally requires a stride confirmed over a longer history
-than one window (`CorrelateDetector`, bounded table, least-seen eviction).
-It is the only policy that scores on a stride-512 scan.
-
-`replay()` and `replay_stream()` both drive one `GateController` rather than
-each reimplementing the decision, and `_publish_gate()` is the single place
-gate state reaches `Metrics`. Duplicating that logic previously left the
-streamed path without these modes entirely, which crashed the sweep.
-
-## CLI and interactive entry points
-
-`cli.py` exposes subcommands for targeted runs (`demo`, `replay`,
-`benchmark`, `normalize`, `train-lstm`, `train-msr-sample`, `export-demo`);
-all real-trace commands accept `--format` and the LSTM-related commands a
-`--lstm-model`/`--save` path.
-
-`main.py` is the guided full run: it asks for demo/cache/window/dataset
-selection (synthetic, MSR sample, MSRC-trace-003 final traces, custom file),
-optional LSTM inclusion with a retrain-or-cached prompt, latency model, and
-output saving; then prints the cost-model block with its break-even, the
-classifier demo, the benchmark table, the result interpretation, and the drift
-report, and saves `outputs/results.md` + `outputs/results.csv`. With no
-arguments it runs non-interactively. Note that it does **not** apply a
-per-trace request limit when training the LSTM -- it trains on the whole
-selected sample and prints a duration warning.
-
-`--prefetch-multiple` (default 1.0) sets what a speculative read costs
-relative to a demand read. It is a first-class flag on both `main.py` and
-`sweep_modes.py` because the setting decides whether the modelled-cost column
-is meaningful at all; see the cost model note below.
-
-`sweep_modes.py` is the collection-wide runner: it streams every `.revised`
-trace in bounded chunks under every mode in `sweep.RANKING_MODES`, so the
-32-file, 11.86 GB collection is swept without materialising it.
-
-## Mode map
-
-| Family | Modes | What decides the policy |
-| --- | --- | --- |
-| Fixed | `none`, `sequential`, `deep`, `strided` | Nothing. `deep` varies only depth (`DEFAULT_READ_AHEAD_DEPTH`, 8 blocks). |
-| Online per-request | `stride`, `markov`, `lstm` | Address deltas. Expose `next_candidates(request)`. |
-| Classifier-routed | `adaptive` | A 4-class window label from `OnlineGaussianNB`, one decision per window. |
-| Evidence-routed | `adaptive_evidence` | `route_window()` on the window's own measured features. No model. |
-| Feedback-gated | `guard`, `depth_adaptive`, `correlate` | `GateController` comparing *realised* prefetch precision against break-even. No model, no prediction. |
-
-
-## Evaluation metrics and their limits
-
-- **Hit ratio** - read hits / requested read blocks (cache-level).
-- **Prefetch precision** - useful prefetches / prefetches issued.
-- **Oracle re-access recall** - uses future-read information *only* for
-  scoring, never for candidate generation; it can be high even with low hit
-  ratio, so read it alongside hit ratio and wasted work.
-- **Unused prefetches** - prefetches never used during replay (including
-  still-resident at stream end): a proxy for cache pollution.
-- **Modelled latency/speedup** - under configured hit/miss/prefetch costs;
-  queueing, bandwidth, asynchronous completion, and device scheduling are not
-  modelled. **This metric is degenerate at the default
-  `prefetch_multiple=1.0`**: break-even precision is 1.0101, so no prefetcher
-  can pay for itself and "no prefetch" wins the column by arithmetic. Read
-  `LatencyModel.break_even_precision()` before interpreting any cost ranking.
-  The **hit** cost remains an approximation (1% of mean service) because the
-  traces record device time only, never cache time.
-- **Observed precision / margin / stride** (`observed_precision`,
-  `precision_margin`, `observed_stride`) - what the feedback gate actually
-  measured, as opposed to predicted. `observed_precision` is `None` when the
-  gate never issued a prefetch, so "never measured" stays distinguishable from
-  "measured as zero". These are written to `outputs/msrc_sweep.csv` per row.
-
-## Non-goals
-
-- OS/kernel integration, real device benchmarks
-- Real-trace four-class ground truth (unavailable; classifier kept frozen by
-  default on real traces)
-- Redistribution of MSR Cambridge or SNIA IOTTA traces (licensing)
-- Performance claims beyond the modelled cache simulation
-- Adapting read-ahead *depth*. Depth is the dimension that decides the
-  hit-ratio outcome (D13, D17: +4.10 points from depth alone versus a 0.55
-  point spread across every other mode), and nothing in this codebase varies
-  it per window. That is the main open problem, and it is a regression on
-  observed reuse distance rather than a 4-class label.
+- Simulated latency is a cost model; only `results/realio/` and
+  `results/live/` hold measured latency, each for one device or one emulated
+  network, a few traces or sessions, and a shared host.
+- The oracle traces have no read/write flag (writes replay as reads), no
+  service time and whole-second timestamps.
+- Classification accuracy exists only for synthetic windows.
+- Web object sizes, RTT, bandwidth and the cost `c` are assumptions; the
+  browser cache is per session; one retailer.

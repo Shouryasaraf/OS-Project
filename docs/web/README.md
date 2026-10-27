@@ -1,5 +1,7 @@
 # Adaptive product-page prefetching on RetailRocket clickstreams
 
+<!-- doc-numbers: off (the pivot branch's README; figures from the pivot run and audit/ measurements) -->
+
 > **Location note (master branch).** This is the `pivot` branch's README,
 > moved here when the web study joined `master`. Paths in it are the pivot
 > layout. On `master` the web CLI writes to `outputs/web/` and `models/web/`

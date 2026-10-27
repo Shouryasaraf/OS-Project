@@ -1,5 +1,10 @@
 # Implementation plan
 
+> **Status on `master`.** The `pivot` branch's executed implementation
+> plan, kept as written. Current web decisions: `docs/web/WEB_DECISIONS.md`.
+
+<!-- doc-numbers: off (the pivot branch's executed plan) -->
+
 ## Objective and evidence standard
 
 Use actual RetailRocket product-view sequences to learn when to prefetch likely next product pages. The adaptive policy must compete with the best fixed depth on a time-held-out test interval. A positive result is not assumed. The dataset has no page sizes or network timing, so outcomes are cache-object hits and speculative-object costs, not measured page-load latency.

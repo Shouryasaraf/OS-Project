@@ -26,10 +26,13 @@ an ``nvidia-smi`` sampler around every job. Everything is resumable: each
 finished piece is a file under ``work_dir`` and is not recomputed.
 
 Outputs (``results/gpu/`` for the full run, ``outputs/gpu/quick/`` for
-``--quick``): ``disk_learned_depth.csv`` (schema-checked),
-``disk_depth_baselines.csv``, ``disk_lstm.csv``, ``gpu_env.json`` and
-``provenance.json``. The last three CSV/JSON files have no registered schema
-yet; their columns are the constants below.
+``--quick``): ``disk_learned_depth.csv``, ``disk_depth_baselines.csv``,
+``disk_lstm.csv``, ``gpu_env.json`` and ``provenance.json``. All four data
+files have a registered schema in ``prefetch_common.schemas`` (``gpu/*``),
+so ``schemas.validate_tree`` checks them. ``disk_learned_depth.csv`` is
+written through ``schemas.write_rows``; the baseline and LSTM CSVs are
+written directly with the column constants below, which their schemas
+mirror.
 """
 
 from __future__ import annotations

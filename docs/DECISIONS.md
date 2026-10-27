@@ -9,7 +9,27 @@ a premise that did not survive measurement.** The real defects were elsewhere
 and were fixed instead. QDA was built, measured, wired in, and then
 deliberately demoted back to opt-in.
 
+**How to read this log on `master`.** D1-D17 are the history of the disk
+study on branch `main`. Their figures come from synthetic traces and from the
+MSRC-trace-003 collection (`.revised` files, request-level service times),
+which is not on this machine and is not part of `results/`. They are kept as
+the record of what was measured then and are **not** regenerated. Four of
+their conclusions are corrected by the multi-corpus results of E1-E3, in
+D18-D21 at the end of this file:
+
+| Earlier entry | What it said | Corrected in |
+|---|---|---|
+| D10.5 | hit ratio saturates by 2048 blocks, so the default cache is 1 MiB | D20: it does not saturate on real block traces |
+| D11 | break-even precision above 1 is "the arithmetic of this hardware" | D18: it is the per-block cost model, not the hardware |
+| D13 | depth 8 is best or near-best | D20: on the oracle corpora hit ratio keeps rising to depth 256, at a large device-work cost |
+| D17 | "depth is the whole result"; `deep` wins 29 of 31 traces | D20: E1's winners, and why hit-ratio winners are not device-work winners |
+
+Every figure from D18 on comes from a file under `results/` that the entry
+names, and `tools/check_doc_numbers.py` verifies it.
+
 ---
+
+<!-- doc-numbers: off (D1-D17: history; figures from synthetic traces and MSRC-trace-003, not in results/) -->
 
 ## D1. Classifier: build QDA, measure it, then keep Naive Bayes
 
@@ -970,3 +990,321 @@ it exactly (33.12 / 33.77 / 35.08 / 37.87 / 38.43), and checked that
 over 500k requests at both capacity 4096 and 256 -- 19 of 19 checkpoints.
 
 Test count: 91 -> 131.
+
+<!-- doc-numbers: on -->
+
+---
+
+## D18. Device work is not hit ratio: device-I/O accounting and `IOCostModel` (corrects D11)
+
+**What D11 got wrong.** D11 called a break-even precision above 1 "the
+arithmetic of this hardware". It is the arithmetic of the cost model.
+`LatencyModel` charges one whole mean service time **per 512-B block**, for a
+demand miss and a prefetch alike, with no request merging: a 64-block
+sequential read is charged as 64 seeks. Under that charge a prefetched block
+can never save more than it costs, whatever the device. The degenerate cost
+column was a property of the per-block unit (plan item M18), not of disks.
+
+**What was built (WP3).** The legacy `LatencyModel` fields and the D11
+break-even are unchanged, so every earlier test still pins them. Beside them:
+
+- `Metrics.demand_ios`, `prefetch_ios`, `prefetch_ios_mergeable`, and the
+  derived `device_ios` and `blocks_moved` (definitions in `docs/METRICS.md`).
+  A demand I/O is a maximal contiguous run of missed blocks in one request;
+  a prefetch run that starts where a missed request ends is merged into it,
+  as the block layer would.
+- `IOCostModel(t_pos_us, t_xfer_us_per_block)`, device time
+  `T = device_ios * t_pos + blocks_moved * t_xfer`, loaded only from a device
+  calibration file, never from a trace or a default.
+- `IOCostModel.kappa_star(policy, none)`: the positioning-to-transfer ratio
+  above which a policy's modelled device time drops below `none`'s.
+- Both replay paths count these identically; the parity tests cover every
+  mode.
+
+**The device constants were measured, not assumed (E0).**
+<!-- source: results/realio/device_sdb.json; results/realio/device_ssd.json -->
+The HDD `sdb` (ST10000NM017B-2T) has `t_pos` = 5665.38 us and `t_xfer` =
+1.916 us per block, so `kappa` is about 2957 blocks: one positioning costs as much as moving
+thousands of blocks. The SATA SSD (Micron 5300) has `t_pos` = 111.54 us and
+`kappa` about 112. These are properties of one backing file on one drive,
+measured with QD1 `O_DIRECT` probes, not of HDDs or SSDs in general.
+<!-- source: none -->
+
+**What E1 shows with it.** Hit ratio and device work move independently.
+At 1 MiB (C1, all 56 traces, paired and cluster bootstrap):
+
+<!-- source: results/disk/deltas.csv config=C1 corpus=all capacity=2048 latency=assumed baseline=none -->
+| Policy | device-I/O ratio vs `none` [paired] [cluster] | blocks-moved ratio [paired] |
+|---|---|---|
+| `deep@8` | 1.066x [1.030, 1.118] [1.001, 1.180] | 1.169x [1.114, 1.240] |
+| `linux_ra@256` | 0.740x [0.687, 0.791] [0.682, 0.820] | 1.086x [1.064, 1.111] |
+| `sequential` | 1.055x [1.031, 1.089] [1.016, 1.135] | |
+| `guard` | 1.026x [1.016, 1.037] [1.009, 1.051] | |
+<!-- source: none -->
+
+By the pre-registered rule (`results/disk/PREREGISTERED.md` section 5) only
+the `linux_ra` family **reduces device I/Os**: its window grows and it reads
+ahead in large contiguous runs, so it replaces many small demand reads with
+few large ones. Fixed-depth read-ahead raises hit ratio while issuing *more*
+device I/Os than `none` at 1 MiB, because each short read-ahead run is an I/O
+of its own. In `results/disk/kappa.csv` (C1, 1 MiB) `kappa*` is finite for
+`linux_ra@256` on 54 of 56 traces and for `deep@8` on only 8: on most traces
+no device ratio makes `deep@8` cheaper than `none` in device time. Paper
+figures F3 (device-I/O ratio against hit gain) and F4 (CDF of `kappa*` with
+the two measured device lines) show this.
+
+**What stays the same.** The cost column of `main.py` and `sweep_modes.py`
+is still degenerate at the default `prefetch_multiple=1.0` and is still
+labelled so. `IOCostModel` is a device-work model with no queueing, no overlap
+and no completion time; whether a policy is faster on a real device is
+measured in D21, not inferred from it.
+
+## D19. The LSTM is retired as a baseline; `learned_depth` is the learned model that was worth testing
+
+**LSTM, honest split (E2).** `train_lstm` now holds out a validation part
+(`val_fraction=0.2`), keeps the best epoch, can run on CUDA and limits CPU
+threads. E2 split each trace's first two million canonical requests
+chronologically (`60/20/20`: train, early stopping, test), and scored it once
+on the test part, on the four pilot traces (`results/gpu/disk_lstm.csv`). On all four its test hit ratio is below
+`linux_ra` on the same slice:
+
+<!-- source: results/gpu/disk_lstm.csv -->
+| Trace | LSTM | `none` | `sequential` | `deep@8` | `linux_ra` |
+|---|---:|---:|---:|---:|---:|
+| msr_hm_0 | 26.21% | 25.76% | 26.71% | 29.22% | 35.09% |
+| msr_prn_0 | 36.41% | 35.46% | 36.13% | 37.68% | 42.54% |
+| fiu_homes | 24.53% | 27.08% | 24.65% | 21.35% | 31.49% |
+| fiu_ikki | 9.89% | 9.70% | 10.96% | 14.90% | 24.51% |
+<!-- source: none -->
+
+Its delta-bucket top-1 accuracy (`test_bucket_top1`) is a statement about
+predicting address deltas, never about workload classes, and it does not
+translate into hit ratio. The per-request inference times in
+`results/gpu/disk_lstm.csv` were taken on a GPU 86-97% busy with other users'
+work and are not quoted as costs. The LSTM stays in the code as the measured negative result; `main.py`
+no longer evaluates it in-sample (D1-era bug M7).
+
+**A known quirk, documented and not changed (M21).** `lstm.bucket_of` maps
+deltas 0 and 1 to the same class, and class 26 is never a target. Changing
+the bucket edges would invalidate every saved artifact (`ARTIFACT_VERSION`
+2) for a defect that only wastes one output unit.
+
+**`learned_depth` (WP9, `depth_model.py`).** D13 and D17 pointed at depth,
+so the learned model predicts **how far to read ahead**, not the next address:
+for each segment past the request's end (0-8, 8-16, ..., 128-256 blocks) the
+probability that one of the next requests reads it, plus a jump head for gaps
+read-ahead cannot reach. Thresholds are chosen on validation only. The fair
+baseline is a **validation-chosen fixed depth (VCF)** under the same action
+cap, never `deep@8` (honesty constraint 7). Every artifact has a
+`.training.json` sidecar bound by SHA-256, and scoring refuses any slice that
+overlaps its training or validation range (constraint 14), which is why
+`learned_depth` is `skipped: evaluated in E2 only` in every E1 row.
+
+**What E2 measured** (`results/gpu/disk_learned_depth.csv`, 21 traces x 5
+seeds, action caps 64 and 256): averaged over seeds, `learned_depth` beat VCF
+on 3 of 21 traces at cap 64 and on 4 of 21 at cap 256, and the paired
+interval of the mean difference over traces lies below 0 (paper macro
+`\ldVsVcfCI`, written by `paper/numbers.py` from that file). The single-seed
+pilot's gain over VCF did not reproduce. The "same-actions oracle" column is
+the best the model's action set could do on the test segment; it is not an
+upper bound on prefetching. `learned_depth` is not in the real-device grid
+(E3), so nothing is claimed about it on a device.
+
+## D20. The oracle corpora: format, reconstruction, and corrections to D10.5, D13 and D17
+
+**Format, corrected.** The libCacheSim `oracleGeneral` files are not "one
+record per 512-B block", as the plan's first draft and an early memory note
+said. Each record is 24 bytes, `<IQIq` = (timestamp in whole seconds,
+`obj_id`, `obj_size`, `next_access_vtime`):
+
+- `obj_id` is a **byte offset**, always a multiple of 512. Alibaba and Tencent
+  carry a volume tag in bits 40 and up, masked with `& (2**40 - 1)`.
+- `obj_size` is in bytes for MSR, Alibaba, Tencent and `fiu_cheetah`, and in
+  512-B sectors for the other nine FIU files (`trace.oracle_profile` detects
+  the unit).
+- MSR, Alibaba and Tencent records are original requests. FIU records are
+  4 KiB **pages**, so same-second contiguous pages are merged back into
+  requests with a 1024-sector cap (`merge="auto"`, the canonical
+  reconstruction; `none` and uncapped `same_second` exist only as labelled
+  sensitivity views).
+- There is no read/write flag and no service time, so writes replay as reads
+  and every oracle replay needs an explicit `latency_model` (M19).
+
+<!-- source: results/disk/corpus_profile.csv trace=fiu_casa-110108-112108 -->
+For example `fiu_casa` has 8,973,201 page records that reconstruct to
+5,875,754 requests.
+<!-- source: none -->
+`results/disk/corpus_profile.csv` has the reconstruction of all 56 traces.
+These hit ratios are never compared numerically with the MSRC-trace-003
+figures in D13-D17 (honesty constraint 5).
+
+**D10.5, corrected: the hit ratio does not saturate at 2048 blocks.** That
+measurement was on synthetic traces. On the 56 real traces (C2, first 250,000
+requests, `results/disk/PREREGISTERED.md`) the `none` hit ratio keeps
+climbing with capacity:
+
+<!-- source: results/disk/table_main.csv config=C2 merge=auto latency=assumed corpus=all policy=none -->
+| Capacity (512-B blocks) | 2048 (1 MiB) | 16384 (8 MiB) | 131072 (64 MiB) | 1048576 (512 MiB) |
+|---|---:|---:|---:|---:|
+| `none` mean hit ratio | 13.81% | 21.86% | 26.43% | 42.13% |
+<!-- source: none -->
+
+`DEFAULT_CAPACITY` stays 2048 because the invariant tests pin it, but no
+result is reported at one capacity only: C1 reports 1 MiB and 64 MiB, C2
+four capacities.
+
+**D13, corrected: depth 8 is not the optimum.** On the 56 traces the mean hit
+ratio keeps rising with read-ahead depth far past 8, and so do the blocks
+moved:
+
+<!-- source: results/disk/table_main.csv config=C2 merge=auto latency=assumed corpus=all capacity=2048 -->
+| `deep@N`, 1 MiB | 0 | 2 | 8 | 32 | 64 | 128 | 256 | 512 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| mean hit ratio | 13.81% | 15.55% | 19.75% | 30.30% | 38.65% | 48.16% | 50.06% | 47.02% |
+| blocks moved vs `none` | 1.000x | 1.044x | 1.181x | 1.702x | 2.455x | 3.953x | 7.159x | 14.441x |
+<!-- source: none -->
+
+<!-- source: results/disk/table_main.csv config=C2 merge=auto latency=assumed corpus=all capacity=1048576 -->
+At 512 MiB the curve has not turned even at depth 512 (87.34%). `deep@0` is
+identical to `none` on every C2 cell (488 of 488 pairs; validity gate 3 in
+`results/disk/provenance.json`).
+<!-- source: none -->
+So the right reading of D13 is that hit ratio is bought with blocks moved,
+and the trade is set by the device (D18), not that 8 is a good depth.
+
+**D17, corrected: what wins, and in which currency.** D17 found `deep` the
+per-trace winner on 29 of 31 MSRC traces and concluded that depth is the
+whole result. On the 56 oracle traces at 1 MiB (C1), the per-trace hit-ratio
+winner is `deep@256` on 39 traces and `linux_ra@1024` on 13
+(`results/disk/winners.csv`), but the per-trace device-I/O winners are
+`linux_ra@1024` (31) and `linux_ra@256` (20). The pre-registration forbids
+naming a winner from hit ratio alone:
+
+<!-- source: results/disk/table_main.csv config=C1 merge=auto latency=assumed corpus=all capacity=2048 -->
+| Policy, C1 1 MiB | mean hit ratio | vs `none` | precision | device-I/O ratio | blocks-moved ratio |
+|---|---:|---:|---:|---:|---:|
+| `none` | 14.85% | | | | |
+| `deep@256` | 50.41% | +35.56 pp | 19.28% | 1.309x | 7.015x |
+| `linux_ra@1024` | 45.41% | +30.56 pp | 59.14% | 0.720x | 1.267x |
+| `linux_ra@256` | 38.62% | +23.77 pp | 76.98% | 0.740x | 1.086x |
+| `belady_min` | 22.79% | | | | |
+<!-- source: none -->
+
+`belady_min` is Belady's MIN for **demand paging without prefetch**. It is
+the limit of replacement alone, not an upper bound for prefetching policies:
+`deep@256` and `linux_ra` exceed it.
+
+**The trained classifier, re-measured.** `adaptive` (frozen GNB) against
+`sequential`, block hit ratio, n = 56:
+
+<!-- source: results/disk/deltas.csv config=C1 corpus=all latency=assumed metric=hit_ratio baseline=sequential policy=adaptive -->
+- 1 MiB: -0.94 pp, paired [-1.31, -0.58], cluster [-1.25, -0.33]; worse on 49
+  of 56 traces.
+- 64 MiB: -1.21 pp, paired [-1.52, -0.92], cluster [-1.44, -0.73]; worse on 54.
+<!-- source: none -->
+
+Both intervals lie below 0 at both capacities, so by the pre-registered rule
+the classifier router is **worse** than plain two-block read-ahead. On the
+second slice of the paper subset (C3, 19 traces with a full slice) the 1 MiB
+interval contains 0 and the 64 MiB one stays below 0
+(`results/disk/table_main.csv`, config `C3:skip=1000000`).
+
+**Is the predictor the smallest lever? Not on disk.** The pre-registered
+lever comparison (hit ratio against `sequential`; predictor `adaptive`,
+feedback `guard`, depth `deep@8`, window growth `linux_ra@256`):
+
+<!-- source: results/disk/deltas.csv config=C1 corpus=all latency=assumed metric=hit_ratio baseline=sequential capacity=2048 -->
+| Lever, 1 MiB | difference [paired] [cluster] |
+|---|---|
+| predictor (`adaptive`) | -0.94 pp [-1.31, -0.58] [-1.25, -0.33] |
+| feedback (`guard`) | -0.46 pp [-0.73, -0.14] [-0.80, +0.02] |
+| depth (`deep@8`) | +4.32 pp [+3.05, +5.62] [+2.23, +5.53] |
+| window growth (`linux_ra@256`) | +21.91 pp [+17.75, +26.38] [+13.69, +25.56] |
+<!-- source: none -->
+
+<!-- source: results/disk/deltas.csv config=C1 corpus=all latency=assumed metric=hit_ratio baseline=sequential capacity=131072 -->
+The predictor is smaller than depth and window growth at both capacities.
+It cannot be ordered against feedback at 1 MiB (the intervals of |D|
+overlap), and at 64 MiB feedback is the *smaller* lever (`guard` -0.22 pp
+[-0.30, -0.16], cluster [-0.39, -0.10], against the predictor's
+[-1.52, -0.92]). The sentence "the predictor is the smallest lever" is
+therefore not written for the disk study.
+<!-- source: none -->
+
+**The gate at the break-even cost model.** At break-even 1.0101 `guard` and
+`depth_adaptive` were identical on all 112 trace-capacity pairs (validity gate
+2, `results/disk/provenance.json`), confirming D14.1. There the gate is a
+waste limiter, not a hit-ratio policy:
+
+<!-- source: results/disk/deltas.csv config=C1 corpus=all capacity=2048 latency=break_even metric=hit_ratio policy=guard baseline=sequential -->
+it is 1.65 pp below `sequential` at 1 MiB (paired [-2.61, -0.96]).
+<!-- source: none -->
+
+## D21. The real-device testbed: what a simulated hit ratio does and does not predict (E0, E3)
+
+**Why it exists.** Every number up to D20 is simulated, and the simulator
+assumes a prefetch completes instantly and costs nothing. `adaptive_prefetch.
+realio` replays a trace prefix on a real device with the simulator's own
+decisions, so the gap between simulated and real can be measured rather than
+argued.
+
+**How it stays honest.**
+
+- The simulator decides; the testbed does I/O. `record_plan` runs
+  `replay_stream` once with a recording cache (`cache_factory`), so every mode
+  runs on the device with no policy re-implemented.
+- **Backend B** (user-space LRU over `O_DIRECT`, prefetch on 4 threads)
+  asserts on every request that its hit/miss sequence equals the plan's.
+  Parity held on every Backend B run (126 HDD and 24 SSD runs in
+  `results/realio/realio.csv`), so its timings differ from the simulator
+  only by what the simulator assumes away: late prefetches and contention.
+- **Backend A** (kernel page cache in a memory cgroup, prefetch as chunked
+  `POSIX_FADV_WILLNEED`) measures the real kernel; its hit ratio is a
+  measured divergence (MGLRU, 4 KiB pages), never matched. `kernel_ra` and
+  `kernel_seq` measure the kernel's own read-ahead.
+- Kernel facts the testbed depends on, each measured on kernel 6.14: one
+  WILLNEED call is truncated to 256 KiB, so hints are chunked; a page already
+  charged to another cgroup is not re-charged, so the whole backing file is
+  dropped with `FADV_DONTNEED` before every run; `cachestat(2)` plus a
+  `preadv2(RWF_NOWAIT)` probe separate ready hits, late hits and misses.
+- Each run is a fresh child process, the drive cache is displaced first, runs
+  are shuffled within a cell, 3 repeats, and a run starts only when the load
+  average is at most 32. HDD rows with foreign I/O above 1% are not used.
+
+**What E3 measured** (20,000-request prefixes of 5 traces, 32 MiB cache;
+`results/realio/realio_summary.csv`; HDD `sdb` is the headline device):
+
+- **Highest simulated hit ratio was never the lowest measured latency.** In
+  none of the 16 cells (device, backend, think model, trace) did the mode
+  with the highest simulated hit ratio have the lowest mean latency. `none`
+  itself was fastest in 6 of them.
+- On the HDD in the closed loop, Backend B, `deep@64` (the best simulated
+  hit ratio in four of the five traces) *raised* mean latency relative to
+  `none` on fiu_homes, msr_hm_0 and msr_prn_0 (interval entirely above 0).
+- Ranking (R2): across modes, the Spearman correlation of simulated hit
+  ratio with measured mean latency never reached the pre-registered 5%
+  critical value (`results/realio/PREREGISTERED.md` section 4) in any HDD
+  cell. Simulated `IOCostModel` device time did
+  better but not reliably: it ranked consistently on fiu_homes (both
+  backends) and *against* measured latency on msr_hm_0 under the spread
+  think model.
+
+<!-- source: results/realio/realio_summary.csv device=sdb trace=fiu_homes-110108-112108 think=closed -->
+  On fiu_homes the device-time correlations are 0.857 (Backend B) and
+  0.976 (Backend A).
+<!-- source: none -->
+
+- The kernel's own read-ahead (`kernel_ra`) was the fastest mode in 2 of the
+  5 HDD page-cache closed-loop cells.
+- SSD rows are secondary and two traces only; the SSD carries other tenants'
+  I/O, and every SSD row reports `foreign_io_frac`.
+
+Stated per trace, think model and device (honesty constraint 15), never as a
+property of HDDs or SSDs. The paper's real-device section (T3, F5) carries
+the per-cell numbers.
+
+**What this changes.** Hit ratio is a cache statistic. On a seek-dominated
+device the latency a requester sees depends on how many I/Os a policy issues,
+whether its prefetches finish before they are needed, and whether they queue
+in front of demand reads. The disk study therefore reports device work beside
+every hit ratio (D18), and makes no latency claim from simulation.

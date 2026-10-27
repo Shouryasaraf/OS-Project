@@ -1,5 +1,14 @@
 # Classifier, LSTM, and pipeline — findings
 
+> **Status on `master`.** This record is current for the trained classifier on
+> **synthetic** windows and is kept as written on branch `main`. Its figures
+> come from `python -m adaptive_prefetch evaluate`, `main.py` and the
+> MSRC-trace-003 runs, which write to `outputs/`, not `results/`; regenerate
+> them with those commands before quoting any. The multi-corpus results that
+> supersede its real-trace conclusions are `docs/DECISIONS.md` D18-D21.
+
+<!-- doc-numbers: off (classifier and LSTM figures from `adaptive_prefetch evaluate`, `main.py` and the MSRC-trace-003 runs on branch main; synthetic windows; written to outputs/, not results/) -->
+
 All numbers below were produced by the commands in this repository, with
 disjoint train/test seeds. Regenerate anything here before presenting it.
 

@@ -1,5 +1,10 @@
 # Implementation — Stage 3 (Final Version)
 
+> **Status on `master`.** An executed historical work plan from branch
+> `main`, kept for the record. The current plan is `docs/MASTER_PLAN.md`.
+
+<!-- doc-numbers: off (executed work plan from branch main; its figures are from that time) -->
+
 Closes **every** gap in the checklist and delivers the "final version" =
 full functionality per the OS Lab Submission 2 (Review 1 PDF) spec, on top
 of the completed Review 2 prototype. Design rationale for each item lives in

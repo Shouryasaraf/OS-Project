@@ -1,5 +1,10 @@
 # Implementation Plan — Stage 2 (delivers "Operating Systems Lab Submission 2" spec)
 
+> **Status on `master`.** An executed historical work plan from branch
+> `main`, kept for the record. The current plan is `docs/MASTER_PLAN.md`.
+
+<!-- doc-numbers: off (executed work plan from branch main; its figures are from that time) -->
+
 Source of truth: [`Operating Systems Lab Submission 2.pdf`](reference/Operating%20Systems%20Lab%20Submission%202.pdf) (Project Review 1).
 Goal of Stage 2: **actually build and prove what the PDF promises** — classify
 access pattern in real time, switch prefetch policy per class, learn online, and
