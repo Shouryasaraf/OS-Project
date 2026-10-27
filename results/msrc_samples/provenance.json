@@ -1,0 +1,67 @@
+{
+  "format": "prefetch_common.provenance/1",
+  "study": "msrc_samples",
+  "command": [
+    "python",
+    "reproduce.py",
+    "msrc"
+  ],
+  "git_sha": "9b8410bcea108fa69a34d696e6e72f2602b73c4a",
+  "git_dirty": false,
+  "created_utc": "2026-10-27T04:35:51+00:00",
+  "host": {
+    "hostname": "antpc",
+    "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+    "kernel": "6.14.0-37-generic",
+    "python": "3.12.3",
+    "cpu_count": 128
+  },
+  "load_avg": {
+    "start": [
+      82.9,
+      99.47,
+      96.44
+    ],
+    "end": [
+      100.6,
+      96.97,
+      95.68
+    ]
+  },
+  "wall_s": 340.264,
+  "gpu": null,
+  "inputs": {
+    "data/samples/msrc/rsrch_1.revised": "96d0df9f5cc86563d32e2eb10e9a00629517840ab29b500c98a77309df76ca49",
+    "data/samples/msrc/rsrch_2.revised": "0a46e7e4bb5931585f66d999edef4128ec9f0f9b32a909ab4ab34ff9652d584a",
+    "data/samples/msrc/wdev_1.revised": "8a13ae1ce6562dc27491fa63de2ab2d6801b5f1f177a3d29314c2817ca521fad",
+    "data/samples/msrc/wdev_2.revised": "70b50be19faf5d9bfa360c3989e7283229c5108795590468e4af5d32084d05a9",
+    "data/samples/msrc/wdev_3.revised": "ce805d3f3e8d88c069f8349801ac66845dddae9d136c8b0638a33b5348127399",
+    "data/samples/msrc/web_1.revised": "03d1088901dc561c1d0f5b118c420d08168a5d04355092007cf354e4a4c2e2ac",
+    "data/samples/msrc/web_3.revised": "4384a047b3f139f5e2fcda74d94e665cf2cce1204eb7a58c181bfaec5c2a0c92"
+  },
+  "outputs": {
+    "PREREGISTERED.md": "6581d964e528a02ed41ebd36699afac3f9bf42760f9ac99fe9c719b1966042b3",
+    "README.md": "d261f5fe7c0ee765730ec81b01c9e347c57c100f886867dac52cf9377ed513e0",
+    "classifier_deltas.csv": "4353d5ac7beacb671eb2922771dd2a3e1351bc0dc2c9bb20f3859b723af0e2a4",
+    "classifier_metrics.csv": "b745a72c47d1bbf33403450f5845bf52a14e3495cfdc7cadd224bce7d8bf4988",
+    "replay.csv": "b60aabdc04a9f48bdf887a9199f3d792f510148a8d38bbc7882261aa81d730bb",
+    "traces.csv": "82a5bfc3fa79b07b460f6e150b34575ecbc65341980e5d46b8dbb4a08c6b765e"
+  },
+  "notes": "E7: labelled-window transfer check and sanity replay on the size-selected MSRC light sample; see PREREGISTERED.md (A1: 7 traces, LOFO)",
+  "extra": {
+    "bootstrap_backend": "numpy",
+    "reps": 2000,
+    "seed": 42,
+    "sklearn": "1.9.1",
+    "workers": 8,
+    "traces": [
+      "rsrch_1",
+      "rsrch_2",
+      "wdev_1",
+      "wdev_2",
+      "wdev_3",
+      "web_1",
+      "web_3"
+    ]
+  }
+}

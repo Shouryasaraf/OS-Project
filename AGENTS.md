@@ -64,7 +64,7 @@ of it). How components work: `docs/architecture.md`. Metric definitions:
 ## Commands
 
 ```bash
-PYTHONPATH=src .venv/bin/python -m unittest discover -s tests   # 609 tests at this commit, about 115 s on a quiet host
+PYTHONPATH=src .venv/bin/python -m unittest discover -s tests   # 627 tests at this commit, about 105 s (290 s on a loaded host)
 PYTHONPATH=src python3 -m unittest discover -s tests            # stdlib only; web/GPU tests skip
 PYTHONPATH=src .venv/bin/python -m unittest tests.test_project.SimulatorTests   # one class
 python3 tools/check_doc_numbers.py        # every number in the docs is in results/
@@ -507,6 +507,19 @@ What the experiments found (details and figures: `docs/DECISIONS.md` D18-D21,
   prefetches without a detectable utility difference.
 - **Live (E6, `results/live/`).** Every pass valid, zero parity mismatches;
   measured waits are on loopback with an emulated network.
+- **MSRC light sample (E7, `results/msrc_samples/`).** Seven size-selected
+  MSRC-trace-003 `.revised` files (`data/samples/msrc/`), not representative,
+  so nothing there is a benchmark claim. The `seq` flag is effectively an
+  address-contiguity flag, so agreement with it measures contiguity recovery,
+  not workload recognition; only `web_3` and `web_1` have enough sequential
+  windows for a verdict. No synthetic-trained family is clearly better than
+  GNB on that label (shipped QDA is the closest); real same-host training
+  data, not a better algorithm, is where the headroom is; in replay the gain
+  comes from `linux_ra`. Writes are write-allocated in the `.revised` loader
+  (a `native` view and a `writes_as_reads` sensitivity view). **The classifier
+  study's paper integration must cover E7 alongside the classifier zoo, the
+  hindsight router and the web rankers** (its PREREGISTERED.md rules, its
+  README citations in `paper/refs_MSRC.bib`).
 - **Open items.** The paper's page count (estimated, not compiled) and the
   authors' e-mail placeholder in `paper/main.tex` await an Overleaf build.
   The C2 best depths are descriptive argmaxes (`deltas.csv` has no
