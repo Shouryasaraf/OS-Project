@@ -68,7 +68,8 @@ Balanced accuracy, `seq` vs `not_seq`, as `est [lo, hi]`:
   synthetic-trained classifiers transfer on `web_3` and `web_1`. The RBF
   SVM passes only barely (0.505 and 0.504), because it calls nearly every
   real window `sequential` (4,991 of 5,027 on `web_1`).
-- **No family is clearly better than the shipped GNB.** Against GNB
+- **QDA is better than the shipped GNB on `web_3` and pooled; no family is
+  better on every scope.** Against GNB
   (`classifier_deltas.csv`), the shipped QDA is *better* on `web_3` (+0.026
   [+0.017, +0.035]) and pooled (+0.025 [+0.019, +0.029]), with no difference
   detected on `web_1` (+0.010 [-0.005, +0.019]). sklearn GaussianNB, logistic, the
@@ -143,8 +144,8 @@ convention). The hit ratios do not depend on the cost model for these modes.
 ## Answer to "GNB shows no real benefit: which classifier is best?"
 
 On these seven size-selected traces, no classifier family trained on
-synthetic windows is clearly better than the shipped GNB on the only real
-label available. QDA is better by about 0.025 balanced accuracy on `web_3`
+synthetic windows is better than the shipped GNB on every scope of the only
+real label available. QDA is better by about 0.025 balanced accuracy on `web_3`
 and pooled, with no difference detected on `web_1`. The flag itself is an
 address-contiguity rule, and in replay the classifier-routed `adaptive` mode
 is not where the hit ratio or the device-I/O savings come from: `linux_ra`

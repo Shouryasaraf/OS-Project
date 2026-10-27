@@ -6,9 +6,9 @@
     "reproduce.py",
     "msrc"
   ],
-  "git_sha": "9b8410bcea108fa69a34d696e6e72f2602b73c4a",
-  "git_dirty": false,
-  "created_utc": "2026-10-27T04:35:51+00:00",
+  "git_sha": "739b599710d672ab3b10c301b99a77fb4d9cc600",
+  "git_dirty": true,
+  "created_utc": "2026-10-27T06:33:24+00:00",
   "host": {
     "hostname": "antpc",
     "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
@@ -18,17 +18,17 @@
   },
   "load_avg": {
     "start": [
-      82.9,
-      99.47,
-      96.44
+      4.84,
+      6.93,
+      7.28
     ],
     "end": [
-      100.6,
-      96.97,
-      95.68
+      8.62,
+      7.31,
+      7.34
     ]
   },
-  "wall_s": 340.264,
+  "wall_s": 170.338,
   "gpu": null,
   "inputs": {
     "data/samples/msrc/rsrch_1.revised": "96d0df9f5cc86563d32e2eb10e9a00629517840ab29b500c98a77309df76ca49",
@@ -41,7 +41,7 @@
   },
   "outputs": {
     "PREREGISTERED.md": "6581d964e528a02ed41ebd36699afac3f9bf42760f9ac99fe9c719b1966042b3",
-    "README.md": "d261f5fe7c0ee765730ec81b01c9e347c57c100f886867dac52cf9377ed513e0",
+    "README.md": "4f7745ced4606799f65a297bf03ef92011d9788be792c9568c0d38aee3106bd3",
     "classifier_deltas.csv": "4353d5ac7beacb671eb2922771dd2a3e1351bc0dc2c9bb20f3859b723af0e2a4",
     "classifier_metrics.csv": "b745a72c47d1bbf33403450f5845bf52a14e3495cfdc7cadd224bce7d8bf4988",
     "replay.csv": "b60aabdc04a9f48bdf887a9199f3d792f510148a8d38bbc7882261aa81d730bb",

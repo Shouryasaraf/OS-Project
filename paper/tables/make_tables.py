@@ -950,7 +950,8 @@ def t13_web_rankers(results, out):
                "eligible next views, and the K1 difference in MRR@8 from the shipped logistic "
                "ranker. K3: each scorer's validated adaptive controller minus logistic's, "
                "$\\Delta$U(c) per view at the pre-registered c. K4: fixed depth 1 minus transition top-1; K5: fixed "
-               "depth 4 minus online counts; $\\Delta$ hit ratio. All $\\Delta$ in pp with "
+               "depth 4 minus online counts; $\\Delta$ hit ratio. Every $\\Delta$ is a difference "
+               "of percentages (points of hit ratio, MRR@8 or U(c) per view, as the levels) with "
                "paired session-bootstrap intervals; $^{+}$/$^{-}$ better/worse. Scoring time "
                "per request is wall time on a contended shared host, never a cost.")
     comparisons = results.rows("web_rankers/comparisons.csv", out)
