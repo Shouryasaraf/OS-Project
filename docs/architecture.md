@@ -48,11 +48,12 @@ data/block-traces/*.oracleGeneral.zst             data/raw/events.csv (SHA-pinne
   trace.iter_oracle_chunks (unit detection,         data.prepare: dedup, 30-min sessions,
   FIU page merge, volume-tag mask)                   4 chronological splits, causal context
         |                                                  |
-  Request(timestamp_ms, lba, size_blocks, op)       view rows (session, position, item, next_item)
+  Request(timestamp_ms, lba, size_blocks, ...)      view rows (session, position, item, next_item)
         |                                                  |
   simulator.replay / replay_stream                  scorers: logistic | trans_s0 | trans_prior
    - per-request predictors (stride, markov,          | trans_online (OnlineIndex) | seq (GRU)
-     lstm, linux_ra, learned_depth)                        |
+     lstm, learned_depth)                                  |
+   - cache-aware: linux_ra (observe, CacheView)            |
    - window router (adaptive, adaptive_evidence)    cachecore.Policy / FeedbackGate -> depth
    - feedback gate (guard, depth_adaptive,                 |
      correlate) -> read-ahead depth                 cachecore.Cache (per session, LRU,

@@ -72,14 +72,16 @@ is worth running at cost `c` exactly when its `U(c)` beats no prefetching.
 
 | Metric | Definition |
 |---|---|
-| **coverage@K** | share of eligible next views (the session has a next view) whose item is in the scorer's top K; `results/web/freshness.csv` reports it per candidate index (split 0, splits 0-1, online) |
+| **coverage@K** | share of eligible next views (the session has a next view) whose item is in the scorer's top K; `results/web/freshness.csv` reports it per candidate index (split 0, splits 0-2, online) |
 | **hit@1, MRR@8** | the usual ranking scores of the next view |
 | **novel hit@1, novel recall@8** | the same, counted only on next views that are **not** an item seen earlier in the session (P14). A ranker can score well on hit@1 by predicting back-navigation, which the cache already holds; the novel versions measure what a prefetch can add. |
 
-Ranking scores are not cache utility. A model with a better hit@1 can still
-give a lower cache hit ratio (E5 found exactly that for the GRU against
-online transition counts; `results/web/decomposition.csv`, row
-`sequence_model`). Compare sequence models on the `novel_*` columns.
+Ranking scores are not cache utility, so rankers are compared by the cache
+outcome of the same policy (for the GRU against online transition counts,
+`results/web/decomposition.csv`, row `sequence_model`). The GRU's history
+mask never ranks an item already in the window, so its `hit_at_1` and
+`mrr_at_8` are not comparable with an unmasked ranker's; compare sequence
+models on the `novel_*` columns.
 
 ## Measured latency (real systems)
 

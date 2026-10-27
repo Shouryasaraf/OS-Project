@@ -9,7 +9,9 @@
 > run's committed outputs are kept verbatim in
 > [`results/pivot_original/`](../../results/pivot_original/), and the tests are
 > `tests/test_web_*.py`. Numbers quoted below are from that pivot run and have
-> not been regenerated on `master`.
+> not been regenerated on `master`. Several of its conclusions (selection at
+> one capacity, the "coverage ceiling") are corrected in
+> [`WEB_DECISIONS.md`](WEB_DECISIONS.md) W1-W2.
 
 This project replays real RetailRocket product-view sessions and simulates a per-session object cache. It learns candidates from the oldest time partition, trains a logistic ranker on the next partition, selects controllers on validation, and evaluates frozen choices on the newest test period. Its outcomes are simulated cache hits and speculative requests. **No page-load speedup, byte cost, or network latency is measured.**
 

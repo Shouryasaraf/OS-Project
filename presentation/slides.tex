@@ -146,9 +146,10 @@ Vellore Institute of Technology, Vellore, India}
       \fig[0.55\textheight]{f1_schematic.pdf}
     \end{column}
   \end{columns}
-  \note{Same requests, cache and warm-up for every policy. Replacing the
-  future with random requests leaves every prefix outcome unchanged; the
-  streamed replay equals the in-memory one bit for bit.}
+  \note{Same requests, cache and warm-up for every policy. For the Linux
+  read-ahead policy and the learned depth model the tests replace the future
+  with random requests and get every prefix outcome unchanged; the streamed
+  replay equals the in-memory one bit for bit.}
 \end{frame}
 
 % ---------------------------------------------------------------- 6
@@ -242,8 +243,9 @@ Vellore Institute of Technology, Vellore, India}
       \fig{f4_kappa_cdf.pdf}
     \end{column}
   \end{columns}
-  \note{The vertical lines are the two drives we calibrated. The Linux-style
-  window is cheaper than doing nothing on both; fixed depth 8 almost never.}
+  \note{The vertical lines are the two drives we calibrated. At 1\,MiB the
+  Linux-style window is cheaper than doing nothing on both, on almost every
+  trace; fixed depth 8 on very few (DECISIONS D18).}
 \end{frame}
 
 % ---------------------------------------------------------------- 10
@@ -362,9 +364,9 @@ Vellore Institute of Technology, Vellore, India}
     \end{column}
   \end{columns}
   \note{Each emulated browser's cache is the simulator's cache class, so the
-  counts must match exactly, and they did. With a FIFO link, deep
-  prefetching's saving disappeared into the queue in front of demand fetches
-  (W4).}
+  counts must match exactly, and they did. With a FIFO link (SSD store, one
+  repetition) depth 8's saving was no longer detectable: speculative bytes
+  queued in front of demand fetches (W4).}
 \end{frame}
 
 % ---------------------------------------------------------------- 15

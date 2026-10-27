@@ -6,8 +6,8 @@ import csv
 import random
 from pathlib import Path
 
-from .features import FEATURE_NAMES, extract
 from .datasets import is_aggregate
+from .features import FEATURE_NAMES, extract
 from .model import DEFAULT_CLASSIFIER, make_classifier
 from .simulator import DEFAULT_CAPACITY, LatencyModel, replay
 from .trace import (CLASSES, Request, synthetic_dataset, synthetic_window,

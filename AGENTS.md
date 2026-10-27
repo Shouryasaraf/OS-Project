@@ -214,6 +214,10 @@ predictor is stateful; each replay needs a fresh one.
   reuses a cached artifact only when its training record (seeds disjoint
   from the benchmark, `LSTM_TRAIN_KW` including `val_fraction`) and the
   artifact's SHA-256 both match; otherwise it retrains.
+- Benchmark rows carry private `_read_blocks`, `_prefetchable_misses`,
+  `_total_latency_us`, `_inference_calls`, `_total_inference_us` and
+  `_requests` keys that `aggregate_results` depends on; `write_results_csv`
+  strips them via `COLUMNS`.
 
 ### Feedback gate
 
@@ -255,6 +259,10 @@ predictor is stateful; each replay needs a fresh one.
 - `replay(..., online_updates=True)` raises unless `labels` covers every
   complete window; on real traces the model is frozen. `--online-real` /
   `adaptive_pseudo` self-trains and is not accuracy evidence.
+- `adaptive_evidence` (`simulator.route_window`) routes on the window's own
+  contiguity, repeated stride and jumpiness and needs **no trained model**.
+- `Request.pattern` holds the `.revised` trace's own `seq`/`rand` flag. It is
+  for ground-truth scoring **only**; routing on it is not a result.
 - `FEATURE_NAMES` is 12: 8 stream features plus 4 contextual ones from
   `features.WindowContext`, whose block-age table is LRU-bounded
   (`DEFAULT_AGE_TABLE_BOUND`; `Metrics.age_table_evictions` says when the
@@ -293,6 +301,13 @@ canonical requests; a slice that cannot be filled is a `skipped: n/a` row,
 never a short slice. `corpora.PAPER_SUBSET` has 21 stems;
 `corpora.TWIN_GROUPS` lists the near-duplicate families the cluster bootstrap
 down-weights.
+
+The CSV loaders: `auto` detects a profile by column name only, so headerless
+`iotta8` and `.revised` files need an explicit `--format`. Loaders reject
+timestamps that go backwards and report the offending line; the MSR loader
+first re-sorts by raw `Timestamp`, because merged samples concatenate hosts.
+The committed `data/samples/` traces are small and their provenance is
+unverified (`data/samples/README.md`).
 
 ### Defaults the tests pin
 
