@@ -432,6 +432,15 @@ def run(args: argparse.Namespace) -> int:
     timings["cpu_s_replays"] = round(sum(item["wall_s"] for item in done.values()), 1)
 
     if not quick:
+        extra_previous = {}
+        previous = results / "provenance.json"
+        if not tasks and args.part == "router" and previous.is_file():
+            # A cached re-run (e.g. after a docs-only change in this
+            # directory) computed nothing: keep the computing run's timing.
+            record = json.loads(previous.read_text())
+            extra_previous = {"computing_run": record.get("extra", {}).get("computing_run") or {
+                key: record.get(key) for key in ("created_utc", "wall_s", "load_avg", "git_sha")}
+                | {"timings_s": record.get("extra", {}).get("timings_s")}}
         inputs = [REPO / "results" / "disk" / "sweep.jsonl"] + [found[t] for t in traces]
         provenance.write_provenance(
             results, ["python", "reproduce.py", "classifier"], inputs, start=start,
@@ -443,7 +452,7 @@ def run(args: argparse.Namespace) -> int:
                    "n_candidates": n_candidates, "reps": reps,
                    "distinct_replays": len([k for k in done if k[0] == "labels"]),
                    "selected_baseline_params": {f: chosen[("baseline", f)]["params"]
-                                                for f in zoo.FAMILIES}})
+                                                for f in zoo.FAMILIES}, **extra_previous})
         problems = provenance.verify_provenance(results)
         if problems:
             log(f"provenance problems: {problems}")
