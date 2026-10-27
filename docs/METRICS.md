@@ -98,7 +98,7 @@ models on the `novel_*` columns.
 
 The hindsight `oracle_*` rows replay the slice's own hindsight labels: a
 reference under the trajectory approximation, never a policy and not a true
-ceiling (it falls below VCF at 64 MiB). The web rankers (`results/web_rankers/`)
+ceiling (it does not beat VCF at 64 MiB). The web rankers (`results/web_rankers/`)
 use the ranking metrics above, over the same eligible next views as E4.
 
 ## Measured latency (real systems)

@@ -382,12 +382,14 @@ Vellore Institute of Technology, Vellore, India}
               \pnum{decClfOneMlpSixtyFourMiBPairedCI}); device I/Os
               \pnum{clfRouterIORatioMinOneMiB}--\pnum{clfRouterIORatioMaxOneMiB}
               of \texttt{none}'s
-        \item depth as an action, hindsight labels: vs a fixed depth chosen per
-              trace, \pnum{decHsrHOneHitRatioRoutedHitVsVcfHitOneMiBPairedCI}
-              (\pnum{decHsrHOneHitRatioRoutedHitVsVcfHitOneMiBVerdict})
+        \item depth as an action, hindsight labels: vs a fixed action chosen
+              per trace, \pnum{decHsrHOneHitRatioRoutedHitVsVcfHitOneMiBPairedCI}
+              at 1\,MiB (\pnum{decHsrHOneHitRatioRoutedHitVsVcfHitOneMiBVerdict}),
+              at \pnum{hsrMovedRatioRoutedHitOneMiB} \texttt{none}'s blocks
         \item web: tuned MLP ranker raises the controller's $U(c)$ by
-              \pnum{decWrkSOneMlpUtilityPerViewCapEightCI}, still below online
-              counts (\pnum{decWrkKFiveMlpHitRatioCapEightCI} hit ratio)
+              \pnum{decWrkSOneMlpUtilityPerViewCapEightCI} (capacity 8), still
+              below online counts
+              (\pnum{decWrkKFiveMlpUtilityPerViewCapEightCI} in $U(c)$)
       \end{itemize}
     \end{column}
     \begin{column}{0.54\textwidth}
@@ -395,9 +397,9 @@ Vellore Institute of Technology, Vellore, India}
     \end{column}
   \end{columns}
   \note{The router's four classes each prefetch at most two blocks, so any
-  classifier is capped near sequential; the classifiers disagree with GNB on
-  most windows yet the hit ratio barely moves. Give a router depth as an
-  action and it only matches a fixed depth chosen per trace. On the web a
+  classifier is capped near sequential; the classifiers route many windows
+  differently from GNB, yet the hit ratio barely moves. Give a router depth
+  as an action and it does not beat a fixed action chosen per trace. On the web a
   better ranker helps a little; freshness still decides (D22, W5).}
 \end{frame}
 

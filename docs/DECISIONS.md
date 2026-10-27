@@ -1349,7 +1349,8 @@ training or validation data, and each test set was scored once.
   by a negligible margin at 64 MiB, where VCF is `deep@256` on every trace.
 <!-- source: results/hindsight/summary.csv policy=routed_hit -->
 - Its gains over `sequential` and `adaptive` are the gains of depth, and it
-  moves 3.649 and 2.795 times the blocks of `none`.
+  moves 3.649 and 2.795 times the blocks of `none` with 1.074 and 1.375
+  times its device I/Os.
 <!-- source: results/hindsight/summary.csv policy=routed_dev -->
 - The device-objective router issues fewer device I/Os than `none` (0.976
   and 0.956), but `linux_ra@256` does better still.
@@ -1359,17 +1360,25 @@ training or validation data, and each test set was scored once.
   beat VCF either: the limit is what a per-window choice adds over a
   per-trace fixed depth, not the classifier.
 - Synthetic Part 1 (`results/classifier/synthetic_eval.csv`): under the
-  block-size covariate shift the tree models and boosting match GNB and the
-  scale-sensitive families lose; on the 75% phase blend trees and boosting
-  beat GNB by a wide margin, an optimistic synthetic figure (each window's
+  block-size covariate shift CART, the random forest and HGB show no
+  difference detected against GNB at every request size (extra trees is
+  worse at 1->8, the MLP at 1->32 and 1->128) and the scale-sensitive
+  families are worse; on the 75% phase blend trees and boosting are better
+  than GNB by a wide margin, an optimistic synthetic figure (each window's
   context comes from earlier windows of the same class).
-- E7: the `seq` flag is an address-contiguity flag, no synthetic-trained
-  family is clearly better than GNB on it, and in replay the gain comes from
-  `linux_ra` (`results/msrc_samples/README.md`).
+- E7: the `seq` flag is an address-contiguity flag; against GNB on it the
+  shipped QDA is better on `web_3` and pooled (no difference detected on
+  `web_1`), no scikit-learn family is better on `web_1`, `web_3` and pooled
+  together, and in replay the gain comes from `linux_ra`
+  (`results/msrc_samples/README.md`).
 
-**What this changes.** D1's choice of GNB stands as the right choice for its
-action space, but it no longer matters: the four-class router prefetches at
-most two blocks, so no classifier can beat read-ahead with it. The paper's
+**What this changes.** D1's reason for GNB (it survives the block-size
+shift that breaks QDA) still holds against the scale-sensitive families, but
+CART, the random forest and HGB survive it as well on synthetic windows, and
+on real traces the random forest (1 MiB) and 8 of 14 alternatives (64 MiB)
+route better than the shipped GNB. The choice no longer matters much: the
+four-class router prefetches at most two blocks, and none of the 15
+classifiers tested beats read-ahead with it. The paper's
 section "Can a Better Learner Help?" (`paper/sections/classifier_results.tex`,
 Tables T10-T12, Fig. F9) reports this with the verdicts `paper/decisions.py`
 computes; the title stands. The CART reference is `breiman1984cart` in

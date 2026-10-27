@@ -563,16 +563,17 @@ What the experiments found (details and figures: `docs/DECISIONS.md` D18-D22,
   transition top-1 at depth 1 and all stay far below online counts.
   `docs/web/WEB_RANKERS.md`.
 - **Classifier zoo and router benchmark (track CLF, `results/classifier/`,
-  after E1-E6).** On synthetic windows the tree models and boosting match GNB
-  under the block-size shift and beat it on heavy phase blends (synthetic and
-  optimistic). Routed through `adaptive` on C3 slice 2, no classifier beats
+  after E1-E6).** On synthetic windows CART, the random forest and boosting
+  show no difference detected against GNB under the block-size shift (extra
+  trees is worse at one size) and are better on heavy phase blends (synthetic
+  and optimistic). Routed through `adaptive` on C3 slice 2, no classifier beats
   `sequential` (no difference detected at 1 MiB, worse at 64 MiB), every one
   issues more device I/Os than `none`, and only small gains over the shipped
   GNB exist (`rf` at 1 MiB, 8 of 14 at 64 MiB). The four-class action space
   caps any classifier. D22.
 - **Hindsight router (track HSR, `results/hindsight/`, after E1-E6).** The
-  `routed` mode with depth in its action space is level with the per-trace
-  validation-chosen fixed action at 1 MiB and worse by a negligible margin
+  `routed` mode with depth in its action space shows no difference detected
+  against the per-trace validation-chosen fixed action at 1 MiB and worse by a negligible margin
   at 64 MiB; its gain over `sequential` is depth's and moves several times
   the blocks; `linux_ra@256` does the least device work; GNB has the lowest
   grouped-CV score but replacing it does not beat VCF. The trajectory oracle
@@ -584,9 +585,10 @@ What the experiments found (details and figures: `docs/DECISIONS.md` D18-D22,
   so nothing there is a benchmark claim. The `seq` flag is effectively an
   address-contiguity flag, so agreement with it measures contiguity recovery,
   not workload recognition; only `web_3` and `web_1` have enough sequential
-  windows for a verdict. No synthetic-trained family is clearly better than
-  GNB on that label (shipped QDA is the closest); real same-host training
-  data, not a better algorithm, is where the headroom is; in replay the gain
+  windows for a verdict. Against GNB on that label the shipped QDA is better
+  on `web_3` and pooled (no difference detected on `web_1`) and no
+  scikit-learn family is better on all three; real same-host training data,
+  not a better algorithm, is where the headroom is (descriptive); in replay the gain
   comes from `linux_ra`. Writes are write-allocated in the `.revised` loader
   (a `native` view and a `writes_as_reads` sensitivity view). The paper
   reports it in the appendix only (M1/M2 tallies in Table T9).

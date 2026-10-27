@@ -269,18 +269,19 @@ front of demand fetches. With demand priority it saved time (W4).
 **On the slide:** the three follow-up studies, pre-registered after E1-E6
 were known. The tuned classifiers in the router beat `sequential` at neither
 capacity and all issue more device I/Os than `none`; a router given depth as
-an action is level with a fixed depth chosen per trace (1 MiB) and worse by a
-negligible margin (64 MiB); a tuned MLP ranker raises the web controller's
+an action shows no difference detected against a fixed action chosen per
+trace (1 MiB) and is worse by a negligible margin (64 MiB); a tuned MLP ranker raises the web controller's
 utility slightly but stays far below online counts. All figures are macros
 from `paper/numbers.tex` (`\pnum`).
 
 **Say:** The obvious objection to our disk result is "use a better
 classifier". We tried thirteen tuned families. None helped the router beat
 two-block read-ahead, because the router's four classes each prefetch at
-most two blocks: the classifiers disagree with GNB on most windows and the
-hit ratio barely moves. When we let a router choose read-ahead depth, trained
-on what would have worked in hindsight, it matched a fixed depth chosen per
-trace and did not beat it, at several times the blocks moved; the Linux
+most two blocks: the classifiers route many windows differently from GNB
+and the hit ratio barely moves. When we let a router choose read-ahead depth, trained
+on what would have worked in hindsight, it did not beat a fixed action
+chosen per trace (no difference detected at 1 MiB, worse by a negligible
+margin at 64 MiB), at several times the blocks moved; the Linux
 window still did the least device work. On the web a better ranker helped the
 controller a little, and freshness still decided (D22, W5).
 
@@ -329,22 +330,25 @@ predictor's, so "the predictor is the smallest lever" is not written for disk
 
 **Q: Why not just use a better classifier?**
 We did (D22). Thirteen scikit-learn families, tuned by random search on
-training seeds only, replaced GNB in the router. Some beat GNB slightly (the
-random forest at 1 MiB, more families at 64 MiB), but none made the router
+training seeds only, replaced GNB in the router. Some are better than GNB by
+a little (the random forest at 1 MiB, more families at 64 MiB), but none made the router
 beat `sequential`, and every one issued more device I/Os than `none`. The
 reason is the action space: each class maps to at most two blocks of
 read-ahead, so even a perfect classifier is capped near `sequential`. We then
 gave a router read-ahead depth as an action and real-trace hindsight labels;
-it matched a fixed depth chosen per trace instead of beating it. The limit is
+it did not beat a fixed action chosen per trace. The limit is
 what the router can do, not how well it classifies. These studies were
 pre-registered after E1-E6, which we state.
 
 **Q: Then is GNB the best classifier?**
-On real-trace routing, no family is clearly best: GNB had the lowest
-cross-validation score of the hindsight families, yet the best family did no
-better than a fixed depth. On synthetic windows the tree models and boosting
-match GNB under the block-size shift and beat it on heavy phase blends, but
-those are synthetic, optimistic accuracies, never accuracy on real traces.
+No. Routing real traces, the random forest is better than the shipped GNB
+at 1 MiB and 8 of 14 alternatives are at 64 MiB, and GNB had the lowest
+cross-validation score of the hindsight families; but no routed classifier
+beats `sequential`, and the best hindsight family does not beat a fixed
+action. On synthetic windows CART, the random forest and boosting show no
+difference detected against GNB under the block-size shift and are better on
+heavy phase blends, but those are synthetic, optimistic accuracies, never
+accuracy on real traces.
 
 **Q: Did any learned predictor help?**
 One, a little: on the web, the validation-selected MLP ranker raised the

@@ -105,13 +105,14 @@ D22, W5; the paper's section "Can a Better Learner Help?"):
   GNB and QDA, each routing the unchanged `adaptive` mode on the second
   slice (C3) of 19 traces: none beats `sequential` (no
   difference detected at 1 MiB, worse at 64 MiB for every one), and every one
-  issues more device I/Os than `none`. Some beat the shipped GNB slightly
-  (the random forest at 1 MiB, 8 of 14 at 64 MiB). The router's four classes
-  prefetch at most two blocks, so the classifier cannot matter much.
+  issues more device I/Os than `none`. Some are better than the shipped GNB
+  by a little (the random forest at 1 MiB, 8 of 14 at 64 MiB). The router's
+  four classes prefetch at most two blocks, which caps what any classifier
+  can add.
 - **Depth as an action.** A router trained on real-trace hindsight labels to
-  pick `none`, `sequential` or `deep@{8,32,256}` per window is level with a
-  fixed depth chosen per trace at 1 MiB and worse by a negligible margin at
-  64 MiB; its large gain over `sequential` is the gain of depth, at several
+  pick `none`, `sequential` or `deep@{8,32,256}` per window shows no
+  difference detected against a fixed action chosen per trace at 1 MiB and is
+  worse by a negligible margin at 64 MiB; its large gain over `sequential` is the gain of depth, at several
   times the blocks moved. `linux_ra@256` still does the least device work.
 - **Web ranker.** A tuned MLP ranker improves the validated controller's
   U(0.01) slightly at capacities 8 and 32, yet no ranker beats transition
