@@ -84,8 +84,10 @@ session-bootstrap intervals as pre-registered in `results/web/PREREGISTERED.md`;
 | feedback gate vs the validated adaptive controller | -0.11 pp [-0.13, -0.10] |
 <!-- source: none -->
 
-On the web the learned ranker **is** the smallest lever, a GPU sequence model
-is worse than counting, and the validated adaptive controller beats the best
+On the web the learned ranker's effect lies below both the depth and the
+freshness levers, but the GPU sequence model's overlaps depth, so by the
+pre-registered rule 2 (which takes both predictors) the predictor is not called
+the smallest lever; the sequence model is worse than counting, and the validated adaptive controller beats the best
 fixed depth at capacities 8 and 32 at an assumed cost of 0.01 per prefetch
 (`results/web/comparisons.csv`; `docs/web/WEB_DECISIONS.md` W1-W3).
 

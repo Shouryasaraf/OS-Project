@@ -337,9 +337,10 @@ Vellore Institute of Technology, Vellore, India}
       \fig[0.55\textheight]{f6_freshness.pdf}
     \end{column}
   \end{columns}
-  \note{On the web the learned ranker is the smallest lever by the
-  pre-registered rule, and the GPU sequence model is worse than counting
-  transitions. The adaptive controller still beats the best fixed depth at
+  \note{On the web the learned ranker moves hit ratio less than depth or
+  freshness, but the GPU sequence model's effect overlaps depth, so by the
+  pre-registered rule the predictor is not called the smallest lever. The
+  sequence model is worse than counting transitions. The adaptive controller still beats the best fixed depth at
   caches 8 and 32 for an assumed cost per prefetch.}
 \end{frame}
 

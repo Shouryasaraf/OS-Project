@@ -64,7 +64,7 @@ of it). How components work: `docs/architecture.md`. Metric definitions:
 ## Commands
 
 ```bash
-PYTHONPATH=src .venv/bin/python -m unittest discover -s tests   # 582 tests at this commit, about 90 s
+PYTHONPATH=src .venv/bin/python -m unittest discover -s tests   # 602 tests at this commit, about 105 s
 PYTHONPATH=src python3 -m unittest discover -s tests            # stdlib only; web/GPU tests skip
 PYTHONPATH=src .venv/bin/python -m unittest tests.test_project.SimulatorTests   # one class
 python3 tools/check_doc_numbers.py        # every number in the docs is in results/
@@ -441,7 +441,25 @@ requests.
   `paper/`.
 - `paper/check.py` is the local gate (no LaTeX here, L6): `--strict` after
   generation, `--final` for submission (no `\todo`). It fails on a
-  hand-typed number in `sections/*.tex`.
+  hand-typed number in `sections/*.tex`, on adjacent `$$`, under `--strict`
+  on an undefined number macro, and under `--final` on a macro that prints
+  `\missingnumber`. The committed paper must pass `--final`
+  (`tests/test_paper_check.py`).
+- `paper/decisions.py` applies every `results/*/PREREGISTERED.md` rule to
+  `results/` (disk P1-P6, lever ordering, C3/C4; realio R1-R7; web W1-W8 and
+  rules 1-3; live H1-H7 on citable passes only, `genlib.live_citable`) and
+  emits the `\dec...` macros and Table T9. The prose is written from those
+  verdicts: the paper's title and every verdict sentence depend on them.
+- `tests/test_paper_decisions.py` pins the committed `numbers.tex`, tables
+  and figures byte-for-byte to a fresh regeneration from `results/`, and pins
+  the verdicts the prose relies on. **Any change to `results/` needs
+  `reproduce.py paper` and a re-read of the verdict sentences**; the test
+  fails until both are done. `test_numbers_tex_fits_tex_memory` caps the
+  size of `numbers.tex` (TeX memory on Overleaf), so trim
+  `numbers.FAMILIES` rather than raising the cap.
+- `presentation/slides.tex` uses `\pnum{...}` for systematic macros (a bold
+  ?? if `numbers.py` stops emitting one). Check it after trimming
+  `numbers.FAMILIES`.
 - `presentation/slides.tex` inputs `../paper/numbers.tex` and the paper's
   figure PDFs; `tools/check_doc_numbers.py` fails on a hand-typed figure in
   it. Compile both on Overleaf.
@@ -475,13 +493,17 @@ What the experiments found (details and figures: `docs/DECISIONS.md` D18-D21,
   cell. `learned_depth` is not in the real-device grid.
 - **Web (E4, E5, `results/web/`).** The validated adaptive controller beats
   the best fixed depth at capacities 8 and 32 at `c` = 0.01; freshness
-  (online counts) is the largest lever; the learned ranker is the smallest;
+  (online counts) is the largest lever; the learned ranker's effect lies
+  below both depth and freshness, but the GRU's overlaps depth, so by rule 2
+  (W3 and W8 together) the predictor is **not** called the smallest lever;
   the GRU is worse than online counting; the feedback gate issues fewer
   prefetches without a detectable utility difference.
 - **Live (E6, `results/live/`).** Every pass valid, zero parity mismatches;
   measured waits are on loopback with an emulated network.
-- **Open items.** `paper/README.md` does not yet describe `genlib.py` and
-  `--fixtures`. The suite prints harmless `fork()` deprecation warnings. The
+- **Open items.** The paper's page count (estimated, not compiled) and the
+  authors' e-mail placeholder in `paper/main.tex` await an Overleaf build.
+  The C2 best depths are descriptive argmaxes (`deltas.csv` has no
+  depth-vs-depth rows). The suite prints harmless `fork()` deprecation warnings. The
   `DEFAULT_READ_AHEAD_DEPTH` comment in `simulator.py` still quotes the D13
   MSRC figures.
 

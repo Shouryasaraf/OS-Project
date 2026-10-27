@@ -236,9 +236,10 @@ ranker (counting vs the trained logistic ranker) +0.07 pp; GRU vs counting
 -0.79 pp; feedback gate vs adaptive -0.11 pp.
 <!-- source: none -->
 
-**Say:** On the web the learned ranker *is* the smallest lever by the
-pre-registered rule, and a GPU sequence model trained over five seeds is
-worse than simply counting transitions. The validated adaptive controller
+**Say:** On the web the learned ranker moves hit ratio less than depth or
+freshness, but a GPU sequence model trained over five seeds overlaps depth,
+so by the pre-registered rule the predictor is not called the smallest lever;
+that sequence model is worse than simply counting transitions. The validated adaptive controller
 still beats the best fixed depth at caches 8 and 32 for an assumed cost per
 prefetch (W1, W3).
 
@@ -295,8 +296,9 @@ cost)" is the original branch's rule, kept for comparison.
 
 **Q: Your title says prediction is not what matters. Did the data support
 that everywhere?**
-No, and we say so. On the web the learned ranker is the smallest lever by
-the pre-registered rule. On disk the predictor is smaller than depth and
+No, and we say so. On the web the learned ranker is smaller than depth and
+freshness, but the sequence model overlaps depth, so the rule does not let us
+call the predictor the smallest lever. On disk the predictor is smaller than depth and
 window growth, but at 64 MiB the feedback gate's effect is smaller than the
 predictor's, so "the predictor is the smallest lever" is not written for disk
 (`docs/DECISIONS.md` D20).

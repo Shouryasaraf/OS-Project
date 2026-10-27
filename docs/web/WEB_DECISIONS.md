@@ -152,9 +152,12 @@ W3-W8), with a 95% paired session-bootstrap interval
 
 Reading them by the pre-registered rules (`results/web/PREREGISTERED.md`):
 
-- **The learned ranker is the smallest lever.** Its interval lies entirely
-  below the lower ends of both the depth and the freshness intervals, which
-  is the rule's condition. Counting transitions does at least as well as the
+- **The learned ranker's effect is smaller than depth and freshness.** Its
+  interval lies entirely below the lower ends of both the depth and the
+  freshness intervals. Rule 2 names "the learned predictor" as W3 *and* W8,
+  and the GRU's interval (next bullet) does not lie below depth's, so the
+  paper does **not** call the predictor the smallest lever
+  (`paper/decisions.py`, Table T9). Counting transitions does at least as well as the
   trained logistic ranker, which had learned mostly back-navigation (P2).
 - **The GRU sequence model is worse than counting** (W8, E5): its interval
   lies below 0. Its interval does not lie below the depth lever's, so no
