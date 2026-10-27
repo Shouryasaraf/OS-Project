@@ -1,17 +1,40 @@
-% Abstract and index terms. Written last (WP14), from the outcome of the
-% preregistered comparisons. Four claims, every number a numbers.tex macro.
-% Feeds from: all of results/ (via numbers.tex).
+% Abstract and index terms. Written from the outcome of the pre-registered
+% comparisons (paper/decisions.py; tables/t9_decisions.tex); every number is a numbers.tex
+% macro. Four claims: disk sweep, real device, web decomposition, live HTTP.
 
 \begin{abstract}
-\todo{Four claims with their numbers, each as a numbers.tex macro: the
-multi-corpus disk result, the real-device validation, the web
-decomposition and the live HTTP replay. Written from
-results/disk/deltas.csv, results/realio/realio\_summary.csv,
-results/web/decomposition.csv and results/live/live\_metrics.csv once
-E1--E6 have run.}
+Kernels and browsers both prefetch, spending device or network work now to
+hide latency later. We ask which decision moves the result, under rules fixed
+before any experiment ran. \emph{Disk (simulated):} on \diskTraces{} block
+traces from \diskCorpora{} corpora and a 1\,MiB cache, a learned workload-class
+router hit less often than plain sequential read-ahead
+(\decDiskPOneAdaptiveAssumedOneMiBPairedCI) with \diskIORatioAdaptiveOneMiB{} the
+device I/Os of no prefetching, and a GPU-trained depth controller
+less often than a validation-chosen fixed depth
+(\decDiskLearnedDepthVsVcfCapTwoHundredFiftySixPairedCI), while Linux-style
+window growth added \decDiskPFourLinuxRaAtTwoHundredFiftySixAssumedOneMiBPaired{}
+and cut device I/Os to \decDiskPFiveLinuxRaAtTwoHundredFiftySixOneMiBPaired{} of no
+prefetching's.
+\emph{Real devices (measured):} replaying the same plans on a hard disk and
+an SSD, the mode with the highest simulated hit ratio was fastest in
+\decCellsTopSimFastest{} of \decCells{} cells, and with exact cache parity
+prefetching raised the mean closed-loop latency on the hard disk in
+\decCountROneSdbOdirectClosedRaises{} of \decCountROneSdbOdirectClosed{}
+mode--trace cells.
+\emph{Web (simulated):} on RetailRocket, transition counts beat a trained
+ranker (\decWebWThreeHitRankerCI), online counts beat a GRU
+(\decWebWEightHitSequenceModelCI), and index freshness gave
+\decWebWFourHitFreshnessCI.
+\emph{Live HTTP (measured, emulated network):} every prefetching policy
+lowered the wait with a hard-disk store, by up to
+\liveSavedHddAdaptiveZeroPointOneAtTransOnline{} per view against
+\liveBaseWaitHdd{} without prefetching, with \liveParityMismatches{} parity
+mismatches. How much to fetch and how fresh the
+statistics are moved the results; no learned predictor beat its simple
+baseline, and simulated hit ratio did not predict real-disk latency.
 \end{abstract}
 
 \begin{IEEEkeywords}
 prefetching, read-ahead, page cache, storage traces, web prefetching,
-cache simulation, machine learning for systems
+cache simulation, machine learning for systems, pre-registration
 \end{IEEEkeywords}

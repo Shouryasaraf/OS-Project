@@ -1,28 +1,65 @@
-% IV. Systems. Describes code, not results. Kernel facts quoted here are
-% cited to the man pages and kernel documentation in refs.bib section G.
-% Feeds from: src/adaptive_prefetch (WP3), src/adaptive_prefetch/realio
-% (WP8), src/webprefetch (WP5), src/webprefetch/live (WP12).
+% IV. Systems. Describes code, not results. Kernel facts are cited to the
+% man pages and kernel documentation in refs.bib.
+% Sources: src/adaptive_prefetch (simulator, realio, depth_model),
+% src/webprefetch (simulator, cachecore, scorers, live).
 
 \section{Systems}\label{sec:systems}
 
 \subsection{Disk simulator and policies}\label{sec:systems-disk}
-\todo{The causal replay loop shared by every mode, the first-window
-prefetch gate, the twelve modes plus linux\_ra and learned\_depth, and
-the device-I/O accounting (WP3).}
+One causal replay loop serves every disk policy: a request first reads its
+blocks through the LRU cache, and only then may the policy prefetch for later
+requests; window-based policies never prefetch in their first window. The
+policies are \texttt{none}; \texttt{sequential} (two blocks past each
+request); \texttt{strided} and \texttt{stride} (a repeated address stride);
+\texttt{markov} (address-delta transitions); \texttt{adaptive}, a Gaussian
+naive Bayes classifier that labels each window with one of four workload
+classes and routes it to the matching policy; \texttt{adaptive\_evidence}, a
+rule-based router on the same features; three feedback-gated modes
+(\texttt{guard}, \texttt{depth\_adaptive}, \texttt{correlate}) that issue only
+while their observed precision beats the cost model's break-even;
+\texttt{deep@}$d$, fixed read-ahead of $d$ blocks; and \texttt{linux\_ra@}$w$,
+an emulation of the kernel's read-ahead window with a ceiling of $w$ blocks.
+Two modes are trained: an LSTM over bucketed address deltas, and
+\texttt{learned\_depth}, a network that every 32 requests predicts which
+read-ahead segments will be read soon and sets the depth to the deepest likely
+one. The classifier's accuracy was measured only on synthetic windows; the
+traces carry no workload labels, and we claim nothing about its accuracy on
+them.
 
 \subsection{Real Linux testbed}\label{sec:systems-realio}
-\todo{Backend A: buffered reads through the page cache with
-POSIX\_FADV\_WILLNEED hints~\cite{man_posix_fadvise} inside a memory
-cgroup~\cite{linux_cgroup_v2}. Backend B: O\_DIRECT~\cite{man_open} reads
-with asynchronous prefetch threads. The online driver. Kernel facts: the
-per-call WILLNEED truncation, the cgroup charging rule, and residency
-checks with cachestat versus RWF\_NOWAIT~\cite{man_cachestat,man_readv};
-the host kernel uses the multi-gen LRU~\cite{linux_mglru} (WP8).}
+The testbed executes the simulator's own plan on a real device: the simulator
+runs once with a recording cache, and every hit, miss and prefetch becomes an
+instruction. \emph{Backend~B} keeps a user-space LRU with the simulator's
+rules, reads misses with O\_DIRECT~\cite{man_open}, prefetches on four
+threads, and asserts on every request that its hits and misses equal the plan,
+so only timing differs. \emph{Backend~A} reads through the kernel page cache in
+a memory-limited cgroup~\cite{linux_cgroup_v2} and prefetches with
+\texttt{POSIX\_FADV\_WILLNEED}~\cite{man_posix_fadvise}, issued in chunks of at
+most 256\,KiB because the kernel truncates longer hints; its hit ratio under
+the multi-generational LRU~\cite{linux_mglru} is a measured divergence, never
+forced to match. Backend~A also measures the kernel's own read-ahead
+(\texttt{kernel\_ra}, \texttt{kernel\_seq}) and a gate run inline without a
+plan, and reads residency with \texttt{cachestat} and \texttt{RWF\_NOWAIT}
+reads~\cite{man_cachestat,man_readv}. Before every run the trace's pages are
+dropped and the drive cache is displaced; run order is shuffled.
 
 \subsection{Web replay}\label{sec:systems-web}
-\todo{Per-session LRU cache, the ranker and its scorers, the fixed and
-adaptive controllers, the online index, and the feedback gate (WP5).}
+Each session has an LRU browser cache of $C$ objects that evicts unused
+prefetched objects first. After each view a scorer ranks candidates: a
+logistic ranker, transition counts from the index split
+(\texttt{trans\_s0}), causal online counts updated as the test split replays
+(\texttt{trans\_online}), or a GRU~\cite{hidasi2016session}. A controller
+turns the ranking into fetches: \texttt{fixed}$k$ takes the top $k$;
+\texttt{adaptive} picks the depth in $\{0,1,2,4,8\}$ that maximises the summed
+predicted probability minus a per-fetch penalty (\texttt{adaptive\_ca} after
+dropping resident items); \texttt{gate} fetches two items above a confidence
+threshold; and \texttt{feedback} fetches only where the observed precision of
+a (rank, score-bin) bucket exceeds $c$, exploring with probability $\epsilon$.
 
 \subsection{Live HTTP replay}\label{sec:systems-live}
-\todo{The asyncio origin, the precise timer, the priority link and the
-validity gate (WP12).}
+An asyncio origin serves objects with a real \texttt{pread} from an object
+store on the SSD or the hard disk and emulates the round trip and a
+per-session link that serves demand before prefetch. Emulated browsers replay
+held-out sessions at their recorded gaps with the simulator's cache class and
+record each view's wait. A pass is valid only if its counters equal the
+simulator's in every session, timer lags stay in bounds and the host is quiet.

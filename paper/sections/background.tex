@@ -1,38 +1,61 @@
 % II. Background and related work. Every key cited below is in refs.bib and
-% was verified (docs/REFERENCES.md). Use the corrected titles and venues for
-% CAPSULE, Savva and Herodotou, Akgun et al. and the ECML PKDD chapter;
-% the NVMW'22 abstract is non-archival and is cited as such.
+% was verified (docs/REFERENCES.md). Uses the corrected titles and venues for
+% CAPSULE, Savva and Herodotou, Akgun et al. and the ECML PKDD chapter; the
+% NVMW'22 abstract is non-archival and is cited as such.
 
 \section{Background and Related Work}\label{sec:related}
 
-\todo{Linux read-ahead and its window growth~\cite{wu2007readahead,
-wu2010concurrent,linux_mmapi_readahead}, and the application hints
-posix\_fadvise and readahead~\cite{man_posix_fadvise,man_readahead}.}
+\textbf{Read-ahead in the kernel.} Linux keeps a per-file read-ahead window
+that grows while the reader stays sequential and collapses on a random
+access; a marker page triggers the next asynchronous
+batch~\cite{wu2007readahead,wu2010concurrent,linux_mmapi_readahead}, and
+applications can add hints~\cite{man_posix_fadvise,man_readahead}. Our
+\texttt{linux\_ra} emulates this window; the testbed measures the kernel's
+own.
 
-\todo{Sequential prefetching in storage caches~\cite{gill2005sarc,gill2007amp,
-ding2007diskseen}; block correlation and context~\cite{li2004cminer,
-soundararajan2008context}; informed and integrated prefetching and
-caching~\cite{patterson1995informed,cao1995integrated}; predictive file
-prefetching~\cite{griffioen1994reducing,kroeger2001design,joseph1997markov}.}
+\textbf{Prefetching in storage caches.} Sequential prefetching with adaptive
+degree and trigger distance is standard in storage
+controllers~\cite{gill2005sarc,gill2007amp}; other work exploits disk layout
+and access history~\cite{ding2007diskseen}, mined block
+correlations~\cite{li2004cminer} or server-side
+context~\cite{soundararajan2008context}. Informed prefetching uses application
+hints and bounds how far ahead to fetch~\cite{patterson1995informed}, and
+integrated prefetching and caching studies when a prefetch should replace a
+cached block~\cite{cao1995integrated}. Predictive file prefetching goes back to
+probability graphs and Markov predictors~\cite{griffioen1994reducing,
+kroeger2001design,joseph1997markov}.
 
-\todo{Learned prefetching and caching: LBA-delta sequence
-models~\cite{chakraborttii2020learning,chakraborttii2022deep,
-hashemi2018learning,hochreiter1997lstm}, online and streaming
-learning~\cite{savva2026adaptive,lucasfilho2023streaming}, learned admission
-and prefetch for flash~\cite{wong2024baleen}, spatio-temporal
-clustering~\cite{ramadhan2026capsule}, in-kernel ML~\cite{akgun2021kml},
-cross-layer prefetch~\cite{garg2024crossprefetch}, and memory-side
-prefetch and placement~\cite{maruf2020leap,doudali2019kleio}.}
+\textbf{Learned prefetching.} LSTM models of address
+deltas~\cite{hochreiter1997lstm,hashemi2018learning} have been applied to SSD
+traces~\cite{chakraborttii2020learning} and to flash (a non-archival
+workshop abstract~\cite{chakraborttii2022deep}). Online and streaming learners
+adapt file-system prefetching as the workload
+changes~\cite{savva2026adaptive,lucasfilho2023streaming}. Baleen learns
+admission and prefetch for flash caches~\cite{wong2024baleen}, CAPSULE clusters
+spatio-temporal locality for cloud block storage~\cite{ramadhan2026capsule},
+KML runs models inside the kernel~\cite{akgun2021kml}, and CrossPrefetch
+coordinates prefetching across the OS and the library~\cite{garg2024crossprefetch}.
+Memory-side work learns remote-memory prefetch and page
+placement~\cite{maruf2020leap,doudali2019kleio}. Such work usually compares a
+learned model with one heuristic on a few traces; we fix the simple baselines
+in advance and measure the other levers on the same traces.
 
-\todo{Cache theory used as reference points: Belady's
-MIN~\cite{belady1966study}, stack distance~\cite{mattson1970evaluation},
-ARC~\cite{megiddo2003arc}, and recent eviction
-work~\cite{yang2023fifo,zhang2024sieve,yang2023glcache,shi2019glider}.}
+\textbf{Reference points from cache theory.} Belady's MIN is the optimal
+demand-paging replacement~\cite{belady1966study}; it does not bound a policy
+that prefetches, and we never use it as such a bound. Stack-distance
+analysis~\cite{mattson1970evaluation} is the classical evaluation tool, and
+adaptive, FIFO-based and learned
+eviction~\cite{megiddo2003arc,yang2023fifo,zhang2024sieve,yang2023glcache,
+shi2019glider} change the replacement policy; we keep LRU fixed so that only
+prefetching varies.
 
-\todo{Web prefetching~\cite{padmanabhan1996using,kroeger1997exploring,
-fan1999web} and session-based next-item
-models~\cite{hidasi2016session,kang2018sasrec}.}
+\textbf{Web prefetching and next-item models.} Predictive prefetching of web
+pages~\cite{padmanabhan1996using}, its latency bounds~\cite{kroeger1997exploring}
+and its cost over slow links~\cite{fan1999web} raised the same what and
+how-much questions in the 1990s. Session-based next-item models range from
+GRUs to self-attention~\cite{hidasi2016session,kang2018sasrec}; we test a GRU
+as a ranker.
 
-\todo{Position of this work: a two-domain measurement of which lever moves
-the result, with real-device and real-HTTP validation, rather than a new
-predictor.}
+We do not propose a predictor; we measure, under pre-registered rules,
+which lever moves the outcome, and check the simulators against a real disk
+and real HTTP.

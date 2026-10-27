@@ -249,6 +249,28 @@ def disk_tables(results: g.Results, out: g.Output, m: Macros) -> None:
             if row["mean_hit_ratio"] is None:
                 continue
             m.add(pre + "Hit" + tail, fpct(row["mean_hit_ratio"]), relative)
+            if row["config"] != g.HEADLINE_CONFIG:
+                # Sensitivity configurations (C2-C4): the level, the gain and
+                # the device work only, which is all the prose quotes of them.
+                m.add_ci(pre + "VsNone" + tail, row["delta_vs_none"], row["delta_vs_none_lo"],
+                         row["delta_vs_none_hi"], fpp, relative)
+                for quantity, key in (("IORatio", "device_io_ratio"),
+                                      ("MovedRatio", "blocks_moved_ratio")):
+                    if row[key] is not None:
+                        m.add(pre + quantity + tail, fratio(row[key]), relative)
+                continue
+            if corpus:
+                # Per corpus: the level and the two paired gains, which is what
+                # the prose and Table T2b need; the file holds the rest.
+                m.add_ci(pre + "VsNone" + tail, row["delta_vs_none"], row["delta_vs_none_lo"],
+                         row["delta_vs_none_hi"], fpp, relative)
+                if row["delta_vs_sequential"] is not None:
+                    m.add_ci(pre + "VsSeq" + tail, row["delta_vs_sequential"],
+                             row["delta_vs_sequential_lo"], row["delta_vs_sequential_hi"], fpp,
+                             relative)
+                if row["device_io_ratio"] is not None:
+                    m.add(pre + "IORatio" + tail, fratio(row["device_io_ratio"]), relative)
+                continue
             m.add(pre + "WeightedHit" + tail, fpct(row["weighted_hit_ratio"]), relative)
             m.add_ci(pre + "VsNone" + tail, row["delta_vs_none"], row["delta_vs_none_lo"],
                      row["delta_vs_none_hi"], fpp, relative)
@@ -266,6 +288,33 @@ def disk_tables(results: g.Results, out: g.Output, m: Macros) -> None:
                                   ("LossesVsNone", "losses_vs_none")):
                 if row[key] is not None:
                     m.add(pre + quantity + tail, fcount(row[key]), relative)
+
+
+def disk_best_depth(results: g.Results, out: g.Output, m: Macros) -> None:
+    """C2's best fixed depth per (corpus, capacity): the argmax of the pooled
+    mean hit ratio over depths (disk PREREGISTERED.md section 6, descriptive),
+    and how often it is the deepest depth tested."""
+    relative = "disk/table_by_corpus.csv"
+    rows = [r for r in results.rows(relative, out, required=False) or ()
+            if r["config"] == "C2" and r["merge"] == g.HEADLINE_MERGE
+            and r["latency"] == g.HEADLINE_LATENCY and r["mean_hit_ratio"] is not None]
+    curves = defaultdict(dict)
+    for row in rows:
+        base, _, depth = row["policy"].partition("@")
+        if base == "deep" and depth.isdigit():
+            curves[(row["corpus"], row["capacity"])][int(depth)] = row["mean_hit_ratio"]
+    if not curves:
+        return
+    deepest = max(max(c) for c in curves.values())
+    m.add("diskCTwoDeepest", fcount(deepest), relative)
+    best_is_deepest = 0
+    for (corpus, capacity), curve in curves.items():
+        best = max(curve, key=lambda d: (curve[d], -d))
+        best_is_deepest += best == deepest
+        m.add("diskCTwoBestDepth" + camel(corpus) + disk_capacity_word(capacity), fcount(best),
+              relative)
+    m.add("diskCTwoCurves", fcount(len(curves)), relative)
+    m.add("diskCTwoBestIsDeepest", fcount(best_is_deepest), relative)
 
 
 def delta_name(row) -> str:
@@ -304,20 +353,55 @@ def delta_names(rows) -> list[str]:
     return names
 
 
+#: deltas.csv rows outside the pooled headline (C1, all corpora) get macros
+#: only for these policies: the pre-registered levers and the P3/P4 depths.
+#: deltas.csv holds about 3,850 rows at 13 macros each, and numbers.tex has
+#: to load within TeX's memory on Overleaf; the pooled C1 rows keep every
+#: policy, and the generated tables print every row.
+DELTA_DETAIL_POLICIES = ("sequential", "adaptive", "guard", "deep@8", "deep@32", "deep@256",
+                         "linux_ra@64", "linux_ra@256", "linux_ra@1024", "belady_min")
+#: Sensitivity configurations whose pooled rows get macros (C3, C4; C2 only
+#: for its merge-rule views of the two headline depth/window policies).
+DELTA_DETAIL_CONFIGS = ("C3:skip=1000000", "C3:whole", "C4", "C4:mms=256")
+
+
+#: Metrics of the detail rows: hit ratio (both baselines) and device I/Os.
+DELTA_DETAIL_METRICS = ("hit_ratio", "device_ios")
+
+
+def delta_wanted(row) -> bool:
+    """Whether a deltas.csv row gets macros (see DELTA_DETAIL_POLICIES)."""
+    if row["config"] == g.HEADLINE_CONFIG and row["corpus"] == "all":
+        return True
+    if row["policy"] not in DELTA_DETAIL_POLICIES or row["metric"] not in DELTA_DETAIL_METRICS:
+        return False
+    if row["config"] == g.HEADLINE_CONFIG:
+        return True
+    if row["config"] in DELTA_DETAIL_CONFIGS:
+        return row["corpus"] == "all"
+    return (row["config"].split(":")[0] == "C2" and row["metric"] == "hit_ratio"
+            and row["policy"] in ("deep@8", "linux_ra@256"))
+
+
 def disk_deltas(results: g.Results, out: g.Output, m: Macros) -> None:
     relative = "disk/deltas.csv"
     rows = results.rows(relative, out) or []
     names = delta_names(rows)
     for name, row in zip(names, rows):
+        if not delta_wanted(row):
+            continue
+        pooled = row["config"] == g.HEADLINE_CONFIG and row["corpus"] == "all"
         formatter = delta_formatter(row)
         m.add_ci(name, row["estimate"], row["ci_lo"], row["ci_hi"], formatter, relative)
         if row["cluster_estimate"] is not None:
             m.add_ci(name + "Cluster", row["cluster_estimate"], row["cluster_ci_lo"],
                      row["cluster_ci_hi"], formatter, relative)
-        m.add(name + "Pvalue", fpvalue(row["wilcoxon_p"]), relative)
+        if pooled:
+            m.add(name + "Pvalue", fpvalue(row["wilcoxon_p"]), relative)
         for suffix, key in (("Wins", "wins"), ("Losses", "losses"), ("Ties", "ties"),
                             ("N", "n")):
-            m.add(name + suffix, fcount(row[key]), relative)
+            if pooled or suffix != "Ties":
+                m.add(name + suffix, fcount(row[key]), relative)
     for alias, (metric, policy, baseline, capacity) in CURATED_DISK.items():
         match = [name for name, row in zip(names, rows)
                  if (row["config"], row["merge"], row["latency"], row["corpus"], row["metric"],
@@ -431,6 +515,12 @@ def learned_depth(results: g.Results, out: g.Output, m: Macros) -> None:
             m.add("ld" + quantity + word + "Wins", fcount(won), relative)
             m.add("ld" + quantity + word + "Losses", fcount(lost), relative)
             m.add("ld" + quantity + word + "N", fcount(len(pairs)), relative)
+        # E2 records prefetches issued, not device I/Os: the device-work side
+        # of the comparison is the ratio of issued prefetches (mean over traces).
+        issued = [(mean("test_issued", t), mean("vcf_issued", t)) for t in traces]
+        issued = [a / b for a, b in issued if a is not None and b]
+        if issued:
+            m.add("ldIssuedVsVcf" + word, fratio(statistics.fmean(issued), 2), relative)
         oracle = [(mean("oracle_same_actions_hit_ratio", t), a) for a, t in zip(model, traces)]
         oracle = [(o, a) for o, a in oracle if o is not None and a is not None]
         if oracle:
@@ -489,9 +579,19 @@ def _split_word(split: str) -> str:
     return "" if split == "test" else camel(split)
 
 
+#: policy_metrics.csv rows that get macros: the test split at the capacities
+#: of the headline comparisons (W1-W8), for the rankers the prose discusses.
+#: The file has about 2,150 rows; the full set is in the generated tables.
+WEB_METRIC_SCORERS = ("logistic", "trans_online")
+WEB_METRIC_CAPACITIES = (8, 32)
+
+
 def web_policy_metrics(results: g.Results, out: g.Output, m: Macros) -> None:
     relative = "web/policy_metrics.csv"
     for row in results.rows(relative, out) or ():
+        if (row["split"] != "test" or row["scorer"] not in WEB_METRIC_SCORERS
+                or row["capacity"] not in WEB_METRIC_CAPACITIES):
+            continue
         scope = "" if row["cache_scope"] == "session" else camel(row["cache_scope"])
         tail = (camel(row["scorer"]) + scope + "Cap" + camel(row["capacity"])
                 + camel(row["policy"]) + _split_word(row["split"]))
@@ -503,12 +603,37 @@ def web_policy_metrics(results: g.Results, out: g.Output, m: Macros) -> None:
             m.add("webCStar" + tail, fnum(row["c_star"], 4), relative)
 
 
+#: Controller families of ``webprefetch.benchmark`` (longest prefix first), so
+#: a comparisons row can be named by its family without importing pandas.
+WEB_CONTROLLERS = ("adaptive_ca", "adaptive", "gate", "feedback")
+
+
+def web_family(policy: str) -> str:
+    """'adaptive_ca_0.01' -> 'adaptive_ca'; 'feedback_0.01_eps0.005' -> 'feedback'."""
+    for family in WEB_CONTROLLERS:
+        if str(policy).startswith(family + "_"):
+            return family
+    return str(policy).split("_", 1)[0]
+
+
+def _comparison_tail(row) -> str:
+    """One comparisons.csv row's macro tail. comparisons.csv holds one row per
+    controller family at each (selection, scorer, capacity, cost), so the
+    family is part of the name; the plain adaptive family is left implicit."""
+    family = web_family(row["adaptive_policy"])
+    return (camel(row["selection"]) + camel(row["scorer"])
+            + ("" if family == "adaptive" else camel(family))
+            + "Cap" + camel(row["capacity"]) + "Cost" + camel(repr(float(row["cost"])))
+            + _split_word(row["split"]))
+
+
 def web_comparisons(results: g.Results, out: g.Output, m: Macros) -> None:
     relative = "web/comparisons.csv"
     rows = results.rows(relative, out)
     for row in rows or ():
-        tail = (camel(row["selection"]) + camel(row["scorer"]) + "Cap" + camel(row["capacity"])
-                + "Cost" + camel(repr(float(row["cost"]))) + _split_word(row["split"]))
+        if row["selection"] != "per_capacity" or row["scorer"] not in WEB_METRIC_SCORERS:
+            continue  # capacity_transfer is never a headline row (TeX memory)
+        tail = _comparison_tail(row)
         for quantity, key in (("VsBestFixed", "vs_best_fixed_same_cap"),
                               ("VsFixedZero", "vs_fixed0"),
                               ("VsTransition", "vs_transition_top1")):
@@ -519,12 +644,10 @@ def web_comparisons(results: g.Results, out: g.Output, m: Macros) -> None:
         m.add("webCmpBestFixedPolicy" + tail, g.esc(row["best_fixed_policy"]), relative)
         m.add("webCmpLabel" + tail, g.esc(row["label"]), relative)
     headline = [r for r in g.select(rows, split="test", selection="per_capacity", capacity=8)
-                if r["cost"] > 0]
+                if r["cost"] > 0 and web_family(r["adaptive_policy"]) == "adaptive"]
     if headline:
         row = min(headline, key=lambda r: (r["scorer"] != "logistic", r["cost"]))
-        tail = (camel(row["selection"]) + camel(row["scorer"]) + "Cap" + camel(row["capacity"])
-                + "Cost" + camel(repr(float(row["cost"]))))
-        m.alias("webControllerVsBestFixed", "webCmpVsBestFixed" + tail)
+        m.alias("webControllerVsBestFixed", "webCmpVsBestFixed" + _comparison_tail(row))
 
 
 def unique_names(rows, field_lists, prefix: str) -> list[str]:
@@ -573,6 +696,11 @@ def web_seq(results: g.Results, out: g.Output, m: Macros) -> None:
             groups[(row["model"], row["protocol"], row["capacity"], row["policy"],
                     row["cost"])].append(row)
     multi = len({k[2:] for k in groups}) > 1
+    # The prose compares the final protocol's depth-1 and depth-4 rows at the
+    # W8 capacity; the full grid (about 1,800 rows) is in the results file.
+    groups = {k: v for k, v in groups.items()
+              if not multi or (k[1] == "final" and k[2] == 8 and k[3] in ("fixed1", "fixed4")
+                               and k[4] == 0.01)}
     for (model, protocol, capacity, policy, cost), items in groups.items():
         pre = "webSeq" + camel(model) + camel(protocol)
         if multi:
@@ -591,12 +719,45 @@ def web_seq(results: g.Results, out: g.Output, m: Macros) -> None:
                 m.add(pre + quantity + "Max", formatter(max(values)), relative)
 
 
+def web_calibration(results: g.Results, out: g.Output, m: Macros) -> None:
+    """Brier skill and expected calibration error per (split, scorer): one
+    value per pair, repeated on every reliability bin of calibration.csv."""
+    relative = "web/calibration.csv"
+    seen = set()
+    for row in results.rows(relative, out, required=False) or ():
+        key = (row["split"], row["scorer"])
+        if key in seen:
+            continue
+        seen.add(key)
+        tail = camel(row["scorer"]) + _split_word(row["split"])
+        if row["brier_skill_score"] is not None:
+            m.add("webBrierSkill" + tail, fnum(row["brier_skill_score"], 3, sign=True), relative)
+        if row["ece"] is not None:
+            m.add("webEce" + tail, fnum(row["ece"], 4), relative)
+
+
 def _flatten(payload, prefix=()):
     for key, value in payload.items():
         if isinstance(value, dict):
             yield from _flatten(value, prefix + (key,))
         else:
             yield prefix + (key,), value
+
+
+#: The web protocol's chronological splits by index (PREREGISTERED.md).
+WEB_SPLITS = {"0": "index", "1": "train", "2": "validation", "3": "test"}
+
+
+def dataset_key_words(path) -> str:
+    """Macro name part of a dataset-profile key path. A split index under a
+    ``*_by_split`` key is named by its role ('3' -> 'Test'), so the prose
+    reads ``\\webDataViewsBySplitTest`` instead of a bare split number."""
+    words = []
+    for parent, key in zip((None,) + tuple(path[:-1]), path):
+        if parent is not None and str(parent).endswith("_by_split") and str(key) in WEB_SPLITS:
+            key = WEB_SPLITS[str(key)]
+        words.append(camel(key))
+    return "".join(words)
 
 
 def web_dataset(results: g.Results, out: g.Output, m: Macros) -> None:
@@ -606,8 +767,9 @@ def web_dataset(results: g.Results, out: g.Output, m: Macros) -> None:
     for path, value in _flatten(payload or {}):
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             continue
-        name = "webData" + "".join(camel(p) for p in path)
-        fraction = any(word in path[-1] for word in ("frac", "share", "ratio"))
+        name = "webData" + dataset_key_words(path)
+        # A share may be keyed by its kind under a ``*_share`` parent.
+        fraction = any(word in str(part) for part in path for word in ("frac", "share", "ratio"))
         text = (fcount(value) if isinstance(value, int)
                 else fpct(value) if fraction and abs(value) <= 1 else fnum(value, 2))
         m.add(name, text, relative)
@@ -618,12 +780,12 @@ def web_dataset(results: g.Results, out: g.Output, m: Macros) -> None:
 # ---------------------------------------------------------------------------
 
 def live_groups(rows):
-    """Valid rows grouped by (experiment, store, config, link, policy)."""
+    """Citable rows (valid, store foreign I/O at most 1 %; ``g.live_citable``)
+    grouped by (experiment, store, config, link, policy)."""
     groups = defaultdict(list)
-    for row in rows:
-        if row["valid"]:
-            groups[(row["experiment"], row["store"], row["config"], row["link"],
-                    row["policy"])].append(row)
+    for row in g.live_citable(rows):
+        groups[(row["experiment"], row["store"], row["config"], row["link"],
+                row["policy"])].append(row)
     return groups
 
 
@@ -639,6 +801,10 @@ def live(results: g.Results, out: g.Output, m: Macros) -> None:
         return
     m.add("liveInvalidPasses", fcount(sum(not r["valid"] for r in rows)), relative)
     m.add("liveValidPasses", fcount(sum(r["valid"] for r in rows)), relative)
+    citable = g.live_citable(rows)
+    m.add("liveFlaggedRows", fcount(sum(r["valid"] for r in rows) - len(citable)), relative)
+    m.add("liveCitableRows", fcount(len(citable)), relative)
+    m.add("liveRows", fcount(len(rows)), relative)
     groups = live_groups(rows)
     configs = defaultdict(set)
     for experiment, store, config, link, _ in groups:
@@ -670,6 +836,287 @@ def live(results: g.Results, out: g.Output, m: Macros) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Pre-registered decisions (paper/decisions.py)
+# ---------------------------------------------------------------------------
+
+def _decisions_module():
+    if "paper_decisions" not in sys.modules:
+        spec = importlib.util.spec_from_file_location("paper_decisions",
+                                                      Path(_HERE) / "decisions.py")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["paper_decisions"] = module
+        spec.loader.exec_module(module)
+    return sys.modules["paper_decisions"]
+
+
+DECISION_SOURCE = "paper/decisions.py"
+
+
+def _decision_formatter(statistic):
+    return {"difference": fpp, "ratio": fratio, "us": fus, "ms": fms,
+            "absolute": lambda v: fnum(100.0 * v, 2) + r"\,pp",
+            "rho": lambda v: fnum(v, 2, sign=True)}[statistic]
+
+
+def _verdict_word(verdict: str) -> str:
+    """A verdict's class for counting: 'raises mean latency' -> 'Raises'."""
+    first = verdict.split(" (")[0].split(";")[0]
+    return camel({"lowers mean latency": "lowers", "raises mean latency": "raises",
+                  "no difference detected": "no difference",
+                  "contended": "contended"}.get(first, first))
+
+
+#: Every verdict each tallied rule can give (paper/decisions.py wording).
+TALLY_VERDICTS = {
+    "C3": ("robust", "prefix-dependent"),
+    "C4": ("cap-insensitive", "cap-sensitive"),
+    "H2": ("lowers the mean wait", "raises the mean wait", "no consistent difference",
+           "not established"),
+    "H3": ("the instant-prefetch model overstates the benefit",
+           "the instant-prefetch model understates the benefit", "consistent with the model"),
+    "H7": ("the store changes the delta", "no store difference by the H7 rule"),
+    "R7": ("think time changes the effect", "no change by the R7 rule"),
+    "R2": ("ranks consistently with measured latency", "ranks against measured latency",
+           "ranking not supported", "descriptive only", "contended"),
+}
+
+
+def _tally_group(d) -> str | None:
+    """The group a verdict is counted in for ``\\decTally<Rule><Group><Verdict>``
+    (``None``: not tallied): C3/C4, H7 and R7 over all their comparisons, H2/H3
+    per store, R2 per simulated quantity."""
+    if d.rule in ("C3", "C4", "H7", "R7"):
+        return ""
+    if d.rule in ("H2", "H3"):
+        return camel(d.scope.split()[0])
+    if d.rule == "R2":
+        return "Hit" if "simulated hit," in d.comparison else "DeviceTime"
+    return None
+
+
+def decision_macros(results: g.Results, out: g.Output, m: Macros) -> None:
+    """``\\dec<Key>Verdict``: the verdict a pre-registered rule gives, as text,
+    and ``\\dec<Key><Interval>`` (with Lo, Hi, CI; the unnamed main interval
+    is ``\\dec<Key>`` itself) for each interval it rests on;
+    plus verdict counts per real-device cell group and the policies P5 finds
+    reducing device I/Os."""
+    decisions = _decisions_module().decide(results, out)
+    counts = defaultdict(int)
+    tallies = defaultdict(int)
+    reducers = defaultdict(list)
+    fastest = defaultdict(lambda: [0, 0, 0])
+    for d in decisions:
+        stem = "dec" + d.key[:1].upper() + d.key[1:]
+        m.add(stem + "Verdict", g.esc(d.verdict), DECISION_SOURCE)
+        for label, estimate, lo, hi, statistic in d.intervals:
+            name = stem + camel(label)
+            formatter = _decision_formatter(statistic)
+            if estimate is not None:
+                m.add_ci(name, estimate, lo, hi, formatter, DECISION_SOURCE)
+            elif lo is not None and hi is not None:
+                m.add(name + "Lo", formatter(lo), DECISION_SOURCE)
+                m.add(name + "Hi", formatter(hi), DECISION_SOURCE)
+                m.add(name + "CI", fci(lo, hi, formatter), DECISION_SOURCE)
+        if d.study == "realio" and d.rule in ("R1", "R6"):
+            device, backend, think = d.scope.split(", ")[:3]
+            group = camel(device) + camel(backend) + camel(think)
+            counts["decCount" + camel(d.rule) + group + _verdict_word(d.verdict)] += 1
+            counts["decCount" + camel(d.rule) + group] += 1
+        group = _tally_group(d)
+        if group is not None:
+            stem_count = "decTally" + camel(d.rule) + group
+            tallies[stem_count] += 1
+            tallies[stem_count + camel(d.verdict.split(" (")[0].split(";")[0])] += 1
+        if d.rule == "R2" and d.verdict != "contended (not used)" and d.intervals:
+            rho = d.intervals[0][1]
+            sign = "Hit" if "simulated hit," in d.comparison else "DeviceTime"
+            device = camel(d.scope.split(", ")[0])
+            if rho is not None:
+                tallies["decRhoCells" + sign + device] += 1
+                tallies["decRhoPositive" + sign + device] += rho > 0
+        if d.study == "disk" and d.rule == "P5" and d.verdict == "reduces device I/Os":
+            reducers[d.scope].append(d.comparison.split(" / ")[0])
+        if d.study == "realio" and d.rule == "fastest":
+            device, backend = d.scope.split(", ")[:2]
+            for key in ("", camel(device) + camel(backend)):
+                tally = fastest[key]
+                tally[0] += 1
+                tally[1] += d.verdict == "none"
+                tally[2] += d.note == "highest simulated hit ratio: " + d.verdict
+    # Every verdict class gets a count in every group, zero included, so the
+    # prose can say "lowered it in none" through a macro.
+    classes = ("Lowers", "Raises", "NoDifference", "Contended", "NotEstablished")
+    for name in [n for n in counts if not n.endswith(classes)]:
+        for word in classes:
+            counts.setdefault(name + word, 0)
+    for name, value in sorted(counts.items()):
+        m.add(name, fcount(value), DECISION_SOURCE)
+    # Zero counts too, for every verdict a tallied rule can give.
+    for name in [n for n in tallies if n.startswith("decTally")]:
+        for rule, verdicts in TALLY_VERDICTS.items():
+            prefix = "decTally" + camel(rule)
+            if name.startswith(prefix) and not any(
+                    name.endswith(camel(v)) and len(name) > len(prefix) for v in verdicts):
+                for verdict in verdicts:
+                    tallies.setdefault(name + camel(verdict), 0)
+    for name, value in sorted(tallies.items()):
+        m.add(name, fcount(value), DECISION_SOURCE)
+    for scope, policies in reducers.items():
+        m.add("decPFiveReducers" + camel(scope.replace(" ", "")),
+              g.esc(", ".join(policies)), DECISION_SOURCE)
+    for key, (cells, none_fastest, top_fastest) in fastest.items():
+        m.add("decCells" + key, fcount(cells), DECISION_SOURCE)
+        m.add("decCellsNoneFastest" + key, fcount(none_fastest), DECISION_SOURCE)
+        m.add("decCellsTopSimFastest" + key, fcount(top_fastest), DECISION_SOURCE)
+
+
+# ---------------------------------------------------------------------------
+# U(c) envelopes (Fig. F8): the best policy at the costs the paper marks
+# ---------------------------------------------------------------------------
+
+def envelopes(results: g.Results, out: g.Output, m: Macros) -> None:
+    """The policy on top of the U(c) envelope at each marked cost, from the
+    same rows Fig. F8 draws (``genlib.disk_utility_rows``; the web test split,
+    logistic scorer, capacity 8)."""
+    sweep = results.rows("disk/sweep.jsonl", out, required=False)
+    if sweep:
+        for capacity in g.HEADLINE_CAPACITIES:
+            rows, n = g.disk_utility_rows(sweep, capacity)
+            if not rows:
+                continue
+            word = disk_capacity_word(capacity)
+            m.add("diskEnvelopeTraces" + word, fcount(n), "disk/sweep.jsonl")
+            for name, c in (("Assumed", utility.cost_to_c(5, 100, 50)),
+                            ("BreakEven", utility.BREAK_EVEN_C), ("Zero", 0.0)):
+                best = utility.envelope(rows, [c])[0]
+                m.add("diskEnvelopeBest" + name + word, g.esc(best["policy"]), "disk/sweep.jsonl")
+    metrics = results.rows("web/policy_metrics.csv", out, required=False)
+    if metrics:
+        rows = g.select(metrics, split="test", cache_scope="session", scorer="logistic",
+                        capacity=8)
+        if rows:
+            costs = sorted({r["cost"] for r in results.rows("web/comparisons.csv", out,
+                                                              required=False) or ()})
+            for c in costs or (0.0,):
+                best = utility.envelope(rows, [c])[0]
+                m.add("webEnvelopeBestCost" + camel(repr(float(c))), g.esc(best["policy"]),
+                      "web/policy_metrics.csv")
+
+
+# ---------------------------------------------------------------------------
+# Protocol facts: slice lengths, repeats, sample sizes, assumed inputs
+# ---------------------------------------------------------------------------
+
+def _one(values, what):
+    values = sorted({v for v in values if v is not None})
+    return values[0] if len(values) == 1 else None
+
+
+def facts(results: g.Results, out: g.Output, m: Macros) -> None:
+    """The protocol's own parameters as the results files record them, so the
+    prose never types a sample size, slice length or assumed input."""
+    sweep = results.rows("disk/sweep.jsonl", out, required=False)
+    if sweep:
+        for config in ("C1", "C2", "C3", "C4"):
+            rows = [r for r in sweep if r["config"] == config and r["skip_requests"] == 0]
+            cap = _one((r["max_requests"] for r in rows), config)
+            if cap is not None:
+                m.add("diskSlice" + camel(config), fcount(cap), "disk/sweep.jsonl")
+            skips = sorted({r["skip_requests"] for r in sweep if r["config"] == config
+                            and r["skip_requests"]})
+            if skips:
+                m.add("diskSkip" + camel(config), fcount(skips[0]), "disk/sweep.jsonl")
+    deltas = results.rows("disk/deltas.csv", out, required=False)
+    if deltas:
+        m.add("diskBootstrapReps", fcount(_one((r["reps"] for r in deltas), "reps")),
+              "disk/deltas.csv")
+    summary = results.rows("realio/realio_summary.csv", out, required=False)
+    if summary:
+        m.add("realioRequests", fcount(_one((r["requests"] for r in summary), "requests")),
+              "realio/realio_summary.csv")
+        m.add("realioReps", fcount(_one((r["reps"] for r in summary), "reps")),
+              "realio/realio_summary.csv")
+        m.add("realioTraces", fcount(len({r["trace"] for r in summary})),
+              "realio/realio_summary.csv")
+    raw = results.rows("realio/realio.csv", out, required=False)
+    if raw:
+        m.add("realioRuns", fcount(len(raw)), "realio/realio.csv")
+        m.add("realioOdirectRuns", fcount(sum(r["backend"] == "odirect" for r in raw)),
+              "realio/realio.csv")
+    live_rows = results.rows("live/live_metrics.csv", out, required=False)
+    if live_rows:
+        source = "live/live_metrics.csv"
+        for name, key, formatter in (("liveSessions", "sessions", fcount),
+                                     ("liveViews", "views", fcount),
+                                     ("liveRttMs", "rtt_ms", lambda v: fnum(v, 0) + r"\,ms"),
+                                     ("liveMbps", "mbps", lambda v: fnum(v, 0) + r"\,Mbit/s"),
+                                     ("liveSizeMedianKiB", "size_median_kib",
+                                      lambda v: fnum(v, 0) + r"\,KiB"),
+                                     ("liveGapCapS", "gap_cap_s", lambda v: fnum(v, 0) + r"\,s"),
+                                     ("liveRampS", "ramp_s", lambda v: fnum(v, 0) + r"\,s")):
+            value = _one((r[key] for r in live_rows), key)
+            if value is not None:
+                m.add(name, formatter(value), source)
+        headline = [r for r in live_rows if r["experiment"] == "headline"]
+        m.add("liveHeadlineReps", fcount(len({r["rep"] for r in headline})), source)
+        m.add("livePasses", fcount(len({(r["experiment"], r["store"], r["config"], r["rep"],
+                                         r["policy"]) for r in live_rows})), source)
+        base = [r for r in headline if r["policy"] == r["baseline"]]
+        for store in sorted({r["store"] for r in base}):
+            waits = [r["mean_wait_ms"] for r in base if r["store"] == store]
+            m.add("liveBaseWait" + camel(store), fms(statistics.fmean(waits)), source)
+            ideal = [r["model_ideal_wait_ms"] for r in base if r["store"] == store]
+            m.add("liveBaseIdealWait" + camel(store), fms(statistics.fmean(ideal)), source)
+    comparisons = results.rows("web/comparisons.csv", out, required=False)
+    if comparisons:
+        costs = sorted({r["cost"] for r in comparisons})
+        m.add("webCosts", ", ".join(fnum(c, 2 if c else 0) for c in costs),
+              "web/comparisons.csv")
+        m.add("webCapacities", ", ".join(fcount(c) for c in
+                                         sorted({r["capacity"] for r in comparisons})),
+              "web/comparisons.csv")
+    decomposition = results.rows("web/decomposition.csv", out, required=False)
+    if decomposition:
+        # The cost the pre-registered utility comparisons (W1-W8) use.
+        cost = _one((r["cost"] for r in decomposition if r["metric"] != "hit_ratio"), "cost")
+        if cost is not None:
+            m.add("webHeadlineCost", fnum(cost, 2), "web/decomposition.csv")
+        m.add("webSessions", fcount(_one((r["sessions"] for r in decomposition), "sessions")),
+              "web/decomposition.csv")
+        m.add("webBootstrapReps", fcount(_one((r["reps"] for r in decomposition), "reps")),
+              "web/decomposition.csv")
+    learned = results.rows("gpu/disk_learned_depth.csv", out, required=False)
+    if learned:
+        source = "gpu/disk_learned_depth.csv"
+        m.add("ldPrefixMax", fcount(max(r["n_requests"] for r in learned)), source)
+        # The split points as shares of each trace's prefix (short FIU traces
+        # use their whole length, so the request counts differ per trace).
+        for name, start, end in (("ldTrainShare", "train_start", "train_end"),
+                                 ("ldValShare", "val_start", "val_end"),
+                                 ("ldTestShare", "test_start", "test_end")):
+            share = _one((round((r[end] - r[start]) / r["n_requests"], 4) for r in learned
+                          if r["n_requests"]), name)
+            if share is not None:
+                m.add(name, fnum(100 * share, 0) + r"\,\%", source)
+    lstm = results.rows("gpu/disk_lstm.csv", out, required=False)
+    if lstm:
+        ok = [r for r in lstm if r["status"] == "ok"]
+        m.add("lstmTraces", fcount(len(ok)), "gpu/disk_lstm.csv")
+        pairs = [(r["lstm_hit_ratio"], r["linux_ra_hit_ratio"], r["deep8_hit_ratio"],
+                  r["none_hit_ratio"]) for r in ok]
+        m.add("lstmBelowLinuxRa", fcount(sum(a < b for a, b, _, _ in pairs)), "gpu/disk_lstm.csv")
+        m.add("lstmBelowDeepEight", fcount(sum(a < c for a, _, c, _ in pairs)),
+              "gpu/disk_lstm.csv")
+        m.add("lstmMeanHit", fpct(statistics.fmean(p[0] for p in pairs)), "gpu/disk_lstm.csv")
+        m.add("lstmMeanLinuxRaHit", fpct(statistics.fmean(p[1] for p in pairs)),
+              "gpu/disk_lstm.csv")
+        m.add("lstmMeanDeepEightHit", fpct(statistics.fmean(p[2] for p in pairs)),
+              "gpu/disk_lstm.csv")
+        m.add("lstmMeanNoneHit", fpct(statistics.fmean(p[3] for p in pairs)),
+              "gpu/disk_lstm.csv")
+
+
+# ---------------------------------------------------------------------------
 # Constants and host
 # ---------------------------------------------------------------------------
 
@@ -678,6 +1125,10 @@ def constants(m: Macros) -> None:
     source = "prefetch_common.utility"
     m.add("diskBreakEvenC", fnum(utility.BREAK_EVEN_C, 4), source)
     m.add("diskAssumedC", fnum(utility.cost_to_c(5, 100, 50), 3), source)
+    # The interval level every study uses (the bootstraps' default).
+    import inspect
+    level = inspect.signature(stats.paired_bootstrap).parameters["level"].default
+    m.add("ciLevel", fnum(100 * level, 0) + r"\,\%", "prefetch_common.stats")
 
 
 def host(results: g.Results, out: g.Output, m: Macros) -> None:
@@ -699,9 +1150,9 @@ def host(results: g.Results, out: g.Output, m: Macros) -> None:
         m.add("hostGpu", g.esc(gpus[0]["name"]), "gpu/provenance.json")
 
 
-FAMILIES = (disk_tables, disk_deltas, disk_corpora, disk_kappa, learned_depth, realio,
+FAMILIES = (disk_tables, disk_best_depth, disk_deltas, disk_corpora, disk_kappa, learned_depth, realio,
             web_policy_metrics, web_comparisons, web_decomposition, web_freshness, web_seq,
-            web_dataset, live, host)
+            web_dataset, web_calibration, live, host, decision_macros, facts, envelopes)
 
 
 def build(results: g.Results) -> tuple[Macros, g.Output]:

@@ -10,61 +10,108 @@
       "note": "width: column"
     },
     "figures/f2_hit_vs_depth.pdf": {
-      "inputs": {},
-      "missing": [
-        "disk/table_by_corpus.csv"
-      ],
+      "inputs": {
+        "disk/table_by_corpus.csv": {
+          "sha256": "a9bf267d47d394045ccd6d77edd4e78689ca3094b8cbfb25297d60bab678417b",
+          "provenance_git_sha": "beea45c3007ddbc62e3390095a0a0fa92e319a85",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false,
-      "note": "width: column"
+      "note": "config C2, merge auto, assumed latency; width: column"
     },
     "figures/f3_device_io_vs_hit.pdf": {
-      "inputs": {},
-      "missing": [
-        "disk/deltas.csv"
-      ],
+      "inputs": {
+        "disk/deltas.csv": {
+          "sha256": "0062c15c1f1c72ceaf7ff0eb07e806b56d589377388207140fad1dc3b3ec5e8d",
+          "provenance_git_sha": "beea45c3007ddbc62e3390095a0a0fa92e319a85",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false,
       "note": "width: column"
     },
     "figures/f4_kappa_cdf.pdf": {
-      "inputs": {},
-      "missing": [
-        "disk/kappa.csv"
-      ],
+      "inputs": {
+        "disk/kappa.csv": {
+          "sha256": "a4c4fe226c5534961d42510f8d6cc62f16694bfec4e3621bd00f859a0193d302",
+          "provenance_git_sha": "beea45c3007ddbc62e3390095a0a0fa92e319a85",
+          "provenance_match": true
+        },
+        "realio/device_sdb.json": {
+          "sha256": "e6f3addd0f9504cf91813314f1bad4dd129172f436ad257a717117887120be79",
+          "provenance_git_sha": "aa382c1f7c017109713f8751ee17b6e5b48f25fe",
+          "provenance_match": true
+        },
+        "realio/device_ssd.json": {
+          "sha256": "d86ae43059f766f25392b4589e35e64ce9aa7750edbe82c2daba06671786259d",
+          "provenance_git_sha": "aa382c1f7c017109713f8751ee17b6e5b48f25fe",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false,
       "note": "width: column"
     },
     "figures/f5_sim_vs_measured.pdf": {
-      "inputs": {},
-      "missing": [
-        "realio/realio_summary.csv"
-      ],
+      "inputs": {
+        "realio/realio_summary.csv": {
+          "sha256": "47e8e03cf2d29af9862e492768c46f19d3dbc6ebd39381b01aaa121aeb31acba",
+          "provenance_git_sha": "aa382c1f7c017109713f8751ee17b6e5b48f25fe",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false,
-      "note": "width: text"
+      "note": "kernel_ra/kernel_seq rows have no simulator plan and are not drawn; width: text"
     },
     "figures/f6_freshness.pdf": {
-      "inputs": {},
-      "missing": [
-        "web/freshness.csv"
-      ],
+      "inputs": {
+        "web/freshness.csv": {
+          "sha256": "0569584b8d16da0eabf103be833bf3520abb60ef8f359d90690fb544f3d52fb9",
+          "provenance_git_sha": "6de973bf2dd315e21b3c857481af3d56ff795654",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false,
       "note": "width: column"
     },
     "figures/f7_live_saved_vs_bytes.pdf": {
-      "inputs": {},
-      "missing": [
-        "live/live_metrics.csv"
-      ],
+      "inputs": {
+        "live/live_metrics.csv": {
+          "sha256": "4a3675e9c4eddd70a0ff333277adb524ef7bf66e05cb0d02531019c2bf79fd89",
+          "provenance_git_sha": "ae492d5dfa6fd8ad06bc3c85adcdfe6c48db0fa7",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false,
-      "note": "width: column"
+      "note": "points: mean over citable passes (valid, foreign I/O at most 1%); bars: envelope of the per-pass 95% CIs; width: column"
     },
     "figures/f8_utility_envelopes.pdf": {
-      "inputs": {},
-      "missing": [
-        "disk/sweep.jsonl",
-        "web/policy_metrics.csv"
-      ],
+      "inputs": {
+        "disk/sweep.jsonl": {
+          "sha256": "9d0ebad4d49f76fb922babf7be517c48b2635acd93453e46adb9b78179c53b14",
+          "provenance_git_sha": "beea45c3007ddbc62e3390095a0a0fa92e319a85",
+          "provenance_match": true
+        },
+        "web/comparisons.csv": {
+          "sha256": "982f0c0dfaace1afeba5b6bdf9a953debfd8ab09a721fc64f571bbcff03ef761",
+          "provenance_git_sha": "6de973bf2dd315e21b3c857481af3d56ff795654",
+          "provenance_match": true
+        },
+        "web/policy_metrics.csv": {
+          "sha256": "8ec7fb90a2dbefdbf5106227b2ea19d8986e79d4c3568be6b995fe66a0dfe410",
+          "provenance_git_sha": "6de973bf2dd315e21b3c857481af3d56ff795654",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false,
-      "note": "width: text"
+      "note": "disk: C1 auto, mean over 56 paired traces; web: test split, scorer logistic, capacity 8; no measured web c in the results schema yet; width: text"
     }
   }
 }

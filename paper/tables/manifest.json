@@ -4,97 +4,262 @@
   "fixture": false,
   "outputs": {
     "tables/t1_datasets.tex": {
-      "inputs": {},
-      "missing": [
-        "disk/corpus_profile.csv",
-        "web/dataset_profile.json"
-      ],
+      "inputs": {
+        "disk/corpus_profile.csv": {
+          "sha256": "6c3ecb9f31eb58df545f6fa2b7d0c0eeb35ea2b69ba8715416de52d60f0f0d1d",
+          "provenance_git_sha": "beea45c3007ddbc62e3390095a0a0fa92e319a85",
+          "provenance_match": true
+        },
+        "web/dataset_profile.json": {
+          "sha256": "b89cae5a15142dae34d17178f61031ec4fae0c707a4277e7a17631de364abda3",
+          "provenance_git_sha": "6de973bf2dd315e21b3c857481af3d56ff795654",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false
     },
     "tables/t1b_hardware.tex": {
-      "inputs": {},
-      "missing": [
-        "realio/device_*.json"
-      ],
+      "inputs": {
+        "disk/provenance.json": {
+          "sha256": "5d6ff1e62de92882a1913343ade1d3c41b0297a2c2e155e9b610b97164e35a38",
+          "provenance_git_sha": "beea45c3007ddbc62e3390095a0a0fa92e319a85",
+          "provenance_match": null
+        },
+        "realio/device_sdb.json": {
+          "sha256": "e6f3addd0f9504cf91813314f1bad4dd129172f436ad257a717117887120be79",
+          "provenance_git_sha": "aa382c1f7c017109713f8751ee17b6e5b48f25fe",
+          "provenance_match": true
+        },
+        "realio/device_ssd.json": {
+          "sha256": "d86ae43059f766f25392b4589e35e64ce9aa7750edbe82c2daba06671786259d",
+          "provenance_git_sha": "aa382c1f7c017109713f8751ee17b6e5b48f25fe",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false
     },
     "tables/t2_disk_main.tex": {
-      "inputs": {},
-      "missing": [
-        "disk/table_main.csv"
-      ],
+      "inputs": {
+        "disk/deltas.csv": {
+          "sha256": "0062c15c1f1c72ceaf7ff0eb07e806b56d589377388207140fad1dc3b3ec5e8d",
+          "provenance_git_sha": "beea45c3007ddbc62e3390095a0a0fa92e319a85",
+          "provenance_match": true
+        },
+        "disk/table_main.csv": {
+          "sha256": "92e4077811bcd4569adc79cd14f58ecf670da23e7597a3ab35646bc41cf7e237",
+          "provenance_git_sha": "beea45c3007ddbc62e3390095a0a0fa92e319a85",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false
     },
     "tables/t2b_disk_by_corpus.tex": {
-      "inputs": {},
-      "missing": [
-        "disk/table_by_corpus.csv"
-      ],
+      "inputs": {
+        "disk/table_by_corpus.csv": {
+          "sha256": "a9bf267d47d394045ccd6d77edd4e78689ca3094b8cbfb25297d60bab678417b",
+          "provenance_git_sha": "beea45c3007ddbc62e3390095a0a0fa92e319a85",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false
     },
     "tables/t2c_learned_depth.tex": {
-      "inputs": {},
-      "missing": [
-        "gpu/disk_learned_depth.csv"
-      ],
+      "inputs": {
+        "gpu/disk_learned_depth.csv": {
+          "sha256": "feca611606e0f1619b264e49eda923390b346a3bed43e1789c83b1cdc5f4f3ba",
+          "provenance_git_sha": "f44afe72efdb05479603c9270d6ad710f3eadde9",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false
     },
     "tables/t3_realio.tex": {
-      "inputs": {},
-      "missing": [
-        "realio/realio_summary.csv"
-      ],
+      "inputs": {
+        "realio/device_sdb.json": {
+          "sha256": "e6f3addd0f9504cf91813314f1bad4dd129172f436ad257a717117887120be79",
+          "provenance_git_sha": "aa382c1f7c017109713f8751ee17b6e5b48f25fe",
+          "provenance_match": true
+        },
+        "realio/device_ssd.json": {
+          "sha256": "d86ae43059f766f25392b4589e35e64ce9aa7750edbe82c2daba06671786259d",
+          "provenance_git_sha": "aa382c1f7c017109713f8751ee17b6e5b48f25fe",
+          "provenance_match": true
+        },
+        "realio/realio_summary.csv": {
+          "sha256": "47e8e03cf2d29af9862e492768c46f19d3dbc6ebd39381b01aaa121aeb31acba",
+          "provenance_git_sha": "aa382c1f7c017109713f8751ee17b6e5b48f25fe",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false
     },
     "tables/t3b_realio_summary.tex": {
-      "inputs": {},
-      "missing": [
-        "realio/realio_summary.csv"
-      ],
+      "inputs": {
+        "realio/realio.csv": {
+          "sha256": "536b12de7e13efbadc402e5d058b41e2e3928481cbd2d4babb2d2fc5f5cbc440",
+          "provenance_git_sha": "aa382c1f7c017109713f8751ee17b6e5b48f25fe",
+          "provenance_match": true
+        },
+        "realio/realio_summary.csv": {
+          "sha256": "47e8e03cf2d29af9862e492768c46f19d3dbc6ebd39381b01aaa121aeb31acba",
+          "provenance_git_sha": "aa382c1f7c017109713f8751ee17b6e5b48f25fe",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false
     },
     "tables/t4_web_dataset.tex": {
-      "inputs": {},
-      "missing": [
-        "web/dataset_profile.json"
-      ],
+      "inputs": {
+        "web/dataset_profile.json": {
+          "sha256": "b89cae5a15142dae34d17178f61031ec4fae0c707a4277e7a17631de364abda3",
+          "provenance_git_sha": "6de973bf2dd315e21b3c857481af3d56ff795654",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false
     },
     "tables/t5_web_decomposition.tex": {
-      "inputs": {},
-      "missing": [
-        "web/decomposition.csv"
-      ],
+      "inputs": {
+        "web/decomposition.csv": {
+          "sha256": "e53144edbaf3c5792a4d5d734230a727cf48811a96b6b45b4853f8a9e18c143c",
+          "provenance_git_sha": "6de973bf2dd315e21b3c857481af3d56ff795654",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false
     },
     "tables/t6_web_comparisons.tex": {
-      "inputs": {},
-      "missing": [
-        "web/comparisons.csv"
-      ],
+      "inputs": {
+        "web/comparisons.csv": {
+          "sha256": "982f0c0dfaace1afeba5b6bdf9a953debfd8ab09a721fc64f571bbcff03ef761",
+          "provenance_git_sha": "6de973bf2dd315e21b3c857481af3d56ff795654",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false
     },
     "tables/t7_live.tex": {
-      "inputs": {},
-      "missing": [
-        "live/live_metrics.csv"
-      ],
+      "inputs": {
+        "live/live_metrics.csv": {
+          "sha256": "4a3675e9c4eddd70a0ff333277adb524ef7bf66e05cb0d02531019c2bf79fd89",
+          "provenance_git_sha": "ae492d5dfa6fd8ad06bc3c85adcdfe6c48db0fa7",
+          "provenance_match": true
+        },
+        "live/live_parity.csv": {
+          "sha256": "8415a58f52be84ab05c86aad5eb7bc2239599bbb49790363fca636afbddb079b",
+          "provenance_git_sha": "ae492d5dfa6fd8ad06bc3c85adcdfe6c48db0fa7",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false
     },
     "tables/t7b_live_ablation.tex": {
-      "inputs": {},
-      "missing": [
-        "live/live_metrics.csv"
-      ],
+      "inputs": {
+        "live/live_metrics.csv": {
+          "sha256": "4a3675e9c4eddd70a0ff333277adb524ef7bf66e05cb0d02531019c2bf79fd89",
+          "provenance_git_sha": "ae492d5dfa6fd8ad06bc3c85adcdfe6c48db0fa7",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false
     },
     "tables/t8_cross_domain.tex": {
-      "inputs": {},
-      "missing": [
-        "disk/table_main.csv",
-        "live/live_metrics.csv",
-        "web/comparisons.csv"
-      ],
+      "inputs": {
+        "disk/sweep.jsonl": {
+          "sha256": "9d0ebad4d49f76fb922babf7be517c48b2635acd93453e46adb9b78179c53b14",
+          "provenance_git_sha": "beea45c3007ddbc62e3390095a0a0fa92e319a85",
+          "provenance_match": true
+        },
+        "disk/table_main.csv": {
+          "sha256": "92e4077811bcd4569adc79cd14f58ecf670da23e7597a3ab35646bc41cf7e237",
+          "provenance_git_sha": "beea45c3007ddbc62e3390095a0a0fa92e319a85",
+          "provenance_match": true
+        },
+        "live/live_metrics.csv": {
+          "sha256": "4a3675e9c4eddd70a0ff333277adb524ef7bf66e05cb0d02531019c2bf79fd89",
+          "provenance_git_sha": "ae492d5dfa6fd8ad06bc3c85adcdfe6c48db0fa7",
+          "provenance_match": true
+        },
+        "web/comparisons.csv": {
+          "sha256": "982f0c0dfaace1afeba5b6bdf9a953debfd8ab09a721fc64f571bbcff03ef761",
+          "provenance_git_sha": "6de973bf2dd315e21b3c857481af3d56ff795654",
+          "provenance_match": true
+        },
+        "web/decomposition.csv": {
+          "sha256": "e53144edbaf3c5792a4d5d734230a727cf48811a96b6b45b4853f8a9e18c143c",
+          "provenance_git_sha": "6de973bf2dd315e21b3c857481af3d56ff795654",
+          "provenance_match": true
+        },
+        "web/policy_metrics.csv": {
+          "sha256": "8ec7fb90a2dbefdbf5106227b2ea19d8986e79d4c3568be6b995fe66a0dfe410",
+          "provenance_git_sha": "6de973bf2dd315e21b3c857481af3d56ff795654",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
+      "fixture": false
+    },
+    "tables/t9_decisions.tex": {
+      "inputs": {
+        "disk/deltas.csv": {
+          "sha256": "0062c15c1f1c72ceaf7ff0eb07e806b56d589377388207140fad1dc3b3ec5e8d",
+          "provenance_git_sha": "beea45c3007ddbc62e3390095a0a0fa92e319a85",
+          "provenance_match": true
+        },
+        "disk/sweep.jsonl": {
+          "sha256": "9d0ebad4d49f76fb922babf7be517c48b2635acd93453e46adb9b78179c53b14",
+          "provenance_git_sha": "beea45c3007ddbc62e3390095a0a0fa92e319a85",
+          "provenance_match": true
+        },
+        "gpu/disk_learned_depth.csv": {
+          "sha256": "feca611606e0f1619b264e49eda923390b346a3bed43e1789c83b1cdc5f4f3ba",
+          "provenance_git_sha": "f44afe72efdb05479603c9270d6ad710f3eadde9",
+          "provenance_match": true
+        },
+        "live/live_metrics.csv": {
+          "sha256": "4a3675e9c4eddd70a0ff333277adb524ef7bf66e05cb0d02531019c2bf79fd89",
+          "provenance_git_sha": "ae492d5dfa6fd8ad06bc3c85adcdfe6c48db0fa7",
+          "provenance_match": true
+        },
+        "live/live_parity.csv": {
+          "sha256": "8415a58f52be84ab05c86aad5eb7bc2239599bbb49790363fca636afbddb079b",
+          "provenance_git_sha": "ae492d5dfa6fd8ad06bc3c85adcdfe6c48db0fa7",
+          "provenance_match": true
+        },
+        "realio/realio.csv": {
+          "sha256": "536b12de7e13efbadc402e5d058b41e2e3928481cbd2d4babb2d2fc5f5cbc440",
+          "provenance_git_sha": "aa382c1f7c017109713f8751ee17b6e5b48f25fe",
+          "provenance_match": true
+        },
+        "realio/realio_summary.csv": {
+          "sha256": "47e8e03cf2d29af9862e492768c46f19d3dbc6ebd39381b01aaa121aeb31acba",
+          "provenance_git_sha": "aa382c1f7c017109713f8751ee17b6e5b48f25fe",
+          "provenance_match": true
+        },
+        "web/comparisons.csv": {
+          "sha256": "982f0c0dfaace1afeba5b6bdf9a953debfd8ab09a721fc64f571bbcff03ef761",
+          "provenance_git_sha": "6de973bf2dd315e21b3c857481af3d56ff795654",
+          "provenance_match": true
+        },
+        "web/decomposition.csv": {
+          "sha256": "e53144edbaf3c5792a4d5d734230a727cf48811a96b6b45b4853f8a9e18c143c",
+          "provenance_git_sha": "6de973bf2dd315e21b3c857481af3d56ff795654",
+          "provenance_match": true
+        }
+      },
+      "missing": [],
       "fixture": false
     }
   }

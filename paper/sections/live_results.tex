@@ -1,19 +1,57 @@
 % IX. Live HTTP results (measured on loopback with an emulated network;
-% constraint 8). Only rows with valid=true are cited.
-% Feeds from: results/live/live_metrics.csv, live_parity.csv,
-% live_config.json, disk_probe_*.json, live_report.md (E6);
-% results/web/think_time.json for the think-time CDF.
-% Generated: table T7; figure F7.
+% RTT, bandwidth and object sizes are ASSUMED; constraint 8). Only valid
+% passes are cited, and SSD-store passes with more than 1 % foreign I/O are
+% left out (lead ruling; genlib.live_citable).
+% Sources: results/live/{live_metrics,live_parity}.csv, live_config.json,
+% via numbers.tex and paper/decisions.py. Generated: Table T7 (T7b and
+% Fig. F7 in the appendix).
 
-\section{Live HTTP Results}\label{sec:live}
+\section{Live HTTP Results (Measured)}\label{sec:live}
 
-\todo{Table T7: milliseconds per view saved with CIs, the model-ideal
-delta, the bytes multiple, parity mismatches and validity, from
-results/live/live\_metrics.csv and results/live/live\_parity.csv.}
+\input{tables/t7_live}
 
-\todo{Fig. F7: latency saved versus bytes wasted, from
-results/live/live\_metrics.csv.}
+Every saving here is measured on loopback with an emulated \liveRttMs{} round
+trip, a \liveMbps{} link and assumed object sizes; it is not a page-load
+speedup of a real site. All \liveRows{} pass--policy rows passed the validity
+gate, with \liveParityMismatches{} sessions whose live counters differ from the
+simulator's (H1); \liveFlaggedRows{} SSD-store rows had over one percent foreign
+I/O and are not cited.
 
-\todo{The FIFO-link ablation, the hint on the HDD store and in-flight-at-view
-counts, from results/live/live\_metrics.csv; the think-time CDF against the
-prefetch lead, from results/web/think\_time.json.}
+\textbf{Prefetching lowered the wait.} With the hard-disk object store, all
+\decTallyHTwoHddLowersTheMeanWait{} prefetching policies lowered the mean wait
+against no prefetching in every repetition (H2; Table~\ref{tab:t7_live}). The
+online-index controller (\polOnline) saved
+\liveSavedHddAdaptiveZeroPointOneAtTransOnlineCI{} per view and \texttt{fixed4}
+\liveSavedHddFixedFourCI, against a no-prefetch wait of \liveBaseWaitHdd; the
+bracket is the envelope of the per-repetition session-bootstrap intervals. On
+the SSD store \decTallyHTwoSsdLowersTheMeanWait{} of \decTallyHTwoSsd{}
+policies lowered the wait; for \polAdaptive{} the effect is
+\decLiveHTwoSsdAdaptiveZeroPointZeroOneVerdict, because only
+\liveRepsSsdAdaptiveZeroPointZeroOne{} of its \liveHeadlineReps{} repetitions was
+unflagged.
+
+\textbf{The instant-prefetch model understated the hard-disk benefit.} The
+model-ideal wait is zero on a hit and the round trip plus transfer on a miss.
+On the hard-disk store the measured saving exceeded the model-ideal saving for
+all \decTallyHThreeHddTheInstantPrefetchModelUnderstatesTheBenefit{} policies
+(H3): \texttt{fixed8} saved \liveSavedHddFixedEight{} against a model-ideal
+\liveIdealSavedHddFixedEight. The ideal model has no disk; a plausible reason is that
+every demand miss on the hard disk also waits for a seek, which a prefetched
+object avoids. On
+the SSD store all \decTallyHThreeSsdConsistentWithTheModel{} policies were
+consistent with the model, and the store changed the saving for
+\decTallyHSevenTheStoreChangesTheDelta{} of \decTallyHSeven{} policies (H7).
+
+\textbf{Bytes, scheduling and hints.} The savings cost bandwidth:
+\texttt{fixed8} transferred \liveBytesXHddFixedEight{} the bytes of no
+prefetching and saved less than \texttt{fixed4}; the two validated adaptive
+controllers moved \liveBytesXHddAdaptiveZeroPointZeroOne{} and
+\liveBytesXHddAdaptiveZeroPointOneAtTransOnline, and they are the only policies
+no other policy beats on both saved wait and bytes (H4, descriptive;
+Fig.~\ref{fig:f7}). Demand priority on the link matters for deep prefetching:
+under a FIFO link, \texttt{fixed8}'s change in wait was
+\decLiveHFiveSsdFixedEightFIFOCI, against \decLiveHFiveSsdFixedEightPriorityRepOneCI{}
+with priority, so \decLiveHFiveSsdFixedEightVerdict{} (H5); for \texttt{fixed4}
+there was \decLiveHFiveSsdFixedFourVerdict. Server-side read-ahead hints alone,
+with no client prefetch, lowered the wait in one repetition on the hard disk
+(H6; \decLiveHSixHddHintFixedEightCI{} for eight hinted objects).

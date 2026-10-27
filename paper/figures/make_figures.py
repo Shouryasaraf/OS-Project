@@ -302,10 +302,20 @@ def f3_device_io_vs_hit(results, out, path):
                     markersize=4, markeredgecolor="white", markeredgewidth=0.5, elinewidth=0.6,
                     capsize=1.2, label=f"{g.capacity_label(capacity)} cache")
         if k == 0:  # one label per policy; the legend tells the capacities apart
+            # Policies within F3_CLUSTER_PP of no gain overlap at this scale,
+            # so they share one label; the rest are named where they sit.
             ranked = sorted(zip(xs, ys, items))
-            for rank, (x, y, key) in enumerate(ranked):
+            crowd = [key[0] for x, y, key in ranked if abs(x) < F3_CLUSTER_PP]
+            spread = [(x, y, key) for x, y, key in ranked if abs(x) >= F3_CLUSTER_PP]
+            for rank, (x, y, key) in enumerate(spread):
                 ax.annotate(key[0], (x, y), xytext=(3, 3 if rank % 2 == 0 else -7),
                             textcoords="offset points", fontsize=5, color=INK_2)
+            if crowd:
+                cx = max(x for x, _, key in ranked if key[0] in crowd)
+                cy = max(y for _, y, key in ranked if key[0] in crowd)
+                ax.annotate("\n".join(_wrap(crowd, 3)), (cx, cy), xytext=(6, 4),
+                            textcoords="offset points", fontsize=4.6, color=INK_2,
+                            va="bottom")
     ax.axhline(1.0, color=AXIS, linewidth=0.6, zorder=0)
     ax.axvline(0.0, color=AXIS, linewidth=0.6, zorder=0)
     ax.set_yscale("log")
@@ -316,6 +326,14 @@ def f3_device_io_vs_hit(results, out, path):
     ax.set_ylabel("device I/Os relative to none")
     ax.legend(loc="best")
     _save(fig, path, out)
+
+
+#: F3: policies whose hit gain is smaller than this many pp share one label.
+F3_CLUSTER_PP = 4.0
+
+
+def _wrap(names, per_line):
+    return [", ".join(names[i:i + per_line]) for i in range(0, len(names), per_line)]
 
 
 # ---------------------------------------------------------------------------
@@ -456,14 +474,15 @@ def f7_live_saved_vs_bytes(results, out, path):
     if rows is None:
         raise Missing
     groups = defaultdict(list)
-    for row in rows:
-        if row["valid"] and row["experiment"] == "headline":
+    for row in g.live_citable(rows):  # valid, and store foreign I/O at most 1 %
+        if row["experiment"] == "headline":
             groups[(row["store"], row["policy"])].append(row)
     if not any(g.live_saved(items) is not None for items in groups.values()):
         out.missing.append("live/live_metrics.csv: no valid headline rows")
         raise Missing
     fig, ax = _figure("f7_live_saved_vs_bytes")
-    out.note = "points: mean over valid passes; bars: envelope of the per-pass 95% CIs"
+    out.note = ("points: mean over citable passes (valid, foreign I/O at most 1%); bars: "
+                "envelope of the per-pass 95% CIs")
     for k, store in enumerate(sorted({key[0] for key in groups})[:3]):
         keys = sorted((key for key in groups if key[0] == store), key=lambda key: g.policy_key(key[1]))
         keys = [key for key in keys if g.live_saved(groups[key]) is not None]
@@ -497,34 +516,7 @@ C_GRID = tuple(10 ** (-3 + i * (math.log10(1.1) + 3) / 120) for i in range(121))
 
 
 def _disk_utility_rows(sweep, capacity):
-    """Mean over traces of each policy's hit ratio and prefetches per block,
-    on the traces where every drawn policy has an ok row (paired).
-
-    Only policies with an ok row on every trace any policy covers are drawn,
-    so one partially covered mode cannot shrink every curve to its traces.
-    """
-    rows = [r for r in sweep if r["config"] == g.HEADLINE_CONFIG and r["merge"] == g.HEADLINE_MERGE
-            and r["latency"] == g.HEADLINE_LATENCY and r["capacity"] == capacity]
-    by_policy = defaultdict(dict)
-    for row in rows:
-        if row["status"] == "ok":
-            by_policy[_label(row)][row["trace"]] = row
-    if not by_policy:
-        return [], 0
-    covered = set.union(*(set(v) for v in by_policy.values()))
-    by_policy = {p: v for p, v in by_policy.items() if set(v) == covered}
-    if not by_policy:
-        return [], 0
-    traces = covered
-    out = []
-    for policy in sorted(by_policy, key=g.policy_key):
-        items = [by_policy[policy][t] for t in sorted(traces)]
-        if items:
-            out.append({"policy": policy, "requests": 1.0,
-                        "hit_ratio": statistics.fmean(r["hit_ratio"] for r in items),
-                        "issued_per_request": statistics.fmean(
-                            r["total_prefetches"] / r["read_blocks"] for r in items)})
-    return out, len(traces)
+    return g.disk_utility_rows(sweep, capacity)
 
 
 def _envelope_panel(ax, rows, title, marks, colors):
@@ -562,7 +554,9 @@ def _envelope_panel(ax, rows, title, marks, colors):
     ax.set_xlim(C_GRID[0], C_GRID[-1])
     ax.set_xlabel("cost per prefetch c (hits)")
     ax.set_title(title, loc="left")
-    ax.legend(loc="lower left", title="best policy", title_fontsize=6)
+    entries = len(ax.get_legend_handles_labels()[1])
+    ax.legend(loc="lower left", title="best policy", title_fontsize=6,
+              ncols=2 if entries > 4 else 1, fontsize=5 if entries > 4 else 6)
 
 
 def f8_utility_envelopes(results, out, path):

@@ -1,21 +1,60 @@
-% I. Introduction. No results file: this section motivates and lists the
-% contributions. Numbers that appear in the contribution list are macros.
+% I. Introduction. Motivates the question and lists the contributions; the
+% numbers it repeats are macros. The thesis is stated as the hypothesis the
+% pre-registrations tested, followed by how the tests came out.
 
 \section{Introduction}\label{sec:intro}
 
-\todo{The operating-system problem: page-cache read-ahead in the kernel and
-browser or proxy prefetch on the web both spend device or network work now
-to hide latency later, and both must decide what and how much to fetch.}
+Prefetching is a bet. The Linux page cache reads ahead of a sequential
+reader~\cite{wu2007readahead,linux_mmapi_readahead}, storage arrays stage
+blocks~\cite{gill2005sarc,gill2007amp}, and browsers or proxies fetch pages a
+user may open next~\cite{padmanabhan1996using,fan1999web}. Each spends device
+or network work now to hide latency later, and must decide \emph{what} to
+fetch, \emph{how much}, and \emph{when to stop}. A growing literature trains
+predictors for the first decision~\cite{chakraborttii2020learning,
+hashemi2018learning,wong2024baleen,savva2026adaptive,hidasi2016session}.
 
-\todo{Why learning is the obvious answer and why the question is whether it
-is the lever that matters. State the thesis as the hypothesis tested by the
-preregistered comparisons in results/disk/PREREGISTERED.md,
-results/web/PREREGISTERED.md and results/live/PREREGISTERED.md, not as a
-foregone conclusion.}
+We ask whether the predictor is the decision that matters, in two domains
+with one model: disk blocks under a page cache and product pages under a
+per-session browser cache. Before each experiment ran, we committed its
+comparisons, baselines, sample sizes, intervals and decision rules to the
+repository. The hypothesis was that the learned predictor is the smallest
+lever and depth, feedback and freshness the large ones. Every claim below is
+the verdict of one of those rules, computed from the results files by a script
+and listed in Table~\ref{tab:t9_decisions} in the appendix.
 
-\todo{Contributions, as a bulleted list: the multi-corpus negative result
-for the learned class router; depth versus device-I/O decoupling; a real
-Linux testbed with exact simulator parity; the web freshness and controller
-decomposition; and the live HTTP replay.}
+The hypothesis held only in part. Every learned predictor we tried lost to its
+simple, fair baseline: the class router to sequential read-ahead, the
+GPU-trained depth controller to a validation-chosen fixed depth, the logistic
+ranker to transition counts, and the GRU sequence model to online counts. How
+much to prefetch, and how fresh the statistics were, moved the simulated hit
+ratio by far more. Yet neither study's ordering rule calls the predictor the
+smallest lever. On disk, the feedback gate, which we expected to matter,
+moved the hit ratio as little as the predictor did, or less; on the web, the
+sequence model's loss could not be separated from the depth lever's gain. And on a real
+hard disk, a higher simulated hit ratio did not mean a lower measured latency.
 
-\todo{Roadmap of the remaining sections.}
+Our contributions are:
+\begin{itemize}
+\item A pre-registered, multi-corpus disk study (\diskTraces{} traces,
+  \diskCorpora{} corpora, paired and corpus-cluster bootstrap intervals) in which
+  a learned class router and a learned depth controller both lose to simple
+  baselines, while depth and Linux-style window growth carry the gains; window
+  growth is the only family that also reduces device I/Os.
+\item A real Linux testbed that replays the simulator's exact plan on a hard
+  disk and an SSD, with the cache behaviour asserted equal on every request
+  (\realioOdirectRuns{} O\_DIRECT runs), which shows simulated hit ratio failing
+  to rank measured latency.
+\item A web decomposition on RetailRocket that separates the ranker, index
+  freshness, depth, the controller and a feedback gate, each with a paired
+  session-bootstrap interval.
+\item A live HTTP replay of the validated web policies over loopback with an
+  emulated network, with \liveParityMismatches{} mismatches between the live
+  and simulated cache counters.
+\end{itemize}
+
+Section~\ref{sec:related} places the work. Section~\ref{sec:model} defines the
+shared model, Section~\ref{sec:systems} the systems and
+Section~\ref{sec:method} the protocol. Sections~\ref{sec:disk}--\ref{sec:live}
+report the four studies, Section~\ref{sec:discussion} compares the domains,
+and Sections~\ref{sec:threats} and~\ref{sec:conclusion} give the threats and
+conclusions.

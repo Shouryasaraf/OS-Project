@@ -1,17 +1,33 @@
-% XI. Threats to validity. The full list from MASTER_PLAN section 5; if
-% space is short the long form moves to the appendix.
+% XI. Threats to validity. The long form of each item is in the plan
+% (MASTER_PLAN section 5) and the pre-registrations; this is the summary.
 
 \section{Threats to Validity}\label{sec:threats}
 
-\todo{Trace format: oracleGeneral records carry no read/write flag and no
-service time, and timestamps are whole seconds; the FIU page-merge rule is
-ambiguous; the request caps (checked by C3); twin traces.}
+\textbf{Trace format.} The oracleGeneral records carry no read/write flag and
+no service time, and their timestamps are whole seconds; writes are replayed
+as reads, and think time on the real device is reconstructed from those
+seconds. The FIU page-merge rule is our reconstruction; the sensitivity rows
+show that leaving pages unmerged would change the FIU depth gain drastically.
+The disk study replays a prefix of each trace (C3 checks a second slice), and
+near-duplicate traces are down-weighted only in the cluster bootstrap.
 
-\todo{Model assumptions: instant prefetch in both simulators (bounded by
-the real-device and live HTTP runs); the multi-gen LRU in the kernel versus
-LRU in the simulators; assumed web object sizes, RTT and bandwidth; the
-per-session cache scope; heuristic thirty-minute sessions; a single
-retailer; ranking metrics versus cache utility.}
+\textbf{Model assumptions.} Both simulators assume a prefetch completes
+instantly; the real-device and live studies measure what that assumption
+hides, but only on \realioTraces{} trace prefixes and one web sample. The
+simulators use LRU while the kernel uses its multi-generational LRU, which is
+why Backend~A's hit ratio is reported as a divergence. Web object sizes, the
+round-trip time and the bandwidth are assumed, the cache is per session,
+sessions are cut by a fixed gap, and all web data come from one retailer.
 
-\todo{Measurement environment: a shared host and a shared GPU, with the
-load and contention recorded in each provenance.json.}
+
+\textbf{Statistics.} No correction for multiple comparisons is applied; we
+state only the pre-registered comparisons as findings and label the rest
+exploratory. The real-device intervals rest on \realioReps{} repeats and are
+wide. The learned-depth comparison had no pre-registration of its own and is
+read with the disk rule. Trained artifacts are scored only on data they were
+not trained or selected on.
+
+\textbf{Environment.} The host and GPU were shared; load and foreign I/O were
+recorded for every run, contended cells and flagged passes are excluded, and
+no GPU time is quoted as a cost. Each real-device result holds for its trace,
+think model and device, not for hard disks or SSDs in general.

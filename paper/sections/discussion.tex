@@ -1,18 +1,61 @@
-% X. Cross-domain discussion. Do not generalise from web_3, cap 2 or any
-% single trace (constraint 7).
-% Feeds from: results/disk/kappa.csv, results/disk/table_main.csv (E1),
-% results/web/policy_metrics.csv (E4), results/live/live_metrics.csv (E6).
-% Generated: table T8; figure F8.
+% X. Cross-domain discussion. States how the pre-registered hypothesis came
+% out, from the decision rules of each results/*/PREREGISTERED.md
+% (paper/decisions.py). Does not generalise from one trace, capacity or cost
+% (constraint 7). Generated: Fig. F8 (Table T8 in the appendix).
 
 \section{Cross-Domain Discussion}\label{sec:discussion}
 
-\todo{Fig. F8: U(c) envelopes, disk and web panels side by side on a log
-axis of c, with markers at the disk break-even and the measured web c,
-from results/disk/table\_main.csv and results/web/policy\_metrics.csv.}
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/f8_utility_envelopes}
+\caption{Simulated utility $U(c)$ of every policy (grey) and its upper envelope
+(coloured by the winning policy) against the cost of one prefetch. Left: disk,
+C1, 1\,MiB, means over \diskEnvelopeTracesOneMiB{} paired traces, with the two cost
+models marked. Right: web test split, logistic ranker, capacity 8, with the
+assumed costs marked. The envelope is computed in hindsight on the test data
+and is not a selection.}
+\label{fig:f8}
+\end{figure*}
 
-\todo{Table T8: the cross-domain summary (best policy, gain over none,
-waste, c*, whether the gate wins), from results/disk/deltas.csv,
-results/web/comparisons.csv and results/live/live\_metrics.csv.}
+\textbf{One objective, two domains.} Fig.~\ref{fig:f8} puts both domains on
+the axis of Eq.~\eqref{eq:utility}. On disk, the deepest read-ahead
+(\diskEnvelopeBestZeroOneMiB) is best when a prefetch is free, window growth
+(\diskEnvelopeBestAssumedOneMiB) at the assumed cost model's $c$, and no
+prefetching at the break-even model's $c$ above one. On the web, the best
+policy at every marked positive cost is an adaptive controller that chooses
+its depth per view (\webEnvelopeBestCostZeroPointZeroOne{} at $c$ =
+\webHeadlineCost, \webEnvelopeBestCostZeroPointTwoFive{} at the largest marked
+cost). In both domains the policy that wins changes with the price of a
+prefetch, and it is a choice of how much to fetch.
 
-\todo{Whether the preregistered hypothesis held, stated from the decision
-rules in each results/*/PREREGISTERED.md.}
+\textbf{The hypothesis, by its rules.} The pre-registered hypothesis had three
+parts. \emph{The predictor is the smallest lever:} not established in either
+study. Every learned predictor lost to its simple, fair baseline (the class
+router to \texttt{sequential}, the depth network to the validation-chosen
+depth, the logistic ranker to transition counts, the GRU to online counts),
+but on disk the feedback gate moved the hit ratio as little or less, and on
+the web the GRU's loss could not be separated from the depth lever's gain.
+\emph{Depth and freshness are large levers:} supported by the orderings. On
+disk, depth and window growth are larger than both the predictor and the gate
+at both cache sizes; on the web, freshness is larger than the ranker. \emph{Feedback is a large lever:} not supported. The disk
+gate is no better than \texttt{sequential} and the web gate shows no
+detectable difference from the adaptive controller; both mainly issue less.
+The one gated disk mode above \texttt{sequential}, \texttt{depth\_adaptive},
+also chooses its depth (an exploratory comparison).
+
+\textbf{Simulation against measurement.} The two real-system studies point in
+opposite directions, and both are measured. On a hard disk with O\_DIRECT and
+a closed loop, the simulator's higher hit ratio turned into higher latency in
+most cells,
+plausibly because prefetch reads compete with demand reads for one device.
+Over HTTP, the link serves demand first, a prefetched object skips both the
+round trip and the disk, and the instant-prefetch model \emph{understated}
+the saving on the hard-disk store.
+The simulator's hit ratio is therefore a statement about the cache, not about
+latency, and which way the error goes depends on where the bottleneck sits.
+
+\textbf{For a system designer.} Choose how much to prefetch per workload and
+per price of a prefetch, prefer window growth that merges reads when device
+operations are the cost, keep the statistics fresh, and validate on the real
+device before trusting a simulated hit ratio. A learned predictor must beat
+these baselines on held-out data to earn its training cost; none of ours did.
