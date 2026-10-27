@@ -180,6 +180,13 @@ class CommittedFlatFilesTests(unittest.TestCase):
         items = [k.lower() for k in re.findall(r"\\bibitem\{([^{}]+)\}", code)]
         self.assertEqual(sorted(items), sorted(cited))
         self.assertNotIn("MISSING", self.tex)
+        # IEEEtran's unsorted style: \bibitem order is the order of first \cite.
+        bibliography = code.index("\\begin{thebibliography}")
+        first = []
+        for group in re.findall(r"\\cite\{([^{}]*)\}", code[:bibliography] +
+                                code[code.index("\\end{thebibliography}"):]):
+            first += [k.strip().lower() for k in group.split(",") if k.strip().lower() not in first]
+        self.assertEqual(items, list(dict.fromkeys(first)))
 
     def test_flat_tex_figures_exist(self):
         for target in re.findall(r"\\includegraphics\s*(?:\[[^\]]*\])?\s*\{([^{}]+)\}",
@@ -263,6 +270,26 @@ class InlineTests(unittest.TestCase):
         self.assertIn("% >>> begin sections/b.tex", tex)
         self.assertIn("% \\input{sections/nothere}", tex)  # comments stay verbatim
         self.assertNotIn("MISSING", tex)
+
+    def test_an_input_inside_a_paragraph_adds_no_paragraph_break(self):
+        # TeX reads the marker comments as nothing, so neither file gains a
+        # blank line (a \par) that the \input did not have.
+        files = {"tables/t.tex": "\\begin{table}[t]\\caption{T.}\\end{table}\n",
+                 "frag.tex": "middle words\n"}
+        rendered = _render("Before the table\n\\input{tables/t}\nafter the table, "
+                           "then \\input{frag} end.", files)
+        tex = rendered[flatten.FLAT_TEX]
+        self.assertIn("Before the table\n% >>> begin tables/t.tex\n", tex)
+        self.assertIn("% <<< end tables/t.tex\nafter the table", tex)
+        self.assertIn("then \n% >>> begin frag.tex\nmiddle words\n% <<< end frag.tex\n end.", tex)
+        # The plain text sets the float apart, as a block between the
+        # paragraph's two halves, but the inlined fragment stays in its line.
+        text = rendered[flatten.FULL_TEXT]
+        self.assertIn("after the table, then middle words end.", text)
+
+    def test_comment_lines_inside_a_paragraph_do_not_split_the_text(self):
+        text = _text("First half\n% a comment line\nsecond half; joined%\nword.\n\nNext.")
+        self.assertIn("First half second half; joinedword.\n\nNext.", text)
 
     def test_if_file_exists_takes_the_branch_the_file_system_gives(self):
         body = "\\IfFileExists{x.tex}{\\input{x}}{ELSE-BRANCH}"
