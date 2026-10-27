@@ -4,11 +4,13 @@
   "command": [
     "/home/antpc/Ashvik/OS-Project/OS-Project/.venv/bin/python",
     "reproduce.py",
-    "hindsight"
+    "hindsight",
+    "--workers",
+    "28"
   ],
-  "git_sha": "7602a8b991d1a509d3242e51d0834ec5b94718d3",
+  "git_sha": "32f8bdda76f2615e24e7e014f406f2a59ab0dbcb",
   "git_dirty": false,
-  "created_utc": "2026-10-27T04:59:30+00:00",
+  "created_utc": "2026-10-27T05:16:13+00:00",
   "host": {
     "hostname": "antpc",
     "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
@@ -18,17 +20,17 @@
   },
   "load_avg": {
     "start": [
-      14.79,
-      29.54,
-      55.26
+      7.0,
+      33.58,
+      44.67
     ],
     "end": [
-      19.78,
-      26.47,
-      50.2
+      9.65,
+      24.9,
+      39.74
     ]
   },
-  "wall_s": 154.674,
+  "wall_s": 155.049,
   "gpu": null,
   "inputs": {
     "data/block-traces/alibaba/alibabaBlock_13.oracleGeneral.zst": "66641fea45e083148b4b02a219bdf76954027cc497ef82c2ada673163e6d61fa",
@@ -55,13 +57,13 @@
     "results/disk/sweep.jsonl": "9d0ebad4d49f76fb922babf7be517c48b2635acd93453e46adb9b78179c53b14"
   },
   "outputs": {
-    "PREREGISTERED.md": "69cb35af4e8f9bed5ff3cf92ee9a87d7216f20d428352edd4054edd6054e4f7d",
-    "README.md": "a768aec9949cba7fd707830eba43b0e35031f268e3c89a760f6d586b7680acb2",
+    "PREREGISTERED.md": "f4662872619f61b229759dcb2b2d0414262ba8c04c5f0567b3bdd110c24578e1",
+    "README.md": "5a269857e588757235d582e607f053318102f2a8bff15086093040243ac5d4e0",
     "comparisons.csv": "1b33495f11318e2cfa4d6dca648167c309766e94632b48e7afc5ec760a11f453",
     "families.csv": "e1a72634bf6c6d39c1cdbb8eab42f9f1228433d686da58a29e734a3300860bfa",
     "rows.csv": "2f88aa106629cf589a11cb0a4e86209ec3f2605677590d0d8e42d55ed35c55c0",
     "selection.csv": "c88dbfecc096a1135b41c4c37a53c76aa0e1e92493b4594908315e10f97fc4a7",
-    "summary.csv": "1a47544f0886368dab6590c22c8e6eca032f3c8257c7dbd125d80d2ca30e7e8c"
+    "summary.csv": "62bccb440efaa9aaf90ea71cfc13ab0b1fdc7423b70d30ffaf4b1830aae486b3"
   },
   "notes": "Track HSR, simulated. Router trained on slice 1 [0, 1M) of the 21 PAPER_SUBSET traces with trajectory hindsight labels (an approximation of the counterfactual), selected by grouped CV over traces, scored once on slice 2 [1M, 2M). LatencyModel(5, 100, 50) for every row. Oracle rows are references, never policies. CPU timings are on a shared host and are not costs. Written after E1-E6 were known.",
   "extra": {
