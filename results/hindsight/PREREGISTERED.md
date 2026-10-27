@@ -149,3 +149,17 @@ objective: `hit` hit ratio; `u0.5` (hits - 0.5 * prefetches) per read block;
 No test-slice information is used for any choice; no trace, capacity or
 objective is dropped after seeing results; no number from a bounded or
 smoke run is quoted; the oracle is never called a policy.
+
+## Amendments
+
+**A1 (2026-10-27, before the selection run that produced the results; no
+slice-2 router score had been computed).** The first selection run was
+stopped after 24 of 384 CV tasks because its measured throughput (about
+100-170 s per kNN task at host load 45-70) projected about 27 CPU-minutes per
+worker, beyond the track's time budget. Two cuts, both to selection cost
+only: (1) inside each grouped-CV fit the training subsample is 2,000 decision
+points per trace instead of 4,000 (held-out traces are still scored on every
+window; the final refits of section 4 keep 4,000 per trace); (2) the random
+forest and extra-trees `n_estimators` space is {50, 100} instead of
+{100, 200}. Nothing else changes. The scores of the 24 stopped tasks were not
+used.
