@@ -82,8 +82,17 @@ Each family's validated adaptive policy minus the shipped logistic's, U(0.01):
 
 `hgb`, `rf`, `et` and `mlp` are "better" for prefetching at both
 capacities. `logistic_tuned` is "worse": its search chose class-balanced
-weights (highest tuning MRR@8, see `tuning.csv`), whose probabilities are
-not calibrated, and the adaptive controller reads probabilities.
+weights (highest tuning MRR@8, see `tuning.csv`), which inflate the
+predicted probabilities (its tuning log loss in `tuning.csv` is more than
+twenty times every other selected trial's), and the adaptive controller reads probabilities. That explanation
+was not tested separately.
+
+<!-- source: results/web_rankers/comparisons.csv comparison=K3 metric=hit_ratio -->
+The utility gain does not always come with a higher hit ratio. On the K3
+hit-ratio rows `hgb` is "better" at both capacities, but at capacity 8
+`rf` (-0.00349, interval [-0.00372, -0.00326]), `et` (-0.00328) and `mlp`
+(-0.00163) are "worse": their validated controllers issue fewer
+prefetches there. At capacity 32 all four are "better".
 
 <!-- source: results/web_rankers/comparisons.csv comparison=K2 metric=hit_ratio -->
 At fixed depth 1 every family's hit ratio is "better" than the shipped
@@ -93,10 +102,12 @@ non-linear families.
 <!-- source: results/web_rankers/comparisons.csv comparison=K4 -->
 None of them beats the history-only transition top-1 at depth 1 (K4):
 every hit-ratio row is "worse" or "no difference detected", for example
-`mlp` at capacity 8, -0.00020, interval [-0.00037, -0.00003]. The trained
-rankers learn from labels that include self-repeats and back-navigation,
-which a session cache already holds; on novel next views the transition
-order is the better top-1 (`ranking_metrics.csv`).
+`mlp` at capacity 8, -0.00020, interval [-0.00037, -0.00003]. A likely
+reason, not tested here: the trained rankers learn from labels that include
+self-repeats and back-navigation, which a session cache already holds. On
+novel next views transition top-1 has the higher hit@1 point estimate than
+every trained family (`ranking_metrics.csv`, descriptive; no direct
+transition-versus-family ranking interval was pre-registered).
 
 <!-- source: results/web_rankers/comparisons.csv comparison=K5 metric=hit_ratio -->
 Every static ranker stays far below causal online counts at depth 4 (K5):

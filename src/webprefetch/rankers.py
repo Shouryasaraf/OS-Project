@@ -27,8 +27,11 @@ random search (``SEARCH_SPACES``, ``TRIALS``, seed :data:`SEARCH_SEED`), the
 whole of split 2 then selects the prefetch policy per capacity exactly as E4
 does (:func:`webprefetch.benchmark.select_policies`), and split 3 is replayed
 once with everything frozen. Rankings are computed once per split in a batch
-(:func:`rank_split`) and replayed through :class:`ArrayScorer`, which returns
-exactly what the per-request :class:`ModelScorer` would.
+(:func:`array_scorer`) and replayed through :class:`ArrayScorer`, which returns
+the per-request :class:`ModelScorer`'s ranking: the same candidate order, and
+probabilities equal up to floating-point rounding (bit-equal for the trees;
+the MLP computes in float32, so a batch and a one-request call differ by up to
+about 1e-8 in absolute terms, because BLAS sums in another order).
 
 sklearn, numpy and pandas are imported here, so this module is optional: the
 disk core and system ``python3`` never import it.
@@ -266,8 +269,10 @@ class ArrayScorer:
     """A batch-scored ranking looked up by ``(session_id, position)``.
 
     It holds, for every row of one split, the candidates sorted by
-    (-probability, item) as padded arrays, and returns exactly the list a
-    :class:`ModelScorer` returns for that row. The index argument is ignored.
+    (-probability, item) as padded arrays, and returns the list a
+    :class:`ModelScorer` returns for that row: the same order, and
+    probabilities equal up to floating-point rounding (see the module
+    docstring). The index argument is ignored.
     """
 
     def __init__(self, keys: dict, items: np.ndarray, probs: np.ndarray, lengths: np.ndarray):

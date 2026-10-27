@@ -134,6 +134,32 @@ class DesignAndRankingTests(unittest.TestCase):
                 for key in ("hits", "issued", "views"):
                     self.assertEqual(a.rows[cap][name][key], b.rows[cap][name][key])
 
+    def test_float32_mlp_table_keeps_the_per_request_order_and_replay(self):
+        # The MLP computes in float32, so batch and one-request probabilities
+        # may differ in the last bits; the order and every replayed count must
+        # not (the S1 scorer of the full run is an MLP).
+        d = rankers.design(self.views.loc[self.views.split.le(1)], self.index)
+        model = rankers.make_estimator("mlp", {"hidden_layer_sizes": (16,), "alpha": 1e-4,
+                                               "learning_rate_init": 1e-3,
+                                               "batch_size": 256}).fit(d.x, d.y)
+        full = rankers.design(self.frame, self.index)
+        table = rankers.array_scorer(self.frame, full, rankers.predict(model, full.x))
+        online = rankers.ModelScorer(model)
+        for row in self.frame.itertuples(index=False):
+            expected, actual = online.score(row, self.index), table.score(row)
+            self.assertEqual([i for i, _ in actual], [i for i, _ in expected])
+            np.testing.assert_allclose([p for _, p in actual], [p for _, p in expected],
+                                       rtol=1e-5, atol=1e-7)
+        from webprefetch.scorers import ScorerSpec
+        grid = benchmark.policy_grid(feedback=False)
+        a = benchmark.replay_split(self.frame, ScorerSpec("t", "ok", table, None), grid, (2, 8))
+        b = benchmark.replay_split(self.frame, ScorerSpec("m", "ok", online, self.index), grid,
+                                   (2, 8))
+        for cap in (2, 8):
+            for name in a.rows[cap]:
+                for key in ("hits", "issued", "views"):
+                    self.assertEqual(a.rows[cap][name][key], b.rows[cap][name][key])
+
     def test_every_family_fits_and_predicts_probabilities(self):
         d = rankers.design(self.views.loc[self.views.split.le(1)], self.index)
         for family in rankers.FAMILIES:
