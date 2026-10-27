@@ -1,0 +1,3 @@
+# Trace data keeps the bytes it shipped with. Git's autocrlf would rewrite
+# these LF files to CRLF on checkout, so pin them as non-text.
+data/samples/msrc/** -text

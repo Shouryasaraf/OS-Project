@@ -48,3 +48,8 @@ redistributing a trace or a per-request derivative.
   verified (see `data/samples/README.md`), a generated synthetic trace, and a
   small synthetic web fixture (`web_fixture.csv`) that contains no
   RetailRocket data.
+- **MSRC light sample** (`data/samples/msrc/`): seven of the smallest
+  `MSRC-trace-003` `.revised` files, copied unmodified. The subset was
+  chosen by file size only, is not a representative sample, and is never a
+  basis for a benchmark claim. Its redistribution terms are the source's,
+  not this repository's (see `data/samples/msrc/README.md`).
