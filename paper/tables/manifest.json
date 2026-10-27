@@ -319,7 +319,7 @@
         },
         "msrc_samples/classifier_deltas.csv": {
           "sha256": "4353d5ac7beacb671eb2922771dd2a3e1351bc0dc2c9bb20f3859b723af0e2a4",
-          "provenance_git_sha": "9b8410bcea108fa69a34d696e6e72f2602b73c4a",
+          "provenance_git_sha": "739b599710d672ab3b10c301b99a77fb4d9cc600",
           "provenance_match": true
         },
         "realio/realio.csv": {

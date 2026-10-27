@@ -92,17 +92,17 @@
         },
         "msrc_samples/classifier_deltas.csv": {
           "sha256": "4353d5ac7beacb671eb2922771dd2a3e1351bc0dc2c9bb20f3859b723af0e2a4",
-          "provenance_git_sha": "9b8410bcea108fa69a34d696e6e72f2602b73c4a",
+          "provenance_git_sha": "739b599710d672ab3b10c301b99a77fb4d9cc600",
           "provenance_match": true
         },
         "msrc_samples/classifier_metrics.csv": {
           "sha256": "b745a72c47d1bbf33403450f5845bf52a14e3495cfdc7cadd224bce7d8bf4988",
-          "provenance_git_sha": "9b8410bcea108fa69a34d696e6e72f2602b73c4a",
+          "provenance_git_sha": "739b599710d672ab3b10c301b99a77fb4d9cc600",
           "provenance_match": true
         },
         "msrc_samples/traces.csv": {
           "sha256": "82a5bfc3fa79b07b460f6e150b34575ecbc65341980e5d46b8dbb4a08c6b765e",
-          "provenance_git_sha": "9b8410bcea108fa69a34d696e6e72f2602b73c4a",
+          "provenance_git_sha": "739b599710d672ab3b10c301b99a77fb4d9cc600",
           "provenance_match": true
         },
         "realio/device_sdb.json": {

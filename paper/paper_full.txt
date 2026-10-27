@@ -744,9 +744,10 @@ difference detected (paired interval only; not robust to corpus clustering),
 and linux_ra@256 needs only 0.713×. GNB had the lowest cross-validation score
 in 6 of 6 cells, yet the best family does not beat VCF, and trained without
 the test trace's corpus (hyperparameters still chosen with it) the router is
-worse than VCF at both sizes (-4.326 pp [-8.122, -1.254] at 1 MiB); nor is the
-trajectory oracle (a reference, never a policy) a true ceiling, since it beats
-VCF at 1 MiB only.
+worse than VCF at both sizes (-4.326 pp [-8.122, -1.254] at 1 MiB, at 1.177×
+the device I/Os and 5.527× the blocks moved of none); nor is the trajectory
+oracle (a reference, never a policy) a true ceiling, since it beats VCF at
+1 MiB only.
 
 Web rankers (Table XVIII). On the same candidates and features, tuned
 boosting, forests, extra trees and an MLP rank better than the shipped
@@ -2312,9 +2313,11 @@ the selected trial's MRR@8 on the split-2 tuning sample. Ranking: test hit@1
 and MRR@8 over eligible next views, and the K1 difference in MRR@8 from the
 shipped logistic ranker. K3: each scorer's validated adaptive controller minus
 logistic's, ΔU(c) per view at the pre-registered c. K4: fixed depth 1 minus
-transition top-1; K5: fixed depth 4 minus online counts; Δ hit ratio. All Δ in
-pp with paired session-bootstrap intervals; ^+/^- better/worse. Scoring time
-per request is wall time on a contended shared host, never a cost.
+transition top-1; K5: fixed depth 4 minus online counts; Δ hit ratio. Every Δ
+is a difference of percentages (points of hit ratio, MRR@8 or U(c) per view,
+as the levels) with paired session-bootstrap intervals; ^+/^- better/worse.
+Scoring time per request is wall time on a contended shared host, never a
+cost.
 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
                     Tuning                      Test ranking                                   K3 ΔU(0.01)                                       K4 Δhit                                         K5 Δhit
