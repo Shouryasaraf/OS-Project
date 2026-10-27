@@ -12,7 +12,7 @@ ratio while reducing device I/Os, and online counts gained
 its simple baseline, and the pre-registered feedback gates limited waste
 without adding hits; the one gated mode that did add hits also chose depth. Tuning or replacing the
 classifier did not change this: the router's actions, not its learner, cap
-its gain, and a router given depth as an action only matched a fixed depth
+its gain, and a router given depth as an action did not beat a fixed action
 chosen per trace. On a real hard disk the simulated gains did not become lower latency
 in most O\_DIRECT cells, while over emulated HTTP with a hard-disk store the
 measured savings exceeded the model's. Future work should

@@ -27,17 +27,18 @@ of no prefetching's. Real devices (measured): on a hard disk and an SSD, the
 mode with the highest simulated hit ratio was fastest in 0 of 15 cells, and
 with exact cache parity prefetching raised the mean closed-loop latency on the
 hard disk in 22 of 30 mode–trace cells. Web (simulated): on RetailRocket,
-transition counts beat a trained ranker (+0.07 pp [+0.06, +0.09]), online
-counts beat a GRU (-0.79 pp [-0.83, -0.76]), and index freshness gave
+transition counts beat a trained ranker (+0.07 pp [+0.06, +0.09]), a GRU
+trailed online counts (-0.79 pp [-0.83, -0.76]), and index freshness gave
 +1.52 pp [+1.49, +1.56]. Live HTTP (measured, emulated network): every
 prefetching policy lowered the wait with a hard-disk store, by up to 8.27 ms
 per view against 114.11 ms without prefetching, with exact simulator parity.
 Better learners (simulated): none of 15 classifiers made the router beat
 sequential read-ahead, a hindsight-trained router choosing depth did not beat
-a per-trace fixed depth, and a tuned web ranker gained +0.15 pp in utility but
-stayed below transition counts. How much to fetch and how fresh the statistics
-are moved the results; no learned predictor beat its simple baseline, and
-simulated hit ratio did not predict real-disk latency.
+a fixed action chosen per trace, and a tuned web ranker gained
++0.15 pp [+0.13, +0.18] in utility (capacity 8) but did not beat transition
+counts. How much to fetch and how fresh the statistics are moved the results;
+no learned predictor beat its simple baseline, and simulated hit ratio did not
+predict real-disk latency.
 
 Index Terms—prefetching, read-ahead, page cache, storage traces, web
 prefetching, cache simulation, machine learning for systems, pre-registration
@@ -701,9 +702,10 @@ SVMs, CART, forests, boosting and an MLP (the list with its citations is in
 the appendix), each with 16 random-search candidates [58] chosen on training
 seeds alone; test seeds were scored once. The fitted models then routed
 adaptive unchanged on C3's second slice of 19 traces. On synthetic windows
-(appendix, Table XV) the tree models and boosting match GNB under the
-block-size shift that made us keep it, and beat it on heavy phase blends, an
-optimistic synthetic margin.
+(appendix, Table XV) CART, the random forest and boosting show no difference
+detected against GNB at every request size of the block-size shift that made
+us keep it (extra trees is worse at one size), and are better on heavy phase
+blends, an optimistic synthetic margin.
 
 [Figure 3: The action-space ceiling (simulated, C3 slice 2, 19 traces): mean
 hit ratio against device I/Os relative to none. The 15 routed classifiers sit
@@ -716,12 +718,13 @@ classifier beats read-ahead at either capacity: all 15 show no difference
 detected against sequential at 1 MiB and all are worse at 64 MiB (the best, an
 MLP, by -0.34 pp [-0.51, -0.20]). Against the shipped GNB, only the random
 forest is better at 1 MiB (+0.25 pp [+0.07, +0.55] paired, +0.25 pp [+0.05,
-+0.85] cluster), and 8 of 14 alternatives are at 64 MiB. Every routed
++0.85] cluster), with 1.044× [1.024×, 1.069×] of none's device I/Os and 1.017×
+of its blocks moved, and 8 of 14 alternatives are at 64 MiB. Every routed
 classifier increases device I/Os (1.027×–1.160× of none's at 1 MiB), while
-linux_ra@256 adds +21.04 pp over sequential with 0.713× of the I/Os. The
-classifiers agree with GNB on only 0.29–0.70 of windows, yet the hit ratio
-barely moves: the class decides little when every class prefetches two blocks
-at most.
+linux_ra@256 adds +21.04 pp over sequential with 0.713× of the I/Os and 1.128×
+of the blocks moved. The classifiers agree with GNB on only 0.29–0.70 of
+windows, yet the hit ratio barely moves: the class decides little when every
+class prefetches two blocks at most.
 
 Depth as an action. The hindsight router picks the next window's action among
 none, sequential, deep@8, deep@32 and deep@256. Its label is the action that
@@ -733,11 +736,14 @@ corpus-grouped cross-validation on the first slice and scored the second
 router shows no difference detected at 1 MiB (+0.027 pp [-1.995, +2.259]) and
 is worse, by a negligible -0.003 pp, at 64 MiB, where it sends 99.9 % of
 windows to deep@256, the VCF action. Its gains over sequential (+29.809 pp at
-1 MiB) and linux_ra@256 are depth's, at 3.649× the blocks moved by none. A
-device-objective router reduces device I/Os (0.976× of none's), but
-linux_ra@256 needs only 0.713×. GNB had the lowest cross-validation score in 6
-of 6 cells, yet the best family does not beat VCF; nor is the trajectory
-oracle a true ceiling, since it beats VCF at 1 MiB only.
+1 MiB) and linux_ra@256 are depth's, at 3.649× the blocks moved and 1.074× the
+device I/Os of none. A device-objective router reduces device I/Os (0.976× of
+none's, at 1.121× the blocks moved), but against its own VCF it shows no
+difference detected (paired interval only; not robust to corpus clustering),
+and linux_ra@256 needs only 0.713×. GNB had the lowest cross-validation score
+in 6 of 6 cells, yet the best family does not beat VCF; nor is the trajectory
+oracle (a reference, never a policy) a true ceiling, since it beats VCF at
+1 MiB only.
 
 Web rankers (Table XVIII). On the same candidates and features, tuned
 boosting, forests, extra trees and an MLP rank better than the shipped
@@ -747,8 +753,8 @@ learned predictor here that does: the validation-selected MLP raises U(c) per
 view at c = 0.01 by +0.15 pp [+0.13, +0.18] at capacity 8 and +0.15 pp [+0.12,
 +0.17] at 32, though its hit ratio at capacity 8 is lower (-0.16 pp [-0.18,
 -0.14]). No family beats transition top-1 at depth 1, and all stay far below
-online counts (MLP: -1.41 pp [-1.45, -1.37]): a better ranker does not close
-the freshness gap.
+online counts (MLP: -1.39 pp [-1.43, -1.35] in U(c) per view): a better ranker
+does not close the freshness gap.
 
 XI. Cross-Domain Discussion
 ===========================
@@ -786,12 +792,12 @@ depth (an exploratory comparison).
 
 Is the learner the problem? No, in either domain. On disk, any of 15
 classifiers leaves the router level with or below sequential, because its
-actions prefetch two blocks at most; with depth as an action a router only
-reaches a fixed depth chosen per trace, moving 3.649× the blocks of no
+actions prefetch two blocks at most; with depth as an action a router does not
+beat a fixed action chosen per trace, moving 3.649× the blocks of no
 prefetching at 1 MiB. On the web a better ranker helps the controller
-slightly, but transition top-1 and online counts stay ahead. A learner matters
-only once its decision can move the result, and even then depth and freshness
-decide more.
+slightly, but no ranker beats transition top-1 and all stay below online
+counts. A learner matters only once its decision can move the result, and even
+then depth and freshness decide more.
 
 Simulation against measurement. The two real-system studies point in opposite
 directions, and both are measured. On a hard disk with O_DIRECT and a closed
@@ -859,8 +865,8 @@ simulated hit ratio while reducing device I/Os, and online counts gained
 simple baseline, and the pre-registered feedback gates limited waste without
 adding hits; the one gated mode that did add hits also chose depth. Tuning or
 replacing the classifier did not change this: the router's actions, not its
-learner, cap its gain, and a router given depth as an action only matched a
-fixed depth chosen per trace. On a real hard disk the simulated gains did not
+learner, cap its gain, and a router given depth as an action did not beat a
+fixed action chosen per trace. On a real hard disk the simulated gains did not
 become lower latency in most O_DIRECT cells, while over emulated HTTP with a
 hard-disk store the measured savings exceeded the model's. Future work should
 test learned depth and admission against window growth on the real device

@@ -26,9 +26,10 @@ with \clfSynCandidates{} random-search candidates~\cite{bergstra2012random}
 chosen on training seeds alone; test seeds were scored once. The fitted
 models then routed \texttt{adaptive} unchanged on C3's second slice of
 \clfRouterTraces{} traces. On synthetic windows (appendix,
-Table~\ref{tab:t10_classifier_zoo}) the tree models and boosting match GNB
-under the block-size shift that made us keep it, and beat it on heavy phase
-blends, an optimistic synthetic margin.
+Table~\ref{tab:t10_classifier_zoo}) CART, the random forest and boosting
+show no difference detected against GNB at every request size of the
+block-size shift that made us keep it (extra trees is worse at one size), and
+are better on heavy phase blends, an optimistic synthetic margin.
 
 \begin{figure}[t]
 \centering
@@ -48,12 +49,15 @@ Table~\ref{tab:t11_classifier_router}). By the claim rule,
 \texttt{sequential} at 1\,MiB and all are worse at 64\,MiB (the best, an MLP,
 by \decClfOneMlpSixtyFourMiBPairedCI). Against the shipped GNB, only the random
 forest is better at 1\,MiB (\decClfTwoRfOneMiBPairedCI{} paired,
-\decClfTwoRfOneMiBClusterCI{} cluster), and \decTallyClfTwoSixtyFourMiBBetter{}
+\decClfTwoRfOneMiBClusterCI{} cluster), with \decClfThreeRfOneMiBPairedCI{}
+of \texttt{none}'s device I/Os and \decClfFourRfOneMiBPaired{} of its blocks
+moved, and \decTallyClfTwoSixtyFourMiBBetter{}
 of \decTallyClfTwoSixtyFourMiB{} alternatives are at 64\,MiB. Every routed
 classifier increases device I/Os (\clfRouterIORatioMinOneMiB--\clfRouterIORatioMaxOneMiB{}
 of \texttt{none}'s at 1\,MiB), while \texttt{linux\_ra@256} adds
 \decClfOneLinuxRaAtTwoHundredFiftySixOneMiBPaired{} over \texttt{sequential}
-with \clfRouterIORatioLinuxRaAtTwoHundredFiftySixOneMiB{} of the I/Os. The
+with \clfRouterIORatioLinuxRaAtTwoHundredFiftySixOneMiB{} of the I/Os and
+\decClfFourLinuxRaAtTwoHundredFiftySixOneMiBPaired{} of the blocks moved. The
 classifiers agree with GNB on only \clfRouterAgreementMin--\clfRouterAgreementMax{}
 of windows, yet the hit ratio barely moves: the class decides little when
 every class prefetches two blocks at most.
@@ -75,13 +79,17 @@ sends \hsrDeepShareRoutedHitSixtyFourMiB{} of windows to \texttt{deep@256}, the
 VCF action. Its gains over \texttt{sequential}
 (\decHsrHTwoHitRatioRoutedHitVsSequentialOneMiBPaired{} at 1\,MiB) and
 \texttt{linux\_ra@256} are depth's, at \hsrMovedRatioRoutedHitOneMiB{} the
-blocks moved by \texttt{none}. A device-objective router
+blocks moved and \hsrIORatioRoutedHitOneMiB{} the device I/Os of
+\texttt{none}. A device-objective router
 \decHsrDDeviceIosRoutedDevVsNoneOneMiBVerdict{}
-(\decHsrDDeviceIosRoutedDevVsNoneOneMiBPaired{} of \texttt{none}'s), but
+(\decHsrDDeviceIosRoutedDevVsNoneOneMiBPaired{} of \texttt{none}'s, at
+\decHsrDBlocksMovedRoutedDevVsNoneOneMiBPaired{} the blocks moved), but against
+its own VCF it shows \decHsrHFourDeviceIosRoutedDevVsVcfDevOneMiBVerdict, and
 \texttt{linux\_ra@256} needs only \hsrIORatioLinuxRaAtTwoHundredFiftySixOneMiB.
 GNB had the lowest cross-validation score in \hsrCvGnbLowest{} of
 \hsrCvCells{} cells, yet the best family does not beat VCF; nor is the
-trajectory oracle a true ceiling, since it beats VCF at 1\,MiB only.
+trajectory oracle (a reference, never a policy) a true ceiling, since it beats
+VCF at 1\,MiB only.
 
 \textbf{Web rankers} (Table~\ref{tab:t13_web_rankers}). On the same candidates
 and features, tuned boosting, forests, extra trees and an MLP rank better than
@@ -92,5 +100,5 @@ view at $c$ = \webHeadlineCost{} by \decWrkSOneMlpUtilityPerViewCapEightCI{} at
 capacity 8 and \decWrkSOneMlpUtilityPerViewCapThirtyTwoCI{} at 32, though its
 hit ratio at capacity 8 is lower (\decWrkSOneMlpHitRatioCapEightCI). No family
 beats transition top-1 at depth 1, and all stay far below online counts (MLP:
-\decWrkKFiveMlpHitRatioCapEightCI): a better ranker does not close the
+\decWrkKFiveMlpUtilityPerViewCapEightCI{} in $U(c)$ per view): a better ranker does not close the
 freshness gap.

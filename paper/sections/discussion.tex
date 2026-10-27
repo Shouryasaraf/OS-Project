@@ -46,10 +46,10 @@ also chooses its depth (an exploratory comparison).
 \textbf{Is the learner the problem?} No, in either domain. On disk, any of
 \clfRouterClassifiers{} classifiers leaves the router level with or below
 \texttt{sequential}, because its actions prefetch two blocks at most; with
-depth as an action a router only reaches a fixed depth chosen per trace,
+depth as an action a router does not beat a fixed action chosen per trace,
 moving \hsrMovedRatioRoutedHitOneMiB{} the blocks of no prefetching at 1\,MiB.
-On the web a better ranker helps the controller slightly, but transition
-top-1 and online counts stay ahead. A learner matters only once its decision
+On the web a better ranker helps the controller slightly, but no ranker beats
+transition top-1 and all stay below online counts. A learner matters only once its decision
 can move the result, and even then depth and freshness decide more.
 
 \textbf{Simulation against measurement.} The two real-system studies point in

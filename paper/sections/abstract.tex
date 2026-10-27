@@ -21,7 +21,7 @@ prefetching raised the mean closed-loop latency on the hard disk in
 \decCountROneSdbOdirectClosedRaises{} of \decCountROneSdbOdirectClosed{}
 mode--trace cells.
 \emph{Web (simulated):} on RetailRocket, transition counts beat a trained
-ranker (\decWebWThreeHitRankerCI), online counts beat a GRU
+ranker (\decWebWThreeHitRankerCI), a GRU trailed online counts
 (\decWebWEightHitSequenceModelCI), and index freshness gave
 \decWebWFourHitFreshnessCI.
 \emph{Live HTTP (measured, emulated network):} every prefetching policy
@@ -30,9 +30,9 @@ lowered the wait with a hard-disk store, by up to
 \liveBaseWaitHdd{} without prefetching, with exact simulator parity.
 \emph{Better learners (simulated):} none of \clfRouterClassifiers{}
 classifiers made the router beat sequential read-ahead, a hindsight-trained
-router choosing depth did not beat a per-trace fixed depth, and a tuned web
-ranker gained \decWrkSOneMlpUtilityPerViewCapEight{} in utility but stayed
-below transition counts.
+router choosing depth did not beat a fixed action chosen per trace, and a
+tuned web ranker gained \decWrkSOneMlpUtilityPerViewCapEightCI{} in utility
+(capacity 8) but did not beat transition counts.
 How much to fetch and how fresh the statistics are moved the results; no
 learned predictor beat its simple baseline, and simulated hit ratio did not
 predict real-disk latency.
