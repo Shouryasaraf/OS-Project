@@ -28,7 +28,7 @@ of it). How components work: `docs/architecture.md`. Metric definitions:
   `provenance.json`. `results/pivot_original/` is the web branch's original
   run kept verbatim: never edit it.
 - **Never hand-edit a results file.** Every file is written through
-  `prefetch_common.schemas.write_rows` (exact columns and types; 30 schemas)
+  `prefetch_common.schemas.write_rows` (exact columns and types; 39 schemas)
   and hashed in its directory's `provenance.json`;
   `provenance.verify_provenance` detects an edit. A results file changes only
   when its full reproduce command re-runs.

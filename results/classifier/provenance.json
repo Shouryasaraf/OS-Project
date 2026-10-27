@@ -1,0 +1,204 @@
+{
+  "format": "prefetch_common.provenance/1",
+  "study": "classifier",
+  "command": [
+    "python",
+    "reproduce.py",
+    "classifier"
+  ],
+  "git_sha": "96b4dd8e21f56d38edcadb93e0866ac042873fa7",
+  "git_dirty": true,
+  "created_utc": "2026-10-27T04:55:47+00:00",
+  "host": {
+    "hostname": "antpc",
+    "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
+    "kernel": "6.14.0-37-generic",
+    "python": "3.12.3",
+    "cpu_count": 128
+  },
+  "load_avg": {
+    "start": [
+      25.11,
+      37.38,
+      62.4
+    ],
+    "end": [
+      26.78,
+      34.93,
+      58.88
+    ]
+  },
+  "wall_s": 104.899,
+  "gpu": null,
+  "inputs": {
+    "results/disk/sweep.jsonl": "9d0ebad4d49f76fb922babf7be517c48b2635acd93453e46adb9b78179c53b14",
+    "data/block-traces/msr/msr_hm_0.oracleGeneral.zst": "5fc99e798d5e06f61ad97019298ea7226d1afff9ef577e87b447c63a4480de17",
+    "data/block-traces/msr/msr_prn_1.oracleGeneral.zst": "2da82e93e608f8196874c2fad47040247ba0ce27fdd5bfa7c189c1e86028f58b",
+    "data/block-traces/msr/msr_proj_0.oracleGeneral.zst": "dc408c090ffda06a1d3d5638bd0bc0fb78fc47188620e7d88e57a25145cf6faa",
+    "data/block-traces/msr/msr_web_2.oracleGeneral.zst": "52d20c92af57e54a106f6b44bd2f37c467896daacb1abe02ab7667211e0a5c5b",
+    "data/block-traces/msr/msr_prxy_0.oracleGeneral.zst": "8dac49720740de8c27c6c121c3cff94da573d5f63235e8d34e92a6f6badee751",
+    "data/block-traces/msr/msr_prn_0.oracleGeneral.zst": "a7131a3f04673cd4d2122377344cab919182f8d28ed2678c2d5270b530f4c1ea",
+    "data/block-traces/fiu/fiu_casa-110108-112108.oracleGeneral.zst": "711eff2c7debbf886e8adf948b51503529a7780d0f4ba29998e78bf78f45ed30",
+    "data/block-traces/fiu/fiu_homes-110108-112108.oracleGeneral.zst": "5f3537b9ab909b731755af8b80f9006caced81aef7ebed325ffd21b54b121480",
+    "data/block-traces/alibaba/alibabaBlock_23.oracleGeneral.zst": "484dbd6cda0e87d046eb61698aaeffe4ac3789c109f7a24e4abd09b2d85e8c05",
+    "data/block-traces/alibaba/alibabaBlock_19.oracleGeneral.zst": "500884e23bf8491dea51bd43a51d0b12a90adcbb5f8634191c250284e8e1334a",
+    "data/block-traces/alibaba/alibabaBlock_14.oracleGeneral.zst": "bc93f49f20b256748bc1a868a085f5f3d0b277d4f618a704a7d01813d9439a6a",
+    "data/block-traces/alibaba/alibabaBlock_17.oracleGeneral.zst": "5b9061c69682f0c5d63f98575a695933212db52d9e2ecb2593740cd4290548e1",
+    "data/block-traces/alibaba/alibabaBlock_13.oracleGeneral.zst": "66641fea45e083148b4b02a219bdf76954027cc497ef82c2ada673163e6d61fa",
+    "data/block-traces/alibaba/alibabaBlock_3.oracleGeneral.zst": "f6c9f0ee1101d290223be7b9ac30a72412bd8f47d32db4f4f921e1b6fbcb2d61",
+    "data/block-traces/tencent/tencentBlock_1791.oracleGeneral.zst": "21e2f3c866b157025fc6e72b7d647870941ec002f37a03b5c49670857798068e",
+    "data/block-traces/tencent/tencentBlock_1757.oracleGeneral.zst": "7885fa24e671c11d2c9b0aba0bece90bf9398437b67fffa023a54fba9de85df0",
+    "data/block-traces/tencent/tencentBlock_2145.oracleGeneral.zst": "c19d0634a900842d754e263ef737e78479eb5da6c11b85a146a1a6bf1c9456b4",
+    "data/block-traces/tencent/tencentBlock_1162.oracleGeneral.zst": "225e1b878fb00577495fc4de34499126c53a388164bf7949bd3c9c0ed80442de",
+    "data/block-traces/tencent/tencentBlock_1894.oracleGeneral.zst": "3789b566dea6f271719f8afb7fd10dc26faf5c5f4c55b9c597d6f6fbf6c1b626"
+  },
+  "outputs": {
+    "HEADLINES.md": "ca18945f2306935f032259a06a5eab7639f85e7c2ee287832cabf287a6e22bec",
+    "PREREGISTERED.md": "a4f5096346fef0d8bfbdd3d2a9e487f7d5a2fdc5caa61a6f8119767d75f2e99d",
+    "README.md": "0063ce40a619328c814058f842bf06c476014c01a6ae67903d0906ad53e7fa05",
+    "router_comparisons.csv": "70581a0184460fe344cdf8c55cb8cdaaa6586ec39c75976ec25c5466b38d0974",
+    "router_runs.csv": "13bcb72a1785440d725bb3e0088a2441e8864b91c4c4745ddad748ce63dfe2e3",
+    "router_summary.csv": "d00f5f4d3574b7e08fdaa0a7c66330d3c6f51aa7e89779088743172728d6ba58",
+    "synthetic_eval.csv": "e933abccb36ad546376601233c937a34a9d003384ffb042ee2576dffe359d96c",
+    "synthetic_tuning.csv": "486bfc5b6e5860f935a40821649d2c56882c2d15e5e127b91d328b8fed5d7775"
+  },
+  "notes": "Written after E1-E6 were known (see PREREGISTERED.md). Every hit ratio is SIMULATED; predict/train timings are on a shared, contended host.",
+  "extra": {
+    "checks": {
+      "e1_rerun_none": "identical",
+      "e1_rerun_sequential": "identical",
+      "e1_rerun_deep@8": "identical",
+      "e1_rerun_linux_ra@256": "identical",
+      "gnb_router_equals_e1_adaptive": "identical on all 38 cells"
+    },
+    "timings_s": {
+      "vectors_s": 0.0,
+      "replays_s": 0.0,
+      "cpu_s_synthetic_tuning": 2145.6,
+      "cpu_s_vectors": 964.3,
+      "cpu_s_replays": 31109.3
+    },
+    "workers": 20,
+    "traces": [
+      "msr_hm_0",
+      "msr_prn_1",
+      "msr_proj_0",
+      "msr_web_2",
+      "msr_prxy_0",
+      "msr_prn_0",
+      "fiu_casa-110108-112108",
+      "fiu_homes-110108-112108",
+      "alibabaBlock_23",
+      "alibabaBlock_19",
+      "alibabaBlock_14",
+      "alibabaBlock_17",
+      "alibabaBlock_13",
+      "alibabaBlock_3",
+      "tencentBlock_1791",
+      "tencentBlock_1757",
+      "tencentBlock_2145",
+      "tencentBlock_1162",
+      "tencentBlock_1894"
+    ],
+    "settings": [
+      "baseline",
+      "noisy",
+      "overlap",
+      "overlap2",
+      "realistic",
+      "transition",
+      "transition_heavy",
+      "transfer"
+    ],
+    "n_candidates": 16,
+    "reps": 10000,
+    "distinct_replays": 550,
+    "selected_baseline_params": {
+      "gnb_online": {},
+      "qda_online": {},
+      "gnb": {
+        "var_smoothing": 6.127119294236467e-06
+      },
+      "lda": {
+        "shrinkage": null
+      },
+      "qda": {
+        "reg_param": 0.052
+      },
+      "logreg": {
+        "C": 379.23982087695913,
+        "scale": false
+      },
+      "knn": {
+        "n_neighbors": 4,
+        "weights": "distance",
+        "scale": true
+      },
+      "svm_linear": {
+        "C": 4.294069355995615,
+        "scale": false
+      },
+      "svm_rbf": {
+        "C": 91.12331506747074,
+        "gamma": 0.00023871464044650578,
+        "scale": true
+      },
+      "cart": {
+        "max_depth": null,
+        "min_samples_leaf": 1
+      },
+      "rf": {
+        "n_estimators": 400,
+        "max_depth": 4,
+        "max_features": "sqrt",
+        "min_samples_leaf": 6
+      },
+      "extra_trees": {
+        "n_estimators": 400,
+        "max_depth": 16,
+        "max_features": "sqrt",
+        "min_samples_leaf": 1
+      },
+      "hgb": {
+        "learning_rate": 0.1,
+        "max_iter": 100,
+        "max_leaf_nodes": 31,
+        "l2_regularization": 0.0
+      },
+      "mlp": {
+        "hidden_layer_sizes": [
+          128,
+          64
+        ],
+        "alpha": 0.019081019663967306,
+        "learning_rate_init": 0.004693907848105574
+      },
+      "sgd_online": {
+        "alpha": 0.002564135099275725,
+        "epochs": 20
+      }
+    },
+    "computing_run": {
+      "created_utc": "2026-10-27T04:38:50+00:00",
+      "wall_s": 2161.948,
+      "load_avg": {
+        "start": [
+          43.2,
+          40.07,
+          31.61
+        ],
+        "end": [
+          89.19,
+          94.66,
+          95.11
+        ]
+      },
+      "git_sha": "e52780a3720f455e12d69456d7df7a660f879cde",
+      "timings_s": {
+        "synthetic_s": 218.8,
+        "vectors_s": 178.5,
+        "replays_s": 1565.7
+      }
+    }
+  }
+}

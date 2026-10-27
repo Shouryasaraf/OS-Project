@@ -1,0 +1,7 @@
+setting,family,candidate,params,folds,val_accuracy,val_macro_f1,selected,error,wall_s,load_avg
+baseline,gnb_online,0,{},12,0.997252,0.955848,True,,0.5,1.0
+baseline,gnb_online,1,{},12,0.972456,0.99374,False,,0.5,1.0
+baseline,qda_online,0,{},12,0.921214,0.949925,True,,0.5,1.0
+baseline,qda_online,1,{},12,0.914196,0.926285,False,,0.5,1.0
+baseline,rf,0,{},12,0.92332,0.982761,True,,0.5,1.0
+baseline,rf,1,{},12,0.958488,0.977679,False,,0.5,1.0

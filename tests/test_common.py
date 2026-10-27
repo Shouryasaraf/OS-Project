@@ -407,7 +407,11 @@ class SchemaTests(unittest.TestCase):
                     "msrc_samples/traces.csv", "msrc_samples/classifier_metrics.csv",
                     "msrc_samples/classifier_deltas.csv", "msrc_samples/replay.csv",
                     # The claims ledger (paper/claims.py, reproduce.py paper).
-                    "claims/paper_claims.csv"}
+                    "claims/paper_claims.csv",
+                    # Track CLF: the classifier zoo and router benchmark.
+                    "classifier/synthetic_tuning.csv", "classifier/synthetic_eval.csv",
+                    "classifier/router_runs.csv", "classifier/router_comparisons.csv",
+                    "classifier/router_summary.csv"}
         self.assertEqual(set(schemas.SCHEMAS), expected)
         for name, schema in schemas.SCHEMAS.items():
             self.assertIn(schema.fmt, schemas.FORMATS, name)

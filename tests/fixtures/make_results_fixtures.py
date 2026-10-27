@@ -745,6 +745,78 @@ def build_msrc(rng) -> None:
     _w("msrc_samples/replay.csv", rows)
 
 
+def build_classifier(rng) -> None:
+    """Track CLF: a few rows of each classifier-zoo file (own generator, so the
+    other studies' fixtures are unchanged)."""
+    families = ("gnb_online", "qda_online", "rf")
+    tuning, evaluation = [], []
+    for family in families:
+        for candidate in range(2):
+            tuning.append({"setting": "baseline", "family": family, "candidate": candidate,
+                           "params": {}, "folds": 12, "val_accuracy": _r(rng, 0.9, 1.0),
+                           "val_macro_f1": _r(rng, 0.9, 1.0), "selected": candidate == 0,
+                           "error": None, "wall_s": 0.5, "load_avg": 1.0})
+        acc = _r(rng, 0.9, 1.0)
+        base = family == "gnb_online"
+        evaluation.append({
+            "setting": "baseline", "condition": "in_regime", "family": family, "params": {},
+            "val_accuracy": acc, "n_seed_pairs": 12, "n_test_per_pair": 160,
+            "accuracy": acc, "accuracy_lo": acc - 0.01, "accuracy_hi": min(1.0, acc + 0.01),
+            "accuracy_sd": 0.01, "macro_f1": acc, "macro_f1_lo": acc - 0.01,
+            "macro_f1_hi": min(1.0, acc + 0.01), "ece": 0.02, "brier": 0.05,
+            "confusion": {"rows_true_cols_pred": ["sequential", "strided", "random", "mixed"],
+                          "counts": [[480, 0, 0, 0], [0, 480, 0, 0], [0, 0, 480, 0],
+                                     [0, 0, 0, 480]]},
+            "predict_us": 20.0, "train_ms": 2.0, "load_avg": 1.0,
+            "delta_accuracy": None if base else 0.001,
+            "delta_accuracy_lo": None if base else -0.002,
+            "delta_accuracy_hi": None if base else 0.004,
+            "delta_macro_f1": None if base else 0.001,
+            "delta_macro_f1_lo": None if base else -0.002,
+            "delta_macro_f1_hi": None if base else 0.004,
+            "verdict_vs_gnb": "baseline" if base else "no difference detected",
+            "wins": None if base else 3, "losses": None if base else 2,
+            "ties": None if base else 7})
+    _w("classifier/synthetic_tuning.csv", tuning)
+    _w("classifier/synthetic_eval.csv", evaluation)
+    runs = []
+    for trace, corpus in TRACES[:3]:
+        for capacity in CAPACITIES:
+            for policy in ("none", "sequential") + families:
+                routed = policy in families
+                hit = _r(rng, 0.2, 0.6)
+                runs.append({
+                    "trace": trace, "corpus": corpus, "capacity": capacity, "policy": policy,
+                    "source": "replayed_labels" if routed else "e1_sweep_reused",
+                    "label_key": "0" * 16 if routed else None,
+                    "gnb_label_key": "0" * 16 if routed else None, "requests": 1000000,
+                    "windows": 31250 if routed else None, "hit_ratio": hit,
+                    "precision": _r(rng, 0.1, 0.5), "total_prefetches": 1000,
+                    "useful_prefetches": 300, "device_ios": rng.randint(5000, 9000),
+                    "blocks_moved": rng.randint(9000, 20000), "policy_switches": 10,
+                    "share_sequential": 0.25 if routed else None,
+                    "share_strided": 0.25 if routed else None,
+                    "share_random": 0.25 if routed else None,
+                    "share_mixed": 0.25 if routed else None,
+                    "agreement_with_gnb": _r(rng, 0.3, 1.0) if routed else None,
+                    "age_table_evictions": 0 if routed else None, "wall_s": 1.0,
+                    "load_avg": 1.0})
+    _w("classifier/router_runs.csv", runs)
+    _w("classifier/router_comparisons.csv", [{
+        "capacity": 2048, "metric": "hit_ratio", "statistic": "difference", "policy": "rf",
+        "baseline": "gnb_online", "n": 3, "estimate": 0.001, "ci_lo": -0.002, "ci_hi": 0.004,
+        "cluster_estimate": 0.001, "cluster_ci_lo": -0.003, "cluster_ci_hi": 0.005,
+        "verdict": "no difference detected", "wins": 2, "losses": 1, "ties": 0,
+        "reps": REPS, "seed": 42}])
+    _w("classifier/router_summary.csv", [{
+        "capacity": 2048, "policy": "rf", "n_traces": 3, "mean_hit_ratio": 0.4,
+        "mean_precision": 0.3, "mean_wasted_share": 0.7, "device_io_ratio": 1.01,
+        "blocks_moved_ratio": 1.02, "mean_agreement_with_gnb": 0.8,
+        "min_agreement_with_gnb": 0.6, "traces_identical_to_gnb": 0,
+        "share_sequential": 0.25, "share_strided": 0.25, "share_random": 0.25,
+        "share_mixed": 0.25}])
+
+
 # ------------------------------------------------------------- provenance
 
 def write_provenance(study: str) -> None:
@@ -787,7 +859,8 @@ def main() -> int:
     build_web_side(side)
     build_live_side(side)
     build_msrc(random.Random(20261028))
-    for study in ("disk", "gpu", "realio", "web", "live", "msrc_samples"):
+    build_classifier(random.Random(20261028))
+    for study in ("disk", "gpu", "realio", "web", "live", "msrc_samples", "classifier"):
         write_provenance(study)
     print(json.dumps(sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*") if p.is_file()),
                      indent=1))

@@ -1,0 +1,41 @@
+{
+  "format": "prefetch_common.provenance/1",
+  "study": "classifier",
+  "command": [
+    "python",
+    "tests/fixtures/make_results_fixtures.py"
+  ],
+  "git_sha": "0000000000000000000000000000000000000000",
+  "git_dirty": false,
+  "created_utc": "2026-01-01T00:00:00+00:00",
+  "host": {
+    "hostname": "fixture-host",
+    "platform": "Linux-fixture",
+    "kernel": "6.14.0",
+    "python": "3.12.0",
+    "cpu_count": 128
+  },
+  "load_avg": {
+    "start": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "end": [
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "wall_s": 0.0,
+  "gpu": null,
+  "inputs": {},
+  "outputs": {
+    "router_comparisons.csv": "16f6fe44f13faa60be90ebf3f5958b2d6362bf39c1c86d37f1c8bbd17f91a09d",
+    "router_runs.csv": "a2223f2de6a0d909ebb9ce396ddc67d8fff4ffc6a6725fd65bd9c0c2b9a62672",
+    "router_summary.csv": "de0ccbd9c0c1fb74b0cddc07d1bde84ff692ef71091bb71a21d7669c80ad4476",
+    "synthetic_eval.csv": "6e551787ad91c80be9cab40630e27d7f68ede143bc619d50058322ebce13371f",
+    "synthetic_tuning.csv": "b142f802a6671371ee490d9a7eac0f3e1394de444b3ecb7d078d0da987c3df65"
+  },
+  "notes": "FIXTURE: synthetic values from tests/fixtures/make_results_fixtures.py; not a result, never quote"
+}
