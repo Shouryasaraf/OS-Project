@@ -1359,6 +1359,10 @@ training or validation data, and each test set was scored once.
   objective-capacity cell (descriptive), yet the selected family does not
   beat VCF either: the limit is what a per-window choice adds over a
   per-trace fixed depth, not the classifier.
+- Trained without the test trace's corpus (leave-one-corpus-out, H6;
+  hyperparameters still chosen by CV that saw that corpus's slice 1), the
+  hindsight router is worse than VCF at both capacities: its per-window
+  choice does not transfer across corpora.
 - Synthetic Part 1 (`results/classifier/synthetic_eval.csv`): under the
   block-size covariate shift CART, the random forest and HGB show no
   difference detected against GNB at every request size (extra trees is
