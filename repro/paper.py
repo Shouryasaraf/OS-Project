@@ -4,8 +4,9 @@
     python reproduce.py paper --fixtures      # synthetic fixtures -> outputs/paper-fixture/
 
 Runs the three generators (``paper/numbers.py``, ``paper/tables/make_tables.py``,
-``paper/figures/make_figures.py``) and then ``paper/check.py --strict`` on the
-directory they wrote. A missing results file never stops the run: its
+``paper/figures/make_figures.py``), then the claims ledger (``paper/claims.py``:
+``results/claims/``, deterministic, from the committed results only), and then
+``paper/check.py --strict`` on the directory they wrote. A missing results file never stops the run: its
 figure, table or macro is written as a "MISSING" placeholder, and the
 manifests (``numbers.manifest.json``, ``tables/manifest.json``,
 ``figures/manifest.json``) list what was missing and the SHA-256 of every
@@ -125,6 +126,13 @@ def run(args: argparse.Namespace) -> int:
         outputs += produced
         gaps = [o for o in produced if o.missing]
         print(f"[paper] {relative}: {len(produced)} output(s), {len(gaps)} with missing input")
+    # The claims ledger: every macro and table cell the paper uses, traced to
+    # its results row (paper/claims.py). For results/ it goes to
+    # results/claims/; for a fixture tree, to <out>/claims/.
+    if not unavailable or all("make_figures" in item for item in unavailable):
+        claims = load("paper_claims", "claims.py")
+        written = claims.generate(results, out)
+        print(f"[paper] claims ledger: {written[0]}")
     missing = sorted({item for o in outputs for item in o.missing})
     for item in missing:
         print(f"[paper]   MISSING: {item}")

@@ -405,7 +405,9 @@ class SchemaTests(unittest.TestCase):
                     "live/disk_probe_*.json",
                     # WPMSRC (E7): the MSRC light sample.
                     "msrc_samples/traces.csv", "msrc_samples/classifier_metrics.csv",
-                    "msrc_samples/classifier_deltas.csv", "msrc_samples/replay.csv"}
+                    "msrc_samples/classifier_deltas.csv", "msrc_samples/replay.csv",
+                    # The claims ledger (paper/claims.py, reproduce.py paper).
+                    "claims/paper_claims.csv"}
         self.assertEqual(set(schemas.SCHEMAS), expected)
         for name, schema in schemas.SCHEMAS.items():
             self.assertIn(schema.fmt, schemas.FORMATS, name)
