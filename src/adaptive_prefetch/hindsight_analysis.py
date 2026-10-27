@@ -57,6 +57,20 @@ def metric_value(row: dict, metric: str) -> float:
     return float(row[metric])
 
 
+def headroom_over_vcf(policy: float, vcf: float, oracle: float) -> float | None:
+    """``(policy - vcf) / (oracle - vcf)``, all oriented higher-is-better.
+
+    ``None`` when the oracle does not beat ``vcf``: there is no headroom to
+    capture, and dividing two negative gaps would report a policy that is
+    *below* ``vcf`` as having captured a positive share (the trajectory
+    oracle sits below ``vcf_hit`` at 131072 blocks). Same convention as
+    ``hindsight.headroom_captured``.
+    """
+    if oracle - vcf <= 0:
+        return None
+    return (policy - vcf) / (oracle - vcf)
+
+
 def verdict(paired, cluster, higher: bool, ratio: bool) -> str:
     """The pre-registered word for a paired and a cluster interval."""
     pivot = 1.0 if ratio else 0.0
@@ -340,9 +354,9 @@ def analyze(cache: Path, out: Path, traces, capacities, n: int, reps: int,
                                 if metric == "device_ios" else 1.0)
                     return sum(sign * metric_value(table[(t, cap, label)], metric) / scale(t)
                                for t in keys) / len(keys)
-                if keys and mean(f"oracle_{objective}") != mean(f"vcf_{objective}"):
-                    headroom = ((mean(policy) - mean(f"vcf_{objective}"))
-                                / (mean(f"oracle_{objective}") - mean(f"vcf_{objective}")))
+                if keys:
+                    headroom = headroom_over_vcf(mean(policy), mean(f"vcf_{objective}"),
+                                                 mean(f"oracle_{objective}"))
             shares = [r["action_shares"] for r in got if r["action_shares"]]
             summary.append({
                 "capacity": cap, "policy": policy, "n_traces": len(names),

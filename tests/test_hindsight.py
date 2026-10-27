@@ -204,6 +204,15 @@ class DecisionWordTests(unittest.TestCase):
         below = CI(0.9, 0.8, 0.95, 9)
         self.assertEqual(verdict(below, below, False, True), "better")
 
+    def test_headroom_over_vcf_is_undefined_when_the_oracle_does_not_beat_it(self):
+        from adaptive_prefetch.hindsight_analysis import headroom_over_vcf
+        self.assertAlmostEqual(headroom_over_vcf(0.55, 0.5, 0.6), 0.5)
+        self.assertAlmostEqual(headroom_over_vcf(0.45, 0.5, 0.6), -0.5)
+        # Policy and oracle both below vcf: two negative gaps must not read
+        # as a positive share captured.
+        self.assertIsNone(headroom_over_vcf(0.83264, 0.83267, 0.8289))
+        self.assertIsNone(headroom_over_vcf(0.5, 0.5, 0.5))
+
 
 @unittest.skipUnless(HAVE_SKLEARN, "needs numpy and scikit-learn (the [web] extra)")
 class ModelTests(unittest.TestCase):

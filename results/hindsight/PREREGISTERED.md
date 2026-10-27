@@ -172,3 +172,12 @@ slice 1 is the whole file (as in C1) and it was used for training and
 selection like the other 20 traces; its training record names [0, 1,000,000)
 as a conservative range. It and `fiu_online.cs.fiu.edu-110108-113008` have no
 full slice 2 and are `n/a` in every slice-2 comparison (n = 19).
+
+**A3 (2026-10-27, adversarial review, written after the run; a reporting
+fix, not a change of rule or of any verdict).** The descriptive headroom of
+section 6, `(routed - vcf) / (oracle - vcf)`, is reported as empty when the
+oracle does not beat `vcf` on that objective and capacity (no headroom to
+capture), the convention `hindsight.headroom_captured` already used for the
+CV score. The first analysis divided two negative gaps at 131072 blocks
+(`routed_hit` and `oracle_hit` both below `vcf_hit`) and printed a positive
+share. No comparison, interval or verdict word depends on this column.

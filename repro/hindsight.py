@@ -45,8 +45,10 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
 def estimate(args: argparse.Namespace) -> str:
     if args.quick:
         return "about 1 min: 4 traces x 20k requests per slice, 2 configs per family"
-    return ("about 25-35 min wall on 28 workers here (load 35-45): fixed-action "
-            "records ~9 min, grouped-CV search ~8 min, slice-2 replays ~10 min")
+    return ("about 58 min wall on 28 workers here, measured at host load 32-157 "
+            "(slice-1 records ~4.5 min, slice-2 records ~28 min overlapping the "
+            "grouped-CV search ~11 min, slice-2 replays ~16 min); a pass over a "
+            "complete cache under outputs/hindsight takes about 2.5 min")
 
 
 def _env() -> dict:

@@ -4,7 +4,7 @@
 (writes replay as reads) under `LatencyModel(5, 100, 50)`. Hit ratios are
 block hit ratios; `device_ios` and `blocks_moved` are modelled device work.
 Nothing here is a latency measurement. Pre-registration (written after
-E1-E6 were known, with amendment A1): `PREREGISTERED.md`. Reproduce:
+E1-E6 were known, with amendments A1-A3): `PREREGISTERED.md`. Reproduce:
 `python reproduce.py hindsight` (`--quick` writes `outputs/hindsight-quick`).
 
 ## What was asked and what was built
@@ -95,28 +95,40 @@ and 0.9562, **better**) but moves more blocks (1.12x, 1.35x, **worse**);
 `linux_ra@256` does better on both (0.7132 and 0.5481 device I/Os, 1.13x and
 1.07x blocks moved).
 
+**Single global fixed action (H7).** `gvcf_<obj>` is the one action with
+the best mean slice-1 objective (`deep@256` for `hit` at both capacities;
+`none` for `dev` at both; `none` for `u0.5` at 2048 and `deep@8` at 131072).
+`routed_hit` vs `gvcf_hit`: no difference detected at 2048 (+0.0319), worse
+at 131072 (the same rows as H1, because `vcf_hit` is `deep@256` on every
+trace there). `routed_u0.5` vs `gvcf_u0.5`: no difference detected at either
+capacity. `routed_dev` vs `gvcf_dev` (= `none`): **better** at both (device-I/O
+ratio 0.9756 and 0.9562, the D rows below).
+
 **Leave-one-corpus-out (H6).** Trained without the test trace's corpus, the
 router is **worse** than `vcf_hit` at both capacities (-0.0433 at 2048;
 -0.0003 at 131072).
 
 **Is the classifier family the problem? (S2, `selection.csv`).** On the
 grouped-CV score (share of hindsight headroom over `none` captured on
-held-out traces), Gaussian naive Bayes is the lowest-scoring family in all
-six (objective, capacity) cells; the selected families are HGB (hit at 2048, u0.5 at 131072), a CART tree (u0.5
+held-out traces; descriptive, no interval), Gaussian naive Bayes is the
+lowest-scoring family in all six (objective, capacity) cells; the selected families are HGB (hit at 2048, u0.5 at 131072), a CART tree (u0.5
 at 2048), logistic regression (hit at 131072) and random forest (dev at
 both). Replayed, the GNB-family hit router is below the selected router at
 both capacities (paired interval only at 2048; **worse** at 131072, -0.0146)
-and **worse** than `vcf_hit` at 131072. So GNB is the weakest family here,
-but replacing it does not produce a router that beats the strongest fixed
-baseline: the bottleneck is what a per-window choice can add over a
-per-trace fixed depth, not the classifier.
+and **worse** than `vcf_hit` at 131072. So GNB scores lowest here, but none
+of the eight families produced a router that beats the strongest fixed
+baseline; on these traces, capacities and labels the limit is what a
+per-window choice adds over a per-trace fixed depth, not the classifier
+family.
 
 **Hindsight ceiling (R).** The trajectory oracle (slice 2's own labels,
 a reference, never a policy) beats `vcf_hit` by +0.0315 at 2048
 (**better**) but is *below* it at 131072 (-0.0038, paired interval only):
 the trajectory labels are not a true counterfactual ceiling. The router
-captured 0.009 (2048) and 0.008 (131072) of the oracle's headroom over
-`vcf_hit` (`summary.csv`, `headroom_captured`); for `dev`, 0.247 and 0.227.
+captured 0.009 of the oracle's headroom over `vcf_hit` at 2048
+(`summary.csv`, `headroom_captured`, descriptive, no interval); at 131072
+there is no headroom over `vcf_hit` to capture (the oracle is below it), so
+the column is empty (amendment A3). For `dev`: 0.247 and 0.227.
 
 **Runtime and load.** Stages ran resumably from `outputs/hindsight/`:
 slice-1 records 264 s on 28 workers; slice-2 records 1,688 s on 10 workers
