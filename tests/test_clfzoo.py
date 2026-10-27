@@ -222,6 +222,32 @@ class HeadlinesTests(unittest.TestCase):
         self.assertIn("| `rf` |", text)
         self.assertIn("no difference detected", text)
 
+    def test_part_synthetic_caches_without_touching_results(self):
+        """``--part synthetic`` never writes results/ (no provenance there)."""
+        import argparse
+        import shutil
+        import sys
+        import tempfile
+        from unittest import mock
+        sys.path.insert(0, str(ROOT))
+        from repro import classifier
+        from adaptive_prefetch.clfzoo import synthetic
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp)
+        results, work = tmp / "results", tmp / "work"
+        row = {"setting": "baseline", "family": "gnb_online", "candidate": 0, "params": {},
+               "folds": 12, "val_accuracy": 1.0, "val_macro_f1": 1.0, "error": None,
+               "wall_s": 0.0, "load_avg": None, "selected": True}
+        fake = {"tuning": [row], "records": [], "chosen": {("baseline", "gnb_online"): row}}
+        args = argparse.Namespace(quick=False, part="synthetic", workers=1,
+                                  results_dir=str(results), work_dir=str(work),
+                                  trace_root=str(tmp), reps=200)
+        with mock.patch.object(classifier, "_available", return_value=None), \
+                mock.patch.object(synthetic, "run", return_value=fake):
+            self.assertEqual(classifier.run(args), 0)
+        self.assertTrue((work / "synthetic_raw.json").is_file())
+        self.assertEqual(list(results.iterdir()), [])
+
 
 @unittest.skipUnless(HAVE_SKLEARN, "scikit-learn and numpy are optional ([web] extra)")
 class ZooTests(unittest.TestCase):

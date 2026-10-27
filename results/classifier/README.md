@@ -55,6 +55,29 @@ BibTeX keys: `paper/refs.bib` (`pedregosa2011sklearn`) and
   no accuracy here is an accuracy on a real trace. Selection used training
   seeds only (12 folds, validate on the next training seed); the test seeds
   were scored once.
+- **Part 1 assumes phases persist across windows.** In `baseline` and the
+  CLASSIFIER_EVAL regimes each class is laid out as its own stream (the
+  `make_model` layout), so a window's four contextual features
+  (`reuse_ratio`, `reuse_distance_log`, `contiguous_delta`,
+  `stride_persist`) are computed from preceding windows **of the same
+  class**, in training and in test alike. A real trace changes phase, so
+  accuracies that use the contextual features are optimistic, and part of a
+  family's difference from `gnb_online` can be how well it exploits that
+  same-class context. (A review probe after the run with the selected
+  `cart`, not pre-registered and not a result, found that the large tree
+  margin on `transition_heavy` is reproduced by the eight stream features
+  alone and by a layout that shuffles every class into one stream, so it is
+  not an artifact of this layout; on `transition` the same-class context
+  did lift that tree's accuracy.) `transfer` builds one context in class order before
+  shuffling, as `main.transfer_probe` does.
+- **`transition` / `transition_heavy` labels.** `pipeline.blended_regime`
+  labels a window by the class of its *first* part: at the 0.75 blend that
+  is the first quarter of the window, a minority of its requests, not the
+  dominant phase its docstring names.
+- **SVM labels are Platt-probability argmaxes.** Both SVM families predict
+  (Part 1 and Part 2 alike) the argmax of `predict_proba`, which can differ
+  from libsvm's own decision-function `predict`; the same rule is used for
+  every scikit-learn family (`zoo.Router`).
 - **Part 2 hit ratios are simulated** LRU block hit ratios (oracleGeneral
   traces: writes replay as reads), each reported with its device-I/O and
   blocks-moved ratios to `none`.

@@ -62,7 +62,8 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--work-dir", default=str(WORK))
     parser.add_argument("--reps", type=int, default=10_000)
     parser.add_argument("--part", choices=("all", "synthetic", "router"), default="all",
-                        help="router needs the synthetic stage's selection (cached)")
+                        help="synthetic computes and caches Part 1 only (results/ untouched); "
+                             "router reuses that cache and writes every results file")
 
 
 def estimate(args: argparse.Namespace) -> str:
@@ -189,6 +190,12 @@ def run(args: argparse.Namespace) -> int:
         if row["selected"]:
             chosen[(row["setting"], row["family"])] = row
     settings = tuple(stored["settings"])
+    if args.part == "synthetic" and not quick:
+        # A partial run never touches results/: the results directory is
+        # rewritten only together with its provenance, at the end of a full
+        # (or cached --part router) run.
+        log(f"Part 1 cached in {raw_path}; run --part router to write {results}")
+        return 0
     schemas.write_rows("classifier/synthetic_tuning.csv", analysis.tuning_rows(tuning),
                        results / "synthetic_tuning.csv")
     schemas.write_rows("classifier/synthetic_eval.csv",

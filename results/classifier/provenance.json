@@ -6,9 +6,9 @@
     "reproduce.py",
     "classifier"
   ],
-  "git_sha": "e52780a3720f455e12d69456d7df7a660f879cde",
+  "git_sha": "96b4dd8e21f56d38edcadb93e0866ac042873fa7",
   "git_dirty": true,
-  "created_utc": "2026-10-27T04:41:34+00:00",
+  "created_utc": "2026-10-27T04:55:47+00:00",
   "host": {
     "hostname": "antpc",
     "platform": "Linux-6.14.0-37-generic-x86_64-with-glibc2.39",
@@ -18,17 +18,17 @@
   },
   "load_avg": {
     "start": [
-      84.71,
-      93.11,
-      94.58
+      25.11,
+      37.38,
+      62.4
     ],
     "end": [
-      71.46,
-      85.34,
-      91.55
+      26.78,
+      34.93,
+      58.88
     ]
   },
-  "wall_s": 132.199,
+  "wall_s": 104.899,
   "gpu": null,
   "inputs": {
     "results/disk/sweep.jsonl": "9d0ebad4d49f76fb922babf7be517c48b2635acd93453e46adb9b78179c53b14",
@@ -55,7 +55,7 @@
   "outputs": {
     "HEADLINES.md": "ca18945f2306935f032259a06a5eab7639f85e7c2ee287832cabf287a6e22bec",
     "PREREGISTERED.md": "a4f5096346fef0d8bfbdd3d2a9e487f7d5a2fdc5caa61a6f8119767d75f2e99d",
-    "README.md": "a4a2704258419e05ec6fa25e6cda8bcbbdc89fb7b057002b2e37aef04d210189",
+    "README.md": "0063ce40a619328c814058f842bf06c476014c01a6ae67903d0906ad53e7fa05",
     "router_comparisons.csv": "70581a0184460fe344cdf8c55cb8cdaaa6586ec39c75976ec25c5466b38d0974",
     "router_runs.csv": "13bcb72a1785440d725bb3e0088a2441e8864b91c4c4745ddad748ce63dfe2e3",
     "router_summary.csv": "d00f5f4d3574b7e08fdaa0a7c66330d3c6f51aa7e89779088743172728d6ba58",
