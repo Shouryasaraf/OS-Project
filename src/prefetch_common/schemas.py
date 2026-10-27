@@ -536,6 +536,64 @@ _LIVE_DISK_PROBE = (
     _c("load_avg_end", "json"),
 )
 
+# ------------------------------------------------- msrc light sample (E7)
+
+_MSRC_TRACES = (
+    _c("trace", "str", "file stem"), _c("family", "str", "MSRC host: stem before the last _"),
+    _c("path", "str"), _c("requests", "int"), _c("read_requests", "int"),
+    _c("seq_flag_requests", "int", "requests flagged seq by the trace"),
+    _c("seq_flag_read_requests", "int"),
+    _c("windows", "int", "complete 32-request windows"),
+    _c("seq_windows_majority", "int", ">= 17 of 32 seq-flagged"),
+    _c("seq_windows_quarter", "int", ">= 8 of 32 seq-flagged"),
+    _c("small_n_majority", "bool", "< 100 windows or < 10 of a class"),
+    _c("mean_service_ms", "float?", "mean t1"),
+    _c("age_table_evictions", "int"),
+    _c("flag_matches_contiguity", "float?", "share of requests whose seq flag equals "
+       "lba == previous lba + previous size"),
+)
+
+_MSRC_METRICS = (
+    _c("protocol", "str", "shipped_synthetic, sklearn_synthetic, loto_real, lofo_real, "
+       "rule, baseline"),
+    _c("classifier", "str"), _c("label_rule", "str", "majority (primary) or quarter"),
+    _c("trace", "str", "file stem or pooled"), _c("status", "str"),
+    _c("train_on", "str"), _c("n_windows", "int"), _c("n_seq", "int"),
+    _c("small_n", "bool"),
+    *_ci("accuracy", "float?", "window accuracy, binary seq vs not_seq"),
+    *_ci("balanced_accuracy", "float?", "None when truth holds one class"),
+    *_ci("macro_f1", "float?", "None when truth holds one class"),
+    _c("seq_precision", "float?"), _c("seq_recall", "float?"),
+    _c("predicted_seq", "int?"), _c("predicted_classes", "json?", "raw prediction counts"),
+    _c("above_chance", "bool?", "balanced_accuracy_lo > 0.5; None when small_n"),
+    _c("reps", "int", "window-bootstrap replicates"), _c("seed", "int"),
+)
+
+_MSRC_DELTAS = (
+    _c("protocol", "str"), _c("classifier", "str"),
+    _c("baseline", "str", "shipped_synthetic/gnb or rule/route_window"),
+    _c("label_rule", "str"), _c("trace", "str"), _c("metric", "str"),
+    _c("n_windows", "int"), _c("small_n", "bool"),
+    *_ci("delta", "float?", "classifier minus baseline, paired window bootstrap"),
+    _c("verdict", "str", "better, worse, no difference detected, insufficient n"),
+    _c("reps", "int"), _c("seed", "int"),
+)
+
+_MSRC_REPLAY = (
+    _c("trace", "str"), _c("view", "str", "native or writes_as_reads"),
+    _c("mode", "str"), _c("latency_model", "str", "measured (mean t1) or assumed 5/100/50"),
+    _c("status", "str"), _c("requests", "int"), _c("read_requests", "int"),
+    _c("read_blocks", "int"), _c("read_hits", "int"),
+    _c("hit_ratio", "float?", "simulated block hit ratio over read blocks"),
+    _c("hit_ratio_delta_vs_none", "float?"),
+    _c("prefetches", "int"), _c("useful_prefetches", "int"), _c("precision", "float?"),
+    _c("device_ios", "int"), _c("device_ios_ratio_vs_none", "float?"),
+    _c("blocks_moved", "int"), _c("blocks_moved_ratio_vs_none", "float?"),
+    _c("mean_latency_us", "float?", "cost model, not a measurement"),
+    _c("hit_us", "float"), _c("demand_miss_us", "float"), _c("prefetch_us", "float"),
+    _c("break_even_precision", "float?"), _c("capacity", "int"), _c("seed", "int"),
+)
+
 # --------------------------------------------------------------- provenance
 
 _PROVENANCE = tuple(_c(key, "json?" if key not in ("format", "study") else "str")
@@ -609,6 +667,16 @@ SCHEMAS: dict[str, Schema] = {s.name: s for s in (
     _schema("live/disk_probe_*.json", "json", "WP12 (E6)",
             "MEASURED cold/warm/hinted page-cache reads of one object store",
             _LIVE_DISK_PROBE),
+    _schema("msrc_samples/traces.csv", "csv", "WPMSRC (E7)",
+            "one row per MSRC sample trace: windows and flag counts", _MSRC_TRACES),
+    _schema("msrc_samples/classifier_metrics.csv", "csv", "WPMSRC (E7)",
+            "binary seq-flag agreement per (protocol, classifier, label rule, trace)",
+            _MSRC_METRICS),
+    _schema("msrc_samples/classifier_deltas.csv", "csv", "WPMSRC (E7)",
+            "paired balanced-accuracy differences vs shipped GNB and route_window",
+            _MSRC_DELTAS),
+    _schema("msrc_samples/replay.csv", "csv", "WPMSRC (E7)",
+            "sanity replay per (trace, view, cost model, mode)", _MSRC_REPLAY),
     _schema("*/provenance.json", "json", "prefetch_common.provenance",
             "provenance.write_provenance output", _PROVENANCE),
 )}

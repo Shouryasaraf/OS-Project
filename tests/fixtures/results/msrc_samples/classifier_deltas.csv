@@ -1,0 +1,10 @@
+protocol,classifier,baseline,label_rule,trace,metric,n_windows,small_n,delta,delta_lo,delta_hi,verdict,reps,seed
+rule,route_window,shipped_synthetic/gnb,majority,fix_1,balanced_accuracy,100,False,0.032761,0.0027609999999999996,0.062761,no difference detected,100,42
+rule,route_window,shipped_synthetic/gnb,majority,fix_2,balanced_accuracy,100,False,0.027679,-0.002321,0.057678999999999994,no difference detected,100,42
+rule,route_window,shipped_synthetic/gnb,majority,pooled,balanced_accuracy,100,False,-0.046679,-0.076679,-0.016679,no difference detected,100,42
+sklearn_synthetic,random_forest,shipped_synthetic/gnb,majority,fix_1,balanced_accuracy,100,False,-0.02959,-0.059590000000000004,0.00040999999999999717,no difference detected,100,42
+sklearn_synthetic,random_forest,shipped_synthetic/gnb,majority,fix_2,balanced_accuracy,100,False,0.010944,-0.019055999999999997,0.040944,no difference detected,100,42
+sklearn_synthetic,random_forest,shipped_synthetic/gnb,majority,pooled,balanced_accuracy,100,False,0.042608,0.012608000000000001,0.072608,no difference detected,100,42
+loto_real,logistic,shipped_synthetic/gnb,majority,fix_1,balanced_accuracy,100,False,0.042755,0.012755000000000002,0.072755,no difference detected,100,42
+loto_real,logistic,shipped_synthetic/gnb,majority,fix_2,balanced_accuracy,100,False,-0.034432,-0.06443199999999999,-0.0044319999999999984,no difference detected,100,42
+loto_real,logistic,shipped_synthetic/gnb,majority,pooled,balanced_accuracy,100,False,0.023742,-0.006258,0.053742,no difference detected,100,42

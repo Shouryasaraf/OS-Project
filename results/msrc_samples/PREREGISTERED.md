@@ -118,3 +118,13 @@ added as a dated amendment below; the original text stays.
   the other two hosts' windows and scores every volume of the held-out host.
   Same defaults, same skip rule, same metrics and words. Where LOTO and LOFO
   disagree, the LOFO figure is the one quoted for "within-real" transfer.
+
+## Amendment A2 (2026-10-27, after a 4,000-request smoke run and a first full run whose tables were not read)
+
+- **Added a descriptive column**, `traces.csv` `flag_matches_contiguity`: the
+  share of requests whose `seq` flag equals "starts where the previous
+  request ended" (`lba == previous lba + previous size`). A check of the raw
+  files while writing the tests suggested the flag is such a contiguity
+  heuristic; if so, agreement with it measures how well a window classifier
+  recovers address contiguity, not an independent workload label, and the
+  README must say so. No rule, label, comparison or word above changes.

@@ -1,0 +1,3 @@
+trace,family,path,requests,read_requests,seq_flag_requests,seq_flag_read_requests,windows,seq_windows_majority,seq_windows_quarter,small_n_majority,mean_service_ms,age_table_evictions,flag_matches_contiguity
+fix_1,fix,data/samples/msrc/fix_1.revised,3200,1600,800,400,100,20,30,False,19.47779,0,0.99117
+fix_2,fix,data/samples/msrc/fix_2.revised,3200,1600,800,400,100,20,30,False,14.766686,0,0.998748

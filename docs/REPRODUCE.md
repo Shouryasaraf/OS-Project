@@ -79,6 +79,7 @@ under `outputs/` and never touches `results/`: a smoke run is not a result.
 | `python reproduce.py web` | **E4**: prepare, train, per-capacity benchmark, freshness, decomposition, parity, learning curve | `results/web/`, `models/web/`, `outputs/web/` | `events.csv`, `[web]` |
 | `python reproduce.py web --gpu` | **E5**: GRU sequence model, 5 seeds, and the decomposition `sequence_model` lever | `results/web/seq_metrics.csv`, `results/web/seq/` | E4's prepared views, CUDA |
 | `python reproduce.py live --store-dir DIR` | **E6**: real HTTP replay with simulator parity | `results/live/` | E4's `comparisons.csv`, prepared views and ranker; a quiet host |
+| `python reproduce.py msrc` | **E7**: MSRC light sample, labelled-window transfer check (seq flag) and sanity replay; see `results/msrc_samples/README.md` for its wall time | `results/msrc_samples/` | `data/samples/msrc/` (tracked), `[web]` |
 | `python reproduce.py paper` | figures, tables and `numbers.tex` from `results/` (no experiment) | `paper/` | `[paper]` for figures |
 | `python reproduce.py all [--quick]` | every study above in order; a step that cannot run here is passed over and the exit status says so | as above | |
 

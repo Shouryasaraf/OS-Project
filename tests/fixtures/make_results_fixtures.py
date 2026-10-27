@@ -687,6 +687,64 @@ def build_live_side(rng) -> None:
         "hinted": {"0": {"resident_frac": 0.0, **summary}}, "load_avg_end": [1.0, 1.0, 1.0]}])
 
 
+def build_msrc(rng) -> None:
+    """E7 (MSRC light sample): synthetic rows, two traces plus pooled."""
+    traces = ("fix_1", "fix_2")
+    _w("msrc_samples/traces.csv", [{
+        "trace": t, "family": "fix", "path": f"data/samples/msrc/{t}.revised",
+        "requests": 3200, "read_requests": 1600, "seq_flag_requests": 800,
+        "seq_flag_read_requests": 400, "windows": 100, "seq_windows_majority": 20,
+        "seq_windows_quarter": 30, "small_n_majority": False,
+        "mean_service_ms": _r(rng, 1, 20), "age_table_evictions": 0,
+        "flag_matches_contiguity": _r(rng, 0.98, 1.0)} for t in traces])
+    metrics, deltas = [], []
+    for protocol, clf in (("shipped_synthetic", "gnb"), ("rule", "route_window"),
+                          ("sklearn_synthetic", "random_forest"), ("loto_real", "logistic")):
+        for rule in ("majority", "quarter"):
+            for t in traces + ("pooled",):
+                b = _r(rng, 0.6, 0.9)
+                metrics.append({
+                    "protocol": protocol, "classifier": clf, "label_rule": rule, "trace": t,
+                    "status": "ok", "train_on": "fixture", "n_windows": 100, "n_seq": 20,
+                    "small_n": False, "accuracy": b, "accuracy_lo": b - 0.05,
+                    "accuracy_hi": b + 0.05, "balanced_accuracy": b,
+                    "balanced_accuracy_lo": b - 0.05, "balanced_accuracy_hi": b + 0.05,
+                    "macro_f1": b, "macro_f1_lo": b - 0.05, "macro_f1_hi": b + 0.05,
+                    "seq_precision": b, "seq_recall": b, "predicted_seq": 20,
+                    "predicted_classes": {"seq": 20, "not_seq": 80}, "above_chance": True,
+                    "reps": 100, "seed": 42})
+                if rule == "majority" and clf != "gnb":
+                    d = _r(rng, -0.05, 0.05)
+                    deltas.append({
+                        "protocol": protocol, "classifier": clf,
+                        "baseline": "shipped_synthetic/gnb", "label_rule": rule, "trace": t,
+                        "metric": "balanced_accuracy", "n_windows": 100, "small_n": False,
+                        "delta": d, "delta_lo": d - 0.03, "delta_hi": d + 0.03,
+                        "verdict": "no difference detected", "reps": 100, "seed": 42})
+    _w("msrc_samples/classifier_metrics.csv", metrics)
+    _w("msrc_samples/classifier_deltas.csv", deltas)
+    rows = []
+    for t in traces:
+        for mode in ("none", "sequential", "adaptive", "adaptive_evidence", "deep@8",
+                     "linux_ra@256"):
+            hr = _r(rng, 0.3, 0.6)
+            rows.append({
+                "trace": t, "view": "native", "mode": mode, "latency_model": "assumed",
+                "status": "ok", "requests": 3200, "read_requests": 1600,
+                "read_blocks": 12800, "read_hits": int(hr * 12800), "hit_ratio": hr,
+                "hit_ratio_delta_vs_none": 0.0 if mode == "none" else _r(rng, -0.02, 0.1),
+                "prefetches": 0 if mode == "none" else 1000,
+                "useful_prefetches": 0 if mode == "none" else 400,
+                "precision": None if mode == "none" else 0.4,
+                "device_ios": 1500, "device_ios_ratio_vs_none": 1.0 if mode == "none" else
+                _r(rng, 0.7, 1.1), "blocks_moved": 8000,
+                "blocks_moved_ratio_vs_none": 1.0 if mode == "none" else _r(rng, 1.0, 1.5),
+                "mean_latency_us": _r(rng, 40, 90), "hit_us": 5.0, "demand_miss_us": 100.0,
+                "prefetch_us": 50.0, "break_even_precision": 50.0 / 95.0, "capacity": 2048,
+                "seed": 42})
+    _w("msrc_samples/replay.csv", rows)
+
+
 # ------------------------------------------------------------- provenance
 
 def write_provenance(study: str) -> None:
@@ -728,7 +786,8 @@ def main() -> int:
     build_gpu_side(side)
     build_web_side(side)
     build_live_side(side)
-    for study in ("disk", "gpu", "realio", "web", "live"):
+    build_msrc(random.Random(20261028))
+    for study in ("disk", "gpu", "realio", "web", "live", "msrc_samples"):
         write_provenance(study)
     print(json.dumps(sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*") if p.is_file()),
                      indent=1))

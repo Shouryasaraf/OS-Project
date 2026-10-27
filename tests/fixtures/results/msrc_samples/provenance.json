@@ -1,0 +1,40 @@
+{
+  "format": "prefetch_common.provenance/1",
+  "study": "msrc_samples",
+  "command": [
+    "python",
+    "tests/fixtures/make_results_fixtures.py"
+  ],
+  "git_sha": "0000000000000000000000000000000000000000",
+  "git_dirty": false,
+  "created_utc": "2026-01-01T00:00:00+00:00",
+  "host": {
+    "hostname": "fixture-host",
+    "platform": "Linux-fixture",
+    "kernel": "6.14.0",
+    "python": "3.12.0",
+    "cpu_count": 128
+  },
+  "load_avg": {
+    "start": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "end": [
+      1.0,
+      1.0,
+      1.0
+    ]
+  },
+  "wall_s": 0.0,
+  "gpu": null,
+  "inputs": {},
+  "outputs": {
+    "classifier_deltas.csv": "db43d2af913551fd60a7fcb18946e7564aa7cd5c7fb28fb46b4b0ffab820e781",
+    "classifier_metrics.csv": "fcafe72ff8f6b053f2a3d75d008230188835501aeb4baf4c8dfd17e2235cf478",
+    "replay.csv": "d5e40b084c56ee864359f62810c36e82f6a15b5fabf3e0a6c7518f3c5bab4ab9",
+    "traces.csv": "6ab2105546f4c5ad0f0dced13b13be2217e4a23878654fbb2e30e8aa736fc12d"
+  },
+  "notes": "FIXTURE: synthetic values from tests/fixtures/make_results_fixtures.py; not a result, never quote"
+}

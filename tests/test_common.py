@@ -402,7 +402,10 @@ class SchemaTests(unittest.TestCase):
                     "web/calibration.csv", "web/learning_curve.csv",
                     "web/dataset_profile.json", "web/think_time.json",
                     "web/session_parity.json", "live/live_config.json",
-                    "live/disk_probe_*.json"}
+                    "live/disk_probe_*.json",
+                    # WPMSRC (E7): the MSRC light sample.
+                    "msrc_samples/traces.csv", "msrc_samples/classifier_metrics.csv",
+                    "msrc_samples/classifier_deltas.csv", "msrc_samples/replay.csv"}
         self.assertEqual(set(schemas.SCHEMAS), expected)
         for name, schema in schemas.SCHEMAS.items():
             self.assertIn(schema.fmt, schemas.FORMATS, name)
