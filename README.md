@@ -135,6 +135,7 @@ $PY reproduce.py web                       # E4: RetailRocket benchmark (about 2
 $PY reproduce.py web --gpu                 # E5: GRU sequence model (about 2 h on a shared GPU)
 $PY reproduce.py live --store-dir DIR      # E6: real HTTP replay (about 3 h)
 $PY reproduce.py paper                     # figures, tables, numbers.tex (under a minute)
+$PY reproduce.py notebook                  # notebooks/walkthrough.ipynb from results/ (under a minute)
 python3 paper/check.py --final             # paper lint
 python3 tools/check_doc_numbers.py         # docs quote only numbers in results/
 ```
@@ -143,7 +144,21 @@ E3 and E6 need Linux, a quiet host (they wait while the load average is
 above 32) and a directory on the device under test; they never write to any
 disk except the SSD and the HDD `sdb`.
 
+## Walk through the results
+
+[`notebooks/walkthrough.ipynb`](notebooks/walkthrough.ipynb) goes through
+every experiment in the order of the talk: the data, E1-E6, every
+pre-registered decision, and the classifier studies once their results land.
+Each table and figure in it is computed from `results/` by a code cell, and
+the verdict columns come from `paper/decisions.py`, the same code that writes
+the paper's verdicts. The notebook is committed with its outputs, so it reads
+without running anything, in VS Code or on GitHub. To run it, open it in VS
+Code with the Python and Jupyter extensions and select `.venv` as the kernel
+([notebooks/README.md](notebooks/README.md)). After `results/` changes,
+rebuild it with `reproduce.py notebook`.
+
 ## Repository layout
+
 
 | Path | What |
 |---|---|
@@ -152,6 +167,7 @@ disk except the SSD and the HDD `sdb`.
 | `src/prefetch_common/` | `U(c)`, bootstraps, provenance, results schemas |
 | `reproduce.py`, `repro/` | one reproduce module per study |
 | `results/` | **tracked** aggregates the paper reads, one directory per study, each with `PREREGISTERED.md` and `provenance.json`; `results/pivot_original/` is the web branch's original run, verbatim |
+| `notebooks/` | the results walkthrough notebook and the script that builds and executes it |
 | `paper/` | IEEEtran paper, generators for `numbers.tex`, tables and figures, `check.py` |
 | `presentation/` | Beamer deck reusing the paper's numbers and figures |
 | `docs/` | architecture, metrics, reproduction, decision logs, presentation outline |
