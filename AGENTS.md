@@ -71,7 +71,7 @@ of it). How components work: `docs/architecture.md`. Metric definitions:
 ## Commands
 
 ```bash
-PYTHONPATH=src .venv/bin/python -m unittest discover -s tests   # 665 tests at this commit, about 105 s (290 s on a loaded host)
+PYTHONPATH=src .venv/bin/python -m unittest discover -s tests   # 722 tests at this commit, about 155 s (290 s on a loaded host)
 PYTHONPATH=src python3 -m unittest discover -s tests            # stdlib only; web/GPU tests skip
 PYTHONPATH=src .venv/bin/python -m unittest tests.test_project.SimulatorTests   # one class
 python3 tools/check_doc_numbers.py        # every number in the docs is in results/
