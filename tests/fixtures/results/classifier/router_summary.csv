@@ -1,0 +1,2 @@
+capacity,policy,n_traces,mean_hit_ratio,mean_precision,mean_wasted_share,device_io_ratio,blocks_moved_ratio,mean_agreement_with_gnb,min_agreement_with_gnb,traces_identical_to_gnb,share_sequential,share_strided,share_random,share_mixed
+2048,rf,3,0.4,0.3,0.7,1.01,1.02,0.8,0.6,0,0.25,0.25,0.25,0.25

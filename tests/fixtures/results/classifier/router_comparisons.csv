@@ -1,0 +1,2 @@
+capacity,metric,statistic,policy,baseline,n,estimate,ci_lo,ci_hi,cluster_estimate,cluster_ci_lo,cluster_ci_hi,verdict,wins,losses,ties,reps,seed
+2048,hit_ratio,difference,rf,gnb_online,3,0.001,-0.002,0.004,0.001,-0.003,0.005,no difference detected,2,1,0,200,42
