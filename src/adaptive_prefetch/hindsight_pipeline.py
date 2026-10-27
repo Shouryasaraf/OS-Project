@@ -92,6 +92,17 @@ def _fit_task(task):
     cap, objective, family, params, exclude_corpus, path, record = task
     datasets = [d for d in _DATA[(cap, objective)]
                 if exclude_corpus is None or corpora.CORPUS_OF(d.trace) != exclude_corpus]
+    sidecar = Path(path).with_suffix(".training.json")
+    if Path(path).exists() and sidecar.exists():
+        # A resumed run keeps an artifact fitted from the same choice.
+        old = json.loads(sidecar.read_text(encoding="utf-8"))
+        if all(old.get(k) == json.loads(json.dumps(record.get(k)))
+               for k in ("family", "params", "role", "capacity", "objective", "per_trace")):
+            try:
+                hm.load(path)
+                return path
+            except ValueError:
+                pass
     model = hm.fit(family, params, datasets, _DATA["per_trace"])
     record = dict(record, traces=[t for t in record["traces"]
                                   if t["trace"] in {d.trace for d in datasets}])
@@ -193,7 +204,9 @@ def run_train(args, traces, capacities, cache: Path) -> None:
 def _replay_task(task):
     label, trace, path, skip, n, cap, mode, schedule, out = task
     out = Path(out)
-    if out.exists():
+    digest = (hindsight.sha256_text(json.dumps(schedule)) if schedule is not None
+              else None)
+    if out.exists() and read_gz(out).get("schedule_sha256") == digest:
         return str(out)
     started, load_start = time.monotonic(), _load1()
     count = _Count()
@@ -215,7 +228,8 @@ def _replay_task(task):
         shares = {a: decided.count(a) / len(decided) for a in hindsight.ACTIONS}
     payload = {"label": label, "trace": trace, "skip": skip, "capacity": cap,
                "mode": mode, "metrics": metrics_row(metrics), "requests": count.requests,
-               "action_shares": shares, "load_start": load_start, "load_end": _load1(),
+               "action_shares": shares, "schedule_sha256": digest,
+               "load_start": load_start, "load_end": _load1(),
                "wall_s": round(time.monotonic() - started, 3)}
     _write_gz(out, payload)
     return str(out)
@@ -312,7 +326,7 @@ def run_score(args, traces, capacities, cache: Path) -> None:
                       str(cache / "score" / f"{_key(check_trace, skip2, capacities[0], 'check_' + mode)}.json.gz")))
     (cache / "score").mkdir(parents=True, exist_ok=True)
     (cache / "score" / "proxy.json").write_text(json.dumps(proxies), encoding="utf-8")
-    todo = [t for t in tasks if not Path(t[-1]).exists()]
+    todo = list(tasks)
     # Deep schedules cost most; start them first.
     todo.sort(key=lambda t: -sum(hindsight.action_depth(a) for a in (t[7] or [])[::64]))
     started = time.monotonic()

@@ -408,8 +408,9 @@ class DepthModelTests(unittest.TestCase):
     def test_benchmark_scores_an_artifact_when_given_one(self):
         rows = benchmark_dataset("held_out", workload(600, seed=30),
                                  depth_model_path=str(self.artifact))
-        self.assertEqual(rows[-1]["mode"], "learned_depth")
-        self.assertEqual(rows[-1]["status"], "ok")
+        # `routed` (track HSR) is appended after learned_depth.
+        self.assertEqual(rows[-2]["mode"], "learned_depth")
+        self.assertEqual(rows[-2]["status"], "ok")
 
     def test_gpu_sampler_summary_parses_nvidia_smi_rows(self):
         sampler = self.D.GpuSampler()
