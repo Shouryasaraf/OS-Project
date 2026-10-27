@@ -9,8 +9,8 @@ how much to fetch and how fresh the statistics were. Window growth gained
 \decDiskPFourLinuxRaAtTwoHundredFiftySixAssumedOneMiBPaired{} of simulated hit
 ratio while reducing device I/Os, and online counts gained
 \decWebWFourHitFreshnessCI{} on the web. Every learned predictor we trained lost
-to a simple baseline, and the feedback gates limited waste without adding
-hits. On a real hard disk the simulated gains did not become lower latency
+to a simple baseline, and the pre-registered feedback gates limited waste
+without adding hits; the one gated mode that did add hits also chose depth. On a real hard disk the simulated gains did not become lower latency
 in most O\_DIRECT cells, while over emulated HTTP with a hard-disk store the
 measured savings exceeded the model's. Future work should
 test learned \emph{depth} and admission against window growth on the real

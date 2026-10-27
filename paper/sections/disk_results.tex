@@ -86,7 +86,15 @@ read-ahead it routes between, and with more device I/Os
 \diskBreakEvenVsNoneGuardOneMiB{} of \texttt{none}. The gate limits waste and device
 work (\diskIORatioGuardOneMiB{} of \texttt{none}'s I/Os, against
 \diskIORatioSequentialOneMiB{} for \texttt{sequential}) but adds no hits over
-\texttt{sequential}.
+\texttt{sequential}. The gated mode that does add hits is
+\texttt{depth\_adaptive}, which lets the same precision evidence also choose a
+read-ahead depth: at the assumed cost model it is above \texttt{sequential} by
+\diskDeltaHitRatioDepthAdaptiveVsSequentialOneMiBCI{} paired
+(\diskDeltaHitRatioDepthAdaptiveVsSequentialOneMiBClusterCI{} cluster) at
+1\,MiB and \diskDeltaHitRatioDepthAdaptiveVsSequentialSixtyFourMiBCI{} at
+64\,MiB (exploratory: not a pre-registered comparison), and at the break-even
+model it is identical to \texttt{guard}. Its gain comes with a choice of depth,
+not with the gate alone.
 
 \textbf{Which lever is smallest.} The pre-registered ordering compares the
 intervals of $|\Delta|$ against \texttt{sequential}. At 1\,MiB the predictor
@@ -108,8 +116,10 @@ hit ratio little, but the feedback gate moves it as little or less.
 paired-only on the second). On FIU, \decTallyCFourCapInsensitive{} of
 \decTallyCFour{} are cap-insensitive between merge caps of 256 and 1024
 sectors. Request reconstruction matters a great deal: on FIU at C2,
-\texttt{deep@8} gains \diskDeltaFiuCTwoHitRatioDeepAtEightVsNoneOneMiBCI{} on merged
-requests but \diskDeltaFiuCTwoNoneHitRatioDeepAtEightVsNoneOneMiBCI{} on the unmerged
+\texttt{deep@8} changes the hit ratio by
+\diskDeltaFiuCTwoHitRatioDeepAtEightVsNoneOneMiBCI{} on merged requests (an
+interval that contains zero) but by
+\diskDeltaFiuCTwoNoneHitRatioDeepAtEightVsNoneOneMiBCI{} on the unmerged
 4\,KiB page records, an artefact of counting each page as a request that we
 report only as a sensitivity view.
 

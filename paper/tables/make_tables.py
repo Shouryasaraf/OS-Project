@@ -736,7 +736,9 @@ def t8_cross_domain(results, out):
         metric = next((m for m in metrics if m["scorer"] == row["scorer"]
                        and m["capacity"] == capacity and m["policy"] == row["adaptive_policy"]),
                       None)
-        gate = next((f for f in feedback if f["capacity"] == capacity), None)
+        # W6 in the row's own unit (U at its cost), as decision rule 3 reads it.
+        gate = next((f for f in feedback if f["capacity"] == capacity
+                     and f["metric"] != "hit_ratio" and f["cost"] == row["cost"]), None)
         table.row([f"Web, cap.\\ {fcount(capacity)}, c = {row['cost']:g}",
                    esc(row["adaptive_policy"]), "U per view, pp",
                    ci_cell(row["vs_fixed0"], row["vs_fixed0_lo"], row["vs_fixed0_hi"]),
@@ -762,9 +764,12 @@ def t8_cross_domain(results, out):
         return placeholder("t8_cross_domain", caption, out, wide=True)
     return float_env("t8_cross_domain", caption, table.latex(), wide=True, out=out, dense=True,
                      note="Disk: C1 canonical, the highest mean hit ratio (not a winner: its "
-                          "waste and device I/Os are beside it), gate = guard. Web: the "
-                          "validation-selected controller at the smallest positive cost, gate = "
-                          "feedback lever. Live: best valid policy by mean saving.")
+                          "waste and device I/Os are beside it); gate column: guard's hit-ratio "
+                          "gain over none. Web: the validation-selected controller at the "
+                          "smallest positive cost; gate column: the validated feedback gate "
+                          "minus the adaptive controller in U at that cost (W6). Live: the "
+                          "citable policy with the largest mean saving; gate column: the "
+                          "feedback gate's own saving per view.")
 
 
 # ---------------------------------------------------------------------------

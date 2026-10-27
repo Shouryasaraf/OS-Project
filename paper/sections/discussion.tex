@@ -40,6 +40,8 @@ disk, depth and window growth are larger than both the predictor and the gate
 at both cache sizes; on the web, freshness is larger than the ranker. \emph{Feedback is a large lever:} not supported. The disk
 gate is no better than \texttt{sequential} and the web gate shows no
 detectable difference from the adaptive controller; both mainly issue less.
+The one gated disk mode above \texttt{sequential}, \texttt{depth\_adaptive},
+also chooses its depth (an exploratory comparison).
 
 \textbf{Simulation against measurement.} The two real-system studies point in
 opposite directions, and both are measured. On a hard disk with O\_DIRECT and

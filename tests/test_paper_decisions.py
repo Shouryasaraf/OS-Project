@@ -220,6 +220,29 @@ class CommittedPaperTests(unittest.TestCase):
         self.assertTrue(hdd)
         self.assertTrue(all(d.verdict == "lowers the mean wait" for d in hdd))
 
+    def test_the_exploratory_depth_adaptive_sentence(self):
+        # disk_results / discussion: depth_adaptive (gate plus a choice of
+        # depth) is above sequential at the assumed cost model in both the
+        # paired and the cluster interval at both C1 capacities, and is
+        # identical to guard at the break-even model.
+        rows = genlib.select(genlib.Results(RESULTS).rows("disk/deltas.csv"),
+                             config=genlib.HEADLINE_CONFIG, merge=genlib.HEADLINE_MERGE,
+                             latency=genlib.HEADLINE_LATENCY, corpus="all", metric="hit_ratio",
+                             policy="depth_adaptive", baseline="sequential")
+        self.assertEqual(len(rows), 2)
+        for row in rows:
+            with self.subTest(capacity=row["capacity"]):
+                self.assertGreater(row["ci_lo"], 0)
+                self.assertGreater(row["cluster_ci_lo"], 0)
+        table = genlib.select(genlib.Results(RESULTS).rows("disk/table_main.csv"),
+                              config=genlib.HEADLINE_CONFIG, merge=genlib.HEADLINE_MERGE,
+                              corpus="all", latency="break_even")
+        by_policy = {(r["capacity"], r["policy"]): r["mean_hit_ratio"] for r in table}
+        self.assertTrue(by_policy)
+        for capacity in {c for c, _ in by_policy}:
+            self.assertEqual(by_policy[(capacity, "guard")],
+                             by_policy[(capacity, "depth_adaptive")])
+
     def test_committed_numbers_and_tables_are_current(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
