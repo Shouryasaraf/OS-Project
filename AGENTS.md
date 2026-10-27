@@ -64,7 +64,7 @@ of it). How components work: `docs/architecture.md`. Metric definitions:
 ## Commands
 
 ```bash
-PYTHONPATH=src .venv/bin/python -m unittest discover -s tests   # 602 tests at this commit, about 105 s
+PYTHONPATH=src .venv/bin/python -m unittest discover -s tests   # 622 tests at this commit, about 120 s
 PYTHONPATH=src python3 -m unittest discover -s tests            # stdlib only; web/GPU tests skip
 PYTHONPATH=src .venv/bin/python -m unittest tests.test_project.SimulatorTests   # one class
 python3 tools/check_doc_numbers.py        # every number in the docs is in results/
@@ -498,6 +498,12 @@ What the experiments found (details and figures: `docs/DECISIONS.md` D18-D21,
   (W3 and W8 together) the predictor is **not** called the smallest lever;
   the GRU is worse than online counting; the feedback gate issues fewer
   prefetches without a detectable utility difference.
+- **Web rankers (track WRK, `results/web_rankers/`, after E1-E6).** Tuned
+  `hgb`, `rf`, `et` and `mlp` rankers over the shipped candidates and features
+  rank better than the shipped logistic ranker and raise the validated
+  controller's simulated utility at both replayed capacities; the
+  validation-selected `mlp` is the primary row. None beats transition top-1
+  at depth 1 and all stay far below online counts. `docs/web/WEB_RANKERS.md`.
 - **Live (E6, `results/live/`).** Every pass valid, zero parity mismatches;
   measured waits are on loopback with an emulated network.
 - **Open items.** The paper's page count (estimated, not compiled) and the
