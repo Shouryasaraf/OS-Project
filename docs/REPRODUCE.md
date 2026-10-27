@@ -112,7 +112,7 @@ CLF computing run when a later cached pass rewrote `provenance.json`):
 | CLF, computing run | `reproduce.py classifier` | 2161.948 s | the committed `provenance.json` is a cached pass of 104.899 s that recomputed nothing |
 | HSR, last pass | `reproduce.py hindsight --workers 28` | 155.049 s | cached stages; the stage-by-stage runtimes of the computing run (about an hour on a loaded host) are in `results/hindsight/README.md` |
 | WRK | `reproduce.py web_rankers --workers 16` | 2736.277 s | load rose to about 78 (1-minute average at the end of the run: 29.47) |
-| E7 | `reproduce.py msrc` | 340.264 s | 8 workers |
+| E7, last pass | `reproduce.py msrc` | 170.338 s | 8 workers, 1-minute load 4.84 at the start; a re-run after a README wording fix, every CSV byte-identical to the first run |
 <!-- source: none -->
 
 Each E3 and E6 invocation appends to the same results directory; the earlier
