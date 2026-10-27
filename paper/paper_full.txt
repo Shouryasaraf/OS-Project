@@ -691,10 +691,11 @@ X. Can a Better Learner Help? (Simulated)
 
 The disk router of Section VI uses Gaussian naive Bayes [56], [57] to put each
 32-request window in one of four classes, and each class prefetches at most
-two blocks, so even a perfect classifier can do little better than sequential.
-We tested that bound three ways, under rules committed after E1–E6 were known
-(so not blind to them): replace the classifier, give a router read-ahead depth
-as an action, and replace the web ranker.
+two blocks per request, so we expected the choice of classifier to matter
+little against sequential. We tested that expectation three ways, under rules
+committed after E1–E6 were known (so not blind to them): replace the
+classifier, give a router read-ahead depth as an action, and replace the web
+ranker.
 
 Methods. Besides the shipped online GNB and QDA we tuned 13 scikit-learn
 families [55], from discriminant analysis and logistic regression to kNN,
@@ -741,9 +742,11 @@ device I/Os of none. A device-objective router reduces device I/Os (0.976× of
 none's, at 1.121× the blocks moved), but against its own VCF it shows no
 difference detected (paired interval only; not robust to corpus clustering),
 and linux_ra@256 needs only 0.713×. GNB had the lowest cross-validation score
-in 6 of 6 cells, yet the best family does not beat VCF; nor is the trajectory
-oracle (a reference, never a policy) a true ceiling, since it beats VCF at
-1 MiB only.
+in 6 of 6 cells, yet the best family does not beat VCF, and trained without
+the test trace's corpus (hyperparameters still chosen with it) the router is
+worse than VCF at both sizes (-4.326 pp [-8.122, -1.254] at 1 MiB); nor is the
+trajectory oracle (a reference, never a policy) a true ceiling, since it beats
+VCF at 1 MiB only.
 
 Web rankers (Table XVIII). On the same candidates and features, tuned
 boosting, forests, extra trees and an MLP rank better than the shipped
