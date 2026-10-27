@@ -4,8 +4,9 @@
     python reproduce.py paper --fixtures      # synthetic fixtures -> outputs/paper-fixture/
 
 Runs the three generators (``paper/numbers.py``, ``paper/tables/make_tables.py``,
-``paper/figures/make_figures.py``) and then ``paper/check.py --strict`` on the
-directory they wrote. A missing results file never stops the run: its
+``paper/figures/make_figures.py``), then ``paper/flatten.py`` (the single-file
+``main_flat.tex`` and ``paper_full.txt``), and then ``paper/check.py --strict``
+on the directory they wrote. A missing results file never stops the run: its
 figure, table or macro is written as a "MISSING" placeholder, and the
 manifests (``numbers.manifest.json``, ``tables/manifest.json``,
 ``figures/manifest.json``) list what was missing and the SHA-256 of every
@@ -125,6 +126,12 @@ def run(args: argparse.Namespace) -> int:
         outputs += produced
         gaps = [o for o in produced if o.missing]
         print(f"[paper] {relative}: {len(produced)} output(s), {len(gaps)} with missing input")
+    # The single-file renderings (paper/flatten.py) come last: they read the
+    # sources and every generated file, and write main_flat.tex and
+    # paper_full.txt into the same directory (stdlib only, never unavailable).
+    flatten = load("paper_flatten", "flatten.py")
+    for line in flatten.generate(out):
+        print(f"[paper] flatten.py: {line}")
     missing = sorted({item for o in outputs for item in o.missing})
     for item in missing:
         print(f"[paper]   MISSING: {item}")
